@@ -35,10 +35,13 @@ def crear_tablas():
     cursor.execute(f"CREATE TABLE IF NOT EXISTS producto_insumo (id {id_t}, producto_id INTEGER, insumo_id INTEGER, cantidad_usada REAL)")
     cursor.execute(f"CREATE TABLE IF NOT EXISTS costos_fijos (id {id_t}, concepto TEXT, valor REAL, mes TEXT)")
 
-    # Admin por defecto
+    # Admin por defecto con formato universal
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO usuarios (username, password, role) VALUES (?, ?, ?)", ("admin", "admin123", "ADMIN"))
+        # Usamos %s para asegurar compatibilidad con Postgres en esta parte crítica
+        placeholder = "%s" if (db_url and POSTGRES_AVAILABLE) else "?"
+        query_admin = f"INSERT INTO usuarios (username, password, role) VALUES ({placeholder}, {placeholder}, {placeholder})"
+        cursor.execute(query_admin, ("admin", "admin123", "ADMIN"))
 
     conn.commit(); conn.close()
 
