@@ -9,14 +9,27 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <style>
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        .banner-trial { animation: pulse 6s infinite; }
+        .blur-value { filter: blur(5px); pointer-events: none; user-select: none; color: #38bdf8; }
+        .lock-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border-radius: 20px; cursor: pointer; transition: 0.3s; }
+        .lock-overlay:hover { background: rgba(0,0,0,0.6); }
+        .micro-copy { font-size: 0.65rem; color: #666; margin-top: 0.5rem; font-weight: 500; }
+        .progress-container { background: #1a1a1a; padding: 1rem; border-radius: 12px; margin-top: 1rem; border: 1px solid #333; }
+        .progress-bar { height: 6px; background: #333; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+        .progress-fill { height: 100%; background: #38bdf8; transition: 1s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+
     <nav>
-        <div class="logo" id="main-logo">AS CORE</div>
+        <div class="logo">AS PLATFORM</div>
         <ul class="nav-links">
-            {% if session.role == 'ADMIN' %}
-            <li><a href="/" class="active">Dashboard</a></li>
+            {% if es_trial and dias_restantes <= 7 %}
+            <li><a href="/configuracion" class="banner-trial" style="background: #38bdf8; color: black; padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; text-decoration: none;">{{ banner_msg }}</a></li>
             {% endif %}
+            <li><a href="/" class="active">Dashboard</a></li>
             <li><a href="/ventas">Ventas</a></li>
-            <li><a href="/inventario" data-lang="inventario">Inventario</a></li>
+            <li><a href="/inventario">Inventario</a></li>
             {% if session.role == 'ADMIN' %}
             <li><a href="/analisis">Análisis</a></li>
             <li><a href="/configuracion">Configuración</a></li>
@@ -26,20 +39,105 @@
     </nav>
 
     <main>
-        {% if session.role == 'ADMIN' %}
-        <div class="header">
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-                <h1 id="business-name-display">Estrategia y Control</h1>
-                <p style="color: var(--accent-color); font-weight: 600; font-size: 0.8rem; text-transform: uppercase;">ADMINISTRADOR</p>
+                <h1>Estrategia y Control</h1>
+                <p style="color: #555; font-size: 0.8rem;">Análisis basado en tus costos reales y ventas históricas.</p>
+            </div>
+            <div id="usage-stats" class="progress-container" style="min-width: 200px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem;">
+                    <span>Capacidad de Catálogo</span>
+                    <span id="prod-count">0/10</span>
+                </div>
+                <div class="progress-bar"><div id="prod-fill" class="progress-fill" style="width: 0%"></div></div>
             </div>
         </div>
 
-        <div class="kpi-grid">
+        <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 2rem;">
             <div class="card kpi"><h3>Ingresos Totales</h3><div class="value" id="ingresos">$0</div></div>
-            <div class="card kpi"><h3>Utilidad Neta</h3><div class="value" id="utilidad">$0</div></div>
-            <div class="card kpi"><h3>Margen (MCU)</h3><div class="value" id="margen">$0</div></div>
-            <div class="card kpi"><h3>P. Equilibrio</h3><div class="value" id="pe">0 uds</div></div>
+            
+            <div class="card kpi" style="position: relative;">
+                <h3>Utilidad Neta</h3>
+                <div class="value" id="utilidad">$0</div>
+                <div class="micro-copy">Descubre si realmente estás ganando dinero.</div>
+                <div id="lock-utilidad" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
+                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                </div>
+            </div>
+
+            <div class="card kpi" style="position: relative;">
+                <h3>Margen (MCU)</h3>
+                <div class="value" id="margen">$0</div>
+                <div class="micro-copy">Identifica qué productos te dejan más.</div>
+                <div id="lock-margen" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
+                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                </div>
+            </div>
+
+            <div class="card kpi" style="position: relative;">
+                <h3>P. Equilibrio</h3>
+                <div class="value" id="pe">0 uds</div>
+                <div class="micro-copy">Sabe cuánto debes vender para no perder.</div>
+                <div id="lock-pe" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
+                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                </div>
+            </div>
         </div>
+    </main>
+
+    <!-- MODAL DE CONVERSIÓN EN 2 PASOS -->
+    <div id="modal-upgrade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="max-width: 450px; text-align: center; padding: 3rem; border: 2px solid #38bdf8;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+            <h2 id="modal-title">Lleva tu negocio al siguiente nivel</h2>
+            <p style="color: #888; margin-bottom: 2rem;">Desbloquea el análisis de rentabilidad real basado en tus costos históricos.</p>
+            <ul style="text-align: left; font-size: 0.9rem; margin-bottom: 2rem; list-style: none; padding: 0;">
+                <li>✅ Punto de Equilibrio exacto</li>
+                <li>✅ Margen de utilidad por producto</li>
+                <li>✅ Sincronización Google Sheets</li>
+            </ul>
+            <div style="font-size: 1.5rem; font-weight: 800; margin-bottom: 2rem;">$24.900 <span style="font-size: 0.8rem; color: #555;">/ mes</span></div>
+            <a href="/upgrade_needed" class="btn-upgrade" style="display: block; text-decoration: none; background: #38bdf8; color: black; padding: 1rem; border-radius: 12px; font-weight: 800;">Activar PRO Ahora</a>
+            <button onclick="document.getElementById('modal-upgrade').style.display='none'" style="background: none; border: none; color: #555; margin-top: 1.5rem; cursor: pointer;">Cerrar</button>
+        </div>
+    </div>
+
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        const dias = parseInt("{{ dias_restantes }}") || 0;
+
+        // LÓGICA DE CTA DINÁMICO
+        let ctaText = "Ver mi utilidad";
+        if (dias <= 1) ctaText = "Activar PRO ahora ⚡";
+        else if (dias <= 3) ctaText = "Desbloquear análisis 📊";
+
+        async function initDashboard() {
+            const res = await fetch('/api/resumen');
+            const data = await res.json();
+            
+            const pct = (data.cuotas.productos / data.cuotas.productos_max) * 100;
+            document.getElementById('prod-count').textContent = `${data.cuotas.productos}/${data.cuotas.productos_max}`;
+            document.getElementById('prod-fill').style.width = `${Math.min(pct, 100)}%`;
+
+            document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
+            
+            if (data.is_locked) {
+                const labels = {'utilidad': 'Utilidad Neta', 'margen': 'Margen', 'pe': 'P. Equilibrio'};
+                ['utilidad', 'margen', 'pe'].forEach(id => {
+                    const el = document.getElementById(id);
+                    el.classList.add('blur-value');
+                    el.textContent = id === 'pe' ? `${Math.ceil(data.punto_equilibrio)} uds` : formatCOP.format(data[id]);
+                    const lock = document.getElementById(`lock-${id}`);
+                    lock.style.display = 'flex';
+                    lock.innerHTML = `<span style="font-size: 0.7rem; font-weight: 800; color: #38bdf8;">${ctaText}</span><span style="font-size: 0.6rem; color: #555;">🔒 ${labels[id]}</span>`;
+                    lock.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
+                });
+            } else {
+                // [Lógica para PRO se mantiene...]
+            }
+        }
+        window.onload = initDashboard;
+    </script>
 
         <div class="dashboard-grid">
             <div class="card"><h3>Tendencia Mensual</h3><canvas id="chartTendencia"></canvas></div>
@@ -57,19 +155,32 @@
     </main>
 
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
+    <style>
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .locked-value { color: #555 !important; font-size: 1.2rem !important; cursor: pointer; }
+    </style>
     <script>
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-        let chartTendencia, chartDistribucion;
 
         async function initDashboard() {
-            if ("{{ session.role }}" !== "ADMIN") return;
-            
             const res = await fetch('/api/resumen');
             const data = await res.json();
-            document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
-            document.getElementById('utilidad').textContent = formatCOP.format(data.utilidad);
-            document.getElementById('margen').textContent = formatCOP.format(data.margen_contribucion);
-            document.getElementById('pe').textContent = `${Math.ceil(data.punto_equilibrio)} uds`;
+            
+            const fields = ['ingresos', 'utilidad', 'margen', 'pe'];
+            const labels = {'utilidad': 'Utilidad Neta', 'margen': 'Margen (MCU)', 'pe': 'P. Equilibrio'};
+
+            if (data.is_locked) {
+                document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
+                ['utilidad', 'margen', 'pe'].forEach(id => {
+                    document.getElementById(id).innerHTML = `<span class="locked-value" onclick="location.href='/analisis'">🔒 Ver mi ${labels[id]}</span>`;
+                });
+            } else {
+                document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
+                document.getElementById('utilidad').textContent = formatCOP.format(data.utilidad);
+                document.getElementById('margen').textContent = formatCOP.format(data.margen_contribucion);
+                document.getElementById('pe').textContent = `${Math.ceil(data.punto_equilibrio)} uds`;
+            }
+        }
             
             const resG = await fetch('/api/dashboard/graficos');
             const dataG = await resG.json();

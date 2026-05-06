@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desbloquea AS CORE PRO</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { background: #050505; color: white; margin: 0; font-family: 'Inter', sans-serif; }
+        .hero { padding: 4rem 2rem; text-align: center; }
+        .badge { background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 800; }
+        h1 { font-size: 3rem; font-weight: 800; margin: 1.5rem 0; }
+        .subtitle { color: #888; font-size: 1.2rem; max-width: 600px; margin: 0 auto 3rem; }
+        
+        .matrix-container { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 0 2rem; }
+        .plan-card { background: #111; padding: 3rem; border-radius: 24px; border: 1px solid #222; transition: 0.3s; }
+        .plan-card.pro { border-color: #38bdf8; background: linear-gradient(145deg, #111, #0a0a0a); box-shadow: 0 0 40px rgba(56, 189, 248, 0.1); }
+        
+        .price { font-size: 3.5rem; font-weight: 900; margin: 1.5rem 0; }
+        .price span { font-size: 1rem; color: #555; }
+        .anchor { color: #38bdf8; font-size: 0.9rem; font-weight: 700; margin-bottom: 1.5rem; }
+        
+        .feature-list { list-style: none; padding: 0; text-align: left; margin: 2rem 0; }
+        .feature-list li { margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; }
+        .check { color: #38bdf8; font-weight: 900; }
+        .cross { color: #444; font-weight: 900; }
+
+        .btn-upgrade { display: block; background: #38bdf8; color: black; text-decoration: none; padding: 1.5rem; border-radius: 16px; font-weight: 800; font-size: 1.2rem; text-align: center; }
+        .diff-text { background: #1a1a1a; padding: 1.5rem; border-radius: 12px; font-size: 0.85rem; color: #aaa; border-left: 4px solid #38bdf8; margin-top: 3rem; }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <span class="badge">FUNCIÓN EXCLUSIVA</span>
+        <h1>Toma el control real de tu utilidad</h1>
+        <p class="subtitle">Este análisis se basa en tus costos reales y ventas históricas. No es una estimación, es tu rentabilidad real.</p>
+
+        <div class="matrix-container">
+            <!-- PLAN GRATIS -->
+            <div class="plan-card">
+                <h3 style="color: #666;">Plan FREE</h3>
+                <div class="price">$0 <span>/ siempre</span></div>
+                <ul class="feature-list">
+                    <li><span class="check">✓</span> Registro de Ventas</li>
+                    <li><span class="check">✓</span> Inventario Básico</li>
+                    <li><span class="cross">✕</span> Máximo 10 productos</li>
+                    <li><span class="cross">✕</span> Análisis de Utilidad</li>
+                    <li><span class="cross">✕</span> Sincronización Google</li>
+                </ul>
+                <a href="/" style="color: #444; text-decoration: none; font-size: 0.9rem;">Continuar limitado</a>
+            </div>
+
+            <!-- PLAN PRO -->
+            <div class="plan-card pro">
+                <h3 style="color: #38bdf8;">Plan Profesional</h3>
+                <div class="anchor">🔥 Menos de $1.000 COP al día</div>
+                <div class="price">$24.900 <span>/ mes</span></div>
+                <ul class="feature-list">
+                    <li><span class="check">✓</span> Productos Ilimitados</li>
+                    <li><span class="check">✓</span> <b>Punto de Equilibrio</b></li>
+                    <li><span class="check">✓</span> <b>Rentabilidad Real</b></li>
+                    <li><span class="check">✓</span> Sincronización Automática</li>
+                    <li><span class="check">✓</span> Soporte Prioritario</li>
+                </ul>
+                <a href="https://checkout.wompi.co/l/TU_LINK_AQUI" class="btn-upgrade">🚀 Activar PRO Ahora</a>
+            </div>
+        </div>
+
+        <div style="max-width: 600px; margin: 4rem auto 0;">
+            <div class="diff-text">
+                "AS CORE me permitió entender que estaba perdiendo dinero en mi producto estrella. Al ajustar el costo, recuperé mi margen en 2 semanas." — Cliente AS Solutions.
+            </div>
+            <a href="/" style="display: inline-block; margin-top: 2rem; color: #444; text-decoration: none;">← Volver al inicio</a>
+        </div>
+    </div>
+</body>
+</html>
