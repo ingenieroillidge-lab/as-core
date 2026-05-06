@@ -72,17 +72,23 @@ def crear_tablas():
     # ==========================
     # MIGRACIÓN Y DATOS INICIALES
     # ==========================
+    placeholder = "%s" if (db_url and POSTGRES_AVAILABLE) else "?"
     
     # 1. Crear el primer negocio (El tuyo original) si no existe
     cursor.execute("SELECT COUNT(*) FROM negocios")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO negocios (nombre, status, plan) VALUES (?, ?, ?)", ("Negocio Original", "ACTIVO", "PRO"))
-        negocio_id_def = cursor.lastrowid
+        query_n = f"INSERT INTO negocios (nombre, status, plan) VALUES ({placeholder}, {placeholder}, {placeholder})"
+        cursor.execute(query_n, ("Negocio Original", "ACTIVO", "PRO"))
         
-        # 2. Crear Super Admin vinculado al negocio 1
+        # Obtener el ID recién creado de forma compatible
+        cursor.execute("SELECT id FROM negocios ORDER BY id DESC LIMIT 1")
+        negocio_id_def = cursor.fetchone()[0]
+        
+        # 2. Crear Super Admin vinculado al negocio
         cursor.execute("SELECT COUNT(*) FROM usuarios WHERE role='SUPER'")
         if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?, ?, ?, ?)", (negocio_id_def, "samuel_super", "super2024", "SUPER"))
+            query_u = f"INSERT INTO usuarios (negocio_id, username, password, role) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})"
+            cursor.execute(query_u, (negocio_id_def, "samuel_super", "super2024", "SUPER"))
 
     conn.commit(); conn.close()
 
