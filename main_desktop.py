@@ -15,7 +15,8 @@ from services.inventario_service import (
     obtener_inventario,
     obtener_movimientos
 )
-crear_tablas()
+# crear_tablas() se llamará solo si es ejecución directa
+
 
 # =====================================================
 # 🔹 UTILIDADES BASE DE DATOS

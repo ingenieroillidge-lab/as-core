@@ -1,11 +1,10 @@
 import sqlite3
 import os
 
-# Intentamos importar psycopg2, si no está, seguimos con SQLite (modo local)
 try:
     import psycopg2
     POSTGRES_AVAILABLE = True
-except ImportError:
+except Exception:
     POSTGRES_AVAILABLE = False
 
 def conectar():
