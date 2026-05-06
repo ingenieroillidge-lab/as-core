@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ventas - AS CORE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav>
+        <div class="logo">AS CORE</div>
+        <ul class="nav-links">
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/">Dashboard</a></li>
+            {% endif %}
+            <li><a href="/ventas" class="active">Ventas</a></li>
+            <li><a href="/inventario" data-lang="inventario">Inventario</a></li>
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/analisis">Análisis</a></li>
+            <li><a href="/configuracion">Configuración</a></li>
+            {% endif %}
+            <li><a href="/logout" style="color: #fb7185;">Salir</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="header">
+            <h1>Registro de Ventas</h1>
+            <p style="color: var(--text-secondary)">Punto de venta directo para {{ session.username }}.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            <div class="card">
+                <h3>Nueva Venta</h3>
+                <form id="venta-form" style="margin-top: 1rem;">
+                    <div class="form-group">
+                        <label>Producto</label>
+                        <select id="v-producto" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <input type="number" id="v-cantidad" value="1" min="1" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Método de Pago</label>
+                        <select id="v-metodo">
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Transferencia">Transferencia</option>
+                        </select>
+                    </div>
+                    <button type="submit" style="margin-top: 2rem; width: 100%; height: 3.5rem; font-size: 1.1rem; font-weight: 800;">Registrar Venta</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>Últimas Ventas de Hoy</h3>
+                <div id="status-venta" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
+    <script>
+        async function loadProds() {
+            aplicarTraduccionOperativa();
+            const res = await fetch('/api/productos');
+            const data = await res.json();
+            const select = document.getElementById('v-producto');
+            data.forEach(p => select.add(new Option(`${p.nombre} - $${p.precio}`, p.id)));
+        }
+
+        document.getElementById('venta-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                producto_id: document.getElementById('v-producto').value,
+                cantidad: document.getElementById('v-cantidad').value,
+                metodo_pago: document.getElementById('v-metodo').value
+            };
+            const res = await fetch('/api/ventas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const resD = await res.json();
+            if (res.ok) {
+                document.getElementById('status-venta').innerHTML = `<div style="color: var(--success); background: rgba(52, 211, 153, 0.1); padding: 1rem; border-radius: 12px;">✅ Venta registrada: <strong>$${resD.total}</strong></div>`;
+                e.target.reset();
+            } else {
+                alert("Error: " + resD.error);
+            }
+        };
+
+        window.onload = loadProds;
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Business OS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #0a0a0a; margin: 0; }
+        .login-card { background: #1a1a1a; padding: 3rem; border-radius: 24px; border: 1px solid #333; width: 100%; max-width: 400px; text-align: center; }
+        .error { color: #fb7185; margin-bottom: 1rem; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">Business OS</h1>
+        <p style="color: #888; margin-bottom: 2rem;">Ingresa tus credenciales para continuar</p>
+        
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form action="/login" method="POST">
+            <div class="form-group" style="text-align: left;">
+                <label>Usuario</label>
+                <input type="text" name="username" required>
+            </div>
+            <div class="form-group" style="text-align: left; margin-top: 1rem;">
+                <label>Contraseña</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit" style="width: 100%; margin-top: 2rem; height: 3.5rem;">Entrar al Sistema</button>
+        </form>
+    </div>
+</body>
+</html>

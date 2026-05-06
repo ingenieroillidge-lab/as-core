@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración Avanzada - AS CORE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .config-tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+        .tab-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-weight: 600; padding: 0.5rem 1rem; border-radius: 8px; transition: 0.3s; }
+        .tab-btn:hover { color: var(--accent-color); background: rgba(255,255,255,0.05); }
+        .tab-btn.active { color: var(--accent-color); background: rgba(56, 189, 248, 0.1); }
+        .config-section { display: none; }
+        .config-section.active { display: block; animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .grid-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo" id="main-logo">AS CORE</div>
+        <ul class="nav-links">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/ventas">Ventas</a></li>
+            <li><a href="/inventario" data-lang="inventario">Inventario</a></li>
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/analisis">Análisis</a></li>
+            <li><a href="/configuracion" class="active">Configuración</a></li>
+            {% endif %}
+            <li><a href="/logout" style="color: #fb7185;">Salir</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="header">
+            <h1>Panel de Administración</h1>
+            <p style="color: var(--text-secondary)">Gestión de identidad, equipo y mantenimiento de AS CORE.</p>
+        </div>
+
+        <div class="config-tabs">
+            <button class="tab-btn active" onclick="showSection('sec-perfil')">Perfil y Marca</button>
+            <button class="tab-btn" onclick="showSection('sec-usuarios')">Gestión de Usuarios</button>
+            <button class="tab-btn" onclick="showSection('sec-mantenimiento')" style="color: #fb7185;">Mantenimiento</button>
+        </div>
+
+        <!-- SECCIÓN PERFIL Y MARCA -->
+        <div id="sec-perfil" class="config-section active">
+            <div class="grid-forms">
+                <div class="card">
+                    <h3>Identidad Comercial</h3>
+                    <form id="form-perfil" style="margin-top: 1rem;">
+                        <div class="form-group"><label>Nombre del Negocio</label><input type="text" id="conf-nombre" required></div>
+                        <div class="form-group"><label>Tipo de Operación</label>
+                            <select id="conf-tipo" required>
+                                <option value="PRODUCCIÓN">Producción</option>
+                                <option value="REVENTA">Reventa</option>
+                                <option value="SERVICIOS">Servicios</option>
+                                <option value="HÍBRIDO">Híbrido</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven"></div>
+                        <button type="submit">Guardar Perfil</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Identidad Visual</h3>
+                    <form id="form-branding">
+                        <div class="form-group">
+                            <label>Color de Acento</label>
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <input type="color" id="conf-color-acento" style="width: 50px; height: 50px; border: none; cursor: pointer; background: none;">
+                                <code id="acento-hex">#38bdf8</code>
+                            </div>
+                        </div>
+                        <button type="submit" style="margin-top: 2rem;">Aplicar Colores</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN USUARIOS (CORREGIDA) -->
+        <div id="sec-usuarios" class="config-section">
+            <div class="grid-forms">
+                <div class="card">
+                    <h3>Registrar Nuevo Miembro</h3>
+                    <form id="form-usuario" style="margin-top: 1rem;">
+                        <div class="form-group">
+                            <label>Nombre de Usuario</label>
+                            <input type="text" id="user-name" placeholder="Ej: samuel_ventas" required>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label>Contraseña Temporal</label>
+                            <input type="password" id="user-pass" required>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label>Nivel de Acceso</label>
+                            <select id="user-role">
+                                <option value="OPERADOR">Vendedor (Acceso Limitado)</option>
+                                <option value="ADMIN">Administrador (Acceso Total)</option>
+                            </select>
+                        </div>
+                        <button type="submit" style="margin-top: 2rem; background: var(--success); color: white;">Crear Cuenta</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Equipo de Trabajo</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Usuario</th><th>Rol</th><th>Acción</th></tr></thead>
+                            <tbody id="list-usuarios"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MANTENIMIENTO -->
+        <div id="sec-mantenimiento" class="config-section">
+            <div class="card" style="border: 1px solid var(--danger);">
+                <h3 style="color: var(--danger);">Zona de Riesgo</h3>
+                <button onclick="doBackup()" style="margin-top: 1rem;">Backup de Seguridad</button>
+                <button onclick="doReset()" style="background: var(--danger); margin-top: 1rem;">Reset del Sistema</button>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
+    <script>
+        function showSection(id) {
+            document.querySelectorAll('.config-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function loadAll() {
+            const res = await fetch('/api/config/negocio');
+            const data = await res.json();
+            if (data) {
+                document.getElementById('conf-nombre').value = data.nombre;
+                document.getElementById('conf-tipo').value = data.tipo;
+                document.getElementById('conf-sheet-url-ven').value = data.sheet_url_ventas || '';
+                document.getElementById('conf-color-acento').value = data.color_acento || '#38bdf8';
+                document.getElementById('acento-hex').textContent = data.color_acento || '#38bdf8';
+            }
+            loadUsuarios();
+            aplicarTemaVisual();
+            aplicarTraduccionOperativa();
+        }
+
+        // GESTIÓN DE USUARIOS
+        document.getElementById('form-usuario').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                username: document.getElementById('user-name').value,
+                password: document.getElementById('user-pass').value,
+                role: document.getElementById('user-role').value
+            };
+            const res = await fetch('/api/usuarios', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                alert('Usuario creado con éxito');
+                e.target.reset();
+                loadUsuarios();
+            }
+        };
+
+        async function loadUsuarios() {
+            const res = await fetch('/api/usuarios');
+            const data = await res.json();
+            document.getElementById('list-usuarios').innerHTML = data.map(u => `
+                <tr>
+                    <td><strong>${u.username}</strong></td>
+                    <td><span style="font-size: 0.7rem; background: #333; padding: 2px 6px; border-radius: 4px;">${u.role}</span></td>
+                    <td><button onclick="deleteUser(${u.id})" style="padding: 2px 8px; background: none; border: 1px solid #fb7185; color: #fb7185;">Eliminar</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function deleteUser(id) {
+            if(confirm('¿Seguro que quieres eliminar este usuario?')) {
+                const res = await fetch(`/api/usuarios/${id}`, {method: 'DELETE'});
+                if (res.ok) loadUsuarios();
+                else { const d = await res.json(); alert(d.error); }
+            }
+        }
+
+        document.getElementById('form-perfil').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                nombre: document.getElementById('conf-nombre').value,
+                tipo: document.getElementById('conf-tipo').value,
+                sheet_url_ventas: document.getElementById('conf-sheet-url-ven').value,
+                color_acento: document.getElementById('conf-color-acento').value
+            };
+            await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            location.reload();
+        };
+
+        document.getElementById('form-branding').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                nombre: document.getElementById('conf-nombre').value,
+                tipo: document.getElementById('conf-tipo').value,
+                color_acento: document.getElementById('conf-color-acento').value
+            };
+            await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            aplicarTemaVisual();
+            document.getElementById('acento-hex').textContent = data.color_acento;
+        };
+
+        async function doBackup() { await fetch('/api/mantenimiento/backup', {method:'POST'}); alert('Backup creado en la carpeta /backups'); }
+        async function doReset() { if(confirm('¡ATENCIÓN! Esto borrará todos tus datos. ¿Proceder?')) { await fetch('/api/mantenimiento/reset', {method:'POST'}); location.reload(); } }
+
+        window.onload = loadAll;
+    </script>
+</body>
+</html>

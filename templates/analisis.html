@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capa Analítica Pro - Business OS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav>
+        <div class="logo">Business OS <span style="font-size: 0.6rem; background: var(--accent-color); color: black; padding: 2px 5px; border-radius: 4px;">PRO</span></div>
+        <ul class="nav-links">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/ventas">Ventas</a></li>
+            <li><a href="/inventario">Inventario</a></li>
+            <li><a href="/analisis" class="active">Análisis</a></li>
+            <li><a href="/configuracion">Configuración</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="header">
+            <h1>Capa Analítica Avanzada</h1>
+            <div style="display: flex; gap: 1rem;">
+                <button onclick="showCierreCaja()" style="background: var(--success); color: white;">Cierre de Caja Hoy</button>
+            </div>
+        </div>
+
+        <!-- 1. Rentabilidad y Participación -->
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3>Análisis de Rentabilidad y Mezcla de Ventas (MCU)</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Precio Venta</th>
+                            <th>Costo Receta</th>
+                            <th>Margen (MCU)</th>
+                            <th>% Margen</th>
+                            <th>Participación (Ventas)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="list-rentabilidad"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <!-- 2. Utilidad Mensual -->
+            <div class="card">
+                <h3>Histórico de Utilidad Neta</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mes</th>
+                                <th>Ingresos</th>
+                                <th>Costos V.</th>
+                                <th>Utilidad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="list-mensual"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. Flujo de Inventario -->
+            <div class="card">
+                <h3>Flujo de Inventario (Trazabilidad)</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Insumo</th>
+                                <th>Inicial</th>
+                                <th>Entradas</th>
+                                <th>Salidas</th>
+                                <th>Final</th>
+                            </tr>
+                        </thead>
+                        <tbody id="list-flujo"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 0
+        });
+
+        async function loadAnalisis() {
+            // 1. Rentabilidad y Participación
+            const resR = await fetch('/api/analisis/rentabilidad');
+            const dataR = await resR.json();
+            
+            // Obtener resumen para participacion
+            const resRes = await fetch('/api/resumen');
+            const dataRes = await resRes.json();
+            const partMap = {};
+            dataRes.detalle_productos.forEach(p => partMap[p.nombre] = p.participacion);
+
+            document.getElementById('list-rentabilidad').innerHTML = dataR.map(p => `
+                <tr>
+                    <td>${p.producto}</td>
+                    <td>${formatCOP.format(p.precio)}</td>
+                    <td>${formatCOP.format(p.costo)}</td>
+                    <td style="color: var(--success); font-weight: bold;">${formatCOP.format(p.margen)}</td>
+                    <td>${p.porcentaje.toFixed(1)}%</td>
+                    <td>${(partMap[p.producto] || 0).toFixed(1)}%</td>
+                </tr>
+            `).join('');
+
+            // 2. Mensual
+            const resM = await fetch('/api/analisis/mensual');
+            const dataM = await resM.json();
+            document.getElementById('list-mensual').innerHTML = dataM.map(m => `
+                <tr>
+                    <td>${m.mes}</td>
+                    <td>${formatCOP.format(m.ingresos)}</td>
+                    <td>${formatCOP.format(m.costos_v)}</td>
+                    <td style="color: ${m.utilidad >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCOP.format(m.utilidad)}</td>
+                </tr>
+            `).join('');
+
+            // 3. Flujo Inventario
+            const resF = await fetch('/api/analisis/flujo'); // Necesitaremos crear este endpoint
+            const dataF = await resF.json();
+            document.getElementById('list-flujo').innerHTML = dataF.map(i => `
+                <tr>
+                    <td>${i.nombre}</td>
+                    <td>${i.inicial}</td>
+                    <td><span style="color: var(--success)">+${i.entradas}</span></td>
+                    <td><span style="color: var(--danger)">-${i.salidas}</span></td>
+                    <td><strong>${i.final}</strong></td>
+                </tr>
+            `).join('');
+        }
+
+        async function showCierreCaja() {
+            const res = await fetch('/api/cierre-caja');
+            const data = await res.json();
+            let detalle = Object.entries(data.detalle).map(([k,v]) => `${k}: ${formatCOP.format(v)}`).join('\n');
+            alert(`Cierre de Caja - ${data.fecha}\n\n${detalle}\n\nTOTAL: ${formatCOP.format(data.total)}`);
+        }
+
+        window.onload = loadAnalisis;
+    </script>
+</body>
+</html>

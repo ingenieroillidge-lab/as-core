@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario - AS CORE</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav>
+        <div class="logo">AS CORE</div>
+        <ul class="nav-links">
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/">Dashboard</a></li>
+            {% endif %}
+            <li><a href="/ventas">Ventas</a></li>
+            <li><a href="/inventario" class="active" data-lang="inventario">Inventario</a></li>
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/analisis">Análisis</a></li>
+            <li><a href="/configuracion">Configuración</a></li>
+            {% endif %}
+            <li><a href="/logout" style="color: #fb7185;">Salir</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="header">
+            <h1 data-lang="inventario">Estado del Inventario</h1>
+            <p style="color: var(--text-secondary)">Vista de existencias para {{ session.username }}.</p>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th data-lang="insumos">Insumo</th>
+                        <th data-lang="stock">Stock Actual</th>
+                        {% if session.role == 'ADMIN' %}
+                        <th>Costo Unit.</th>
+                        <th>Acción</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody id="inventory-body"></tbody>
+            </table>
+        </div>
+
+        {% if session.role == 'ADMIN' %}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
+            <div class="card">
+                <h3 data-lang="reponer">Reponer Existencias</h3>
+                <form id="reponer-form" style="margin-top: 1rem;">
+                    <div class="form-group"><label data-lang="insumos">Insumo</label><select id="insumo-id-rep" required></select></div>
+                    <div class="form-group"><label>Cantidad</label><input type="number" id="cantidad-reponer" step="0.01" required></div>
+                    <button type="submit">Registrar Entrada</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+
+    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        const ROLE = "{{ session.role }}";
+
+        async function loadInventory() {
+            aplicarTraduccionOperativa();
+            const res = await fetch('/api/inventario');
+            const data = await res.json();
+            const tbody = document.getElementById('inventory-body');
+            const selectRep = document.getElementById('insumo-id-rep');
+            
+            tbody.innerHTML = '';
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.nombre}</td>
+                    <td><strong>${item.stock_actual} ${item.unidad}</strong></td>
+                    ${ROLE === 'ADMIN' ? `<td>${formatCOP.format(item.costo_unitario_base || 0)}</td>` : ''}
+                    ${ROLE === 'ADMIN' ? `<td><button onclick="fillRep(${item.id})">Reponer</button></td>` : ''}
+                `;
+                tbody.appendChild(tr);
+                if (selectRep) selectRep.add(new Option(item.nombre, item.id));
+            });
+        }
+
+        function fillRep(id) { document.getElementById('insumo-id-rep').value = id; }
+
+        if (document.getElementById('reponer-form')) {
+            document.getElementById('reponer-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const data = { insumo_id: document.getElementById('insumo-id-rep').value, cantidad: document.getElementById('cantidad-reponer').value };
+                await fetch('/api/reponer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                loadInventory(); e.target.reset();
+            };
+        }
+
+        window.onload = loadInventory;
+    </script>
+</body>
+</html>
