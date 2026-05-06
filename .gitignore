@@ -1,0 +1,7 @@
+## .gitignore
+venv/
+__pycache__/
+*.db
+backups/
+*.pdf
+.env
