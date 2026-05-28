@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AS PLATFORM - Control total de tu negocio en tiempo real</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030308;
+            --card-bg: rgba(13, 17, 30, 0.7);
+            --accent-cyan: #38bdf8;
+            --accent-purple: #a855f7;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glow-cyan: rgba(56, 189, 248, 0.15);
+            --glow-purple: rgba(168, 85, 247, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Background glows */
+        .bg-glow-1 {
+            position: absolute;
+            top: -200px;
+            right: -200px;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--glow-cyan) 0%, rgba(0,0,0,0) 70%);
+            z-index: -1;
+            filter: blur(80px);
+        }
+
+        .bg-glow-2 {
+            position: absolute;
+            top: 600px;
+            left: -300px;
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, var(--glow-purple) 0%, rgba(0,0,0,0) 70%);
+            z-index: -1;
+            filter: blur(100px);
+        }
+
+        .bg-glow-3 {
+            position: absolute;
+            bottom: 400px;
+            right: -250px;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--glow-cyan) 0%, rgba(0,0,0,0) 70%);
+            z-index: -1;
+            filter: blur(80px);
+        }
+
+        /* Navigation */
+        header {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span.badge {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.65rem;
+            background: rgba(168, 85, 247, 0.2);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            padding: 2px 6px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-login {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            text-decoration: none;
+            padding: 0.6rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(5px);
+        }
+
+        .btn-login:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Container helper */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        /* Section titles */
+        .section-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 4rem;
+        }
+
+        .section-tag {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
+            letter-spacing: 3px;
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        /* 1. HERO SECTION */
+        .hero-section {
+            padding: 4rem 2rem 8rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-title-wrapper {
+            max-width: 900px;
+            margin: 0 auto 1.5rem;
+        }
+
+        .hero-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, #ffffff 40%, #e2e8f0 70%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            max-width: 600px;
+            margin: 0 auto 3rem;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        .hero-actions {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
+            color: #030712;
+            text-decoration: none;
+            padding: 1.1rem 2.2rem;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.4);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px -5px rgba(56, 189, 248, 0.6);
+            opacity: 0.95;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            text-decoration: none;
+            padding: 1.1rem 2.2rem;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+        }
+
+        /* Mockup Visual */
+        .mockup-container {
+            max-width: 950px;
+            margin: 0 auto;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .mockup-laptop {
+            background: #0d0f19;
+            border-radius: 20px 20px 0 0;
+            border: 4px solid #334155;
+            border-bottom: none;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            aspect-ratio: 16/10;
+            overflow: hidden;
+            position: relative;
+            transform: rotateX(5deg);
+        }
+
+        .mockup-screen {
+            width: 100%;
+            height: 100%;
+            padding: 1.5rem;
+            background: #090d16;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            text-align: left;
+        }
+
+        .mock-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 1rem;
+        }
+
+        .mock-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .mock-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .mock-bar {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            width: 60%;
+        }
+
+        .mock-bar.short { width: 40%; }
+        .mock-bar.value { height: 16px; background: var(--accent-cyan); width: 80%; border-radius: 6px; margin-top: 0.5rem; }
+        .mock-bar.purple { background: var(--accent-purple); }
+
+        .mock-charts {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .mock-chart-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .mock-chart-lines {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            padding-top: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .mock-line-col {
+            flex: 1;
+            background: linear-gradient(to top, rgba(56, 189, 248, 0.1), var(--accent-cyan));
+            border-radius: 4px 4px 0 0;
+            transition: height 1s ease;
+        }
+
+        .mockup-laptop-base {
+            height: 16px;
+            background: #1e293b;
+            border-radius: 0 0 20px 20px;
+            border-top: 2px solid #475569;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.5);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Mobile mockup overlay */
+        .mockup-phone {
+            position: absolute;
+            bottom: -30px;
+            right: -40px;
+            width: 200px;
+            height: 400px;
+            background: #090d16;
+            border: 8px solid #334155;
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            z-index: 5;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+            transform: rotate(-5deg);
+        }
+
+        /* 2. EL PROBLEMA */
+        .problem-section {
+            background: linear-gradient(180deg, rgba(3,3,8,0) 0%, rgba(13,10,24,0.3) 50%, rgba(3,3,8,0) 100%);
+        }
+
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 2rem;
+        }
+
+        .problem-card {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2.5rem 2rem;
+            transition: all 0.4s ease;
+        }
+
+        .problem-card:hover {
+            background: rgba(239, 68, 68, 0.02);
+            border-color: rgba(239, 68, 68, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .problem-icon {
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .problem-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+        }
+
+        .problem-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* 3. LA SOLUCIÓN */
+        .solution-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 2rem;
+        }
+
+        .solution-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .solution-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-purple));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .solution-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(56, 189, 248, 0.2);
+            box-shadow: 0 20px 40px -15px rgba(56, 189, 248, 0.1);
+        }
+
+        .solution-card:hover::before {
+            opacity: 1;
+        }
+
+        .solution-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .solution-card.alt .solution-icon {
+            background: rgba(168, 85, 247, 0.1);
+            color: var(--accent-purple);
+        }
+
+        .solution-card h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .solution-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* 4. TU DIFERENCIAL */
+        .diff-section {
+            background: rgba(13, 17, 30, 0.4);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .diff-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .diff-content h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.15;
+        }
+
+        .diff-content p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.7;
+            margin-bottom: 2rem;
+        }
+
+        .diff-badge {
+            background: rgba(168, 85, 247, 0.15);
+            color: #d8b4fe;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .excel-vs-as {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .comparison-row {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .comp-icon {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+        }
+
+        .comp-text h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .comp-text p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* 5. MODO VITRINA */
+        .vitrina-section {
+            text-align: center;
+        }
+
+        .vitrina-card {
+            max-width: 600px;
+            margin: 3rem auto 0;
+            background: var(--card-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 28px;
+            padding: 3rem 2rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 30px 60px -15px rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .vitrina-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            position: relative;
+        }
+
+        .vitrina-kpi {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .vitrina-kpi h4 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.75rem;
+        }
+
+        .vitrina-kpi .val {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .vitrina-kpi .val.cyan {
+            color: var(--accent-cyan);
+            text-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .vitrina-kpi.locked .val {
+            filter: blur(6px);
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .lock-badge {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -20%);
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #fb7185;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vitrina-msg {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .vitrina-submsg {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+        }
+
+        /* 6. TIPOS DE NEGOCIO */
+        .types-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .type-card {
+            background: rgba(255,255,255,0.01);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem 2rem;
+            text-align: left;
+            transition: all 0.3s ease;
+        }
+
+        .type-card:hover {
+            background: rgba(255,255,255,0.03);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        .type-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+
+        .type-card h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+        }
+
+        .type-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* 7. PLANES */
+        .plans-container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+        }
+
+        .plan-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 3.5rem 2.5rem;
+            position: relative;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .plan-card.pro {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 20px 40px rgba(56, 189, 248, 0.08);
+            background: linear-gradient(145deg, rgba(13, 17, 30, 0.9), rgba(3, 3, 8, 0.95));
+        }
+
+        .plan-card.pro::after {
+            content: 'RECOMENDADO';
+            position: absolute;
+            top: -15px;
+            right: 30px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            color: #030712;
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 20px;
+            letter-spacing: 1px;
+        }
+
+        .plan-header h3 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .plan-price {
+            font-size: 3rem;
+            font-weight: 800;
+            font-family: 'Outfit', sans-serif;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: baseline;
+        }
+
+        .plan-price span {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-left: 5px;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin: 2rem 0 3rem;
+            text-align: left;
+        }
+
+        .plan-features li {
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .plan-features li .chk {
+            color: var(--accent-cyan);
+            font-weight: 900;
+        }
+
+        .plan-features li .crs {
+            color: rgba(255,255,255,0.2);
+            font-weight: 900;
+        }
+
+        .btn-plan {
+            display: block;
+            text-align: center;
+            text-decoration: none;
+            padding: 1.1rem;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-plan.free {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-plan.free:hover {
+            background: rgba(255,255,255,0.08);
+        }
+
+        .btn-plan.pro {
+            background: var(--accent-cyan);
+            color: #030712;
+            box-shadow: 0 10px 20px -5px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-plan.pro:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px -5px rgba(56, 189, 248, 0.5);
+        }
+
+        /* 8. TESTIMONIOS */
+        .testi-card {
+            max-width: 750px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.01);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 3rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .testi-text {
+            font-size: 1.25rem;
+            line-height: 1.7;
+            font-weight: 400;
+            margin-bottom: 2rem;
+            font-style: italic;
+            color: #e2e8f0;
+        }
+
+        .testi-author {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--accent-cyan);
+            letter-spacing: 0.5px;
+        }
+
+        /* 9. CTA FINAL */
+        .cta-section {
+            position: relative;
+            padding: 8rem 2rem;
+            text-align: center;
+        }
+
+        .cta-box {
+            max-width: 900px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, rgba(13,17,30,0.8), rgba(88,28,135,0.15));
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 32px;
+            padding: 5rem 3rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 30px 60px -20px rgba(168, 85, 247, 0.15);
+        }
+
+        .cta-box h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .cta-box p {
+            color: var(--text-secondary);
+            font-size: 1.15rem;
+            max-width: 600px;
+            margin: 0 auto 3rem;
+            line-height: 1.6;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 3rem 2rem;
+            text-align: center;
+            color: #555;
+            font-size: 0.85rem;
+        }
+
+        footer p {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Responsive styles */
+        @media (max-width: 992px) {
+            .diff-grid {
+                grid-template-columns: 1fr;
+                gap: 3rem;
+            }
+            .plans-container {
+                grid-template-columns: 1fr;
+                max-width: 500px;
+            }
+            .types-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.6rem;
+            }
+            .section-title {
+                font-size: 2rem;
+            }
+            .mockup-phone {
+                display: none; /* Hide phone mockup on mobile to prevent overflow issues */
+            }
+            .cta-box {
+                padding: 3rem 1.5rem;
+            }
+            .cta-box h2 {
+                font-size: 2.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+    <div class="bg-glow-3"></div>
+
+    <header>
+        <div class="logo">
+            AS PLATFORM <span class="badge">SaaS</span>
+        </div>
+        <a href="/login" class="btn-login">Iniciar sesión</a>
+    </header>
+
+    <!-- 1. HERO SECTION -->
+    <section class="hero-section">
+        <div class="container" style="padding-top: 2rem; padding-bottom: 4rem;">
+            <div class="hero-title-wrapper">
+                <h1 class="hero-title">Descubre si tu negocio realmente está ganando dinero</h1>
+            </div>
+            <p class="hero-subtitle">
+                Inventario, ventas, costos y análisis financiero inteligente en una sola plataforma en tiempo real.
+            </p>
+            <div class="hero-actions">
+                <a href="/register" class="btn-primary">
+                    Probar Gratis
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </a>
+                <a href="/demo" class="btn-secondary">
+                    Explorar Demo
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                </a>
+            </div>
+
+            <!-- Laptop + Phone CSS visual mockup -->
+            <div class="mockup-container">
+                <div class="mockup-laptop">
+                    <div class="mockup-screen">
+                        <div class="mock-nav">
+                            <div style="width: 80px; height: 10px; background: rgba(255,255,255,0.15); border-radius: 5px;"></div>
+                            <div style="display: flex; gap: 8px;">
+                                <div style="width: 40px; height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px;"></div>
+                                <div style="width: 40px; height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px;"></div>
+                            </div>
+                        </div>
+                        <div class="mock-grid">
+                            <div class="mock-card">
+                                <div class="mock-bar"></div>
+                                <div class="mock-bar short"></div>
+                                <div class="mock-bar value"></div>
+                            </div>
+                            <div class="mock-card">
+                                <div class="mock-bar"></div>
+                                <div class="mock-bar short"></div>
+                                <div class="mock-bar value" style="background: #fb7185; width: 65%;"></div>
+                            </div>
+                            <div class="mock-card">
+                                <div class="mock-bar"></div>
+                                <div class="mock-bar short"></div>
+                                <div class="mock-bar value purple" style="width: 50%;"></div>
+                            </div>
+                            <div class="mock-card">
+                                <div class="mock-bar"></div>
+                                <div class="mock-bar short"></div>
+                                <div class="mock-bar value" style="background: #34d399; width: 90%;"></div>
+                            </div>
+                        </div>
+                        <div class="mock-charts">
+                            <div class="mock-chart-card">
+                                <div class="mock-bar" style="width: 30%;"></div>
+                                <div class="mock-chart-lines">
+                                    <div class="mock-line-col" style="height: 30%;"></div>
+                                    <div class="mock-line-col" style="height: 55%;"></div>
+                                    <div class="mock-line-col" style="height: 45%;"></div>
+                                    <div class="mock-line-col" style="height: 80%;"></div>
+                                    <div class="mock-line-col" style="height: 95%;"></div>
+                                    <div class="mock-line-col" style="height: 70%;"></div>
+                                </div>
+                            </div>
+                            <div class="mock-chart-card" style="align-items: center; justify-content: center;">
+                                <div style="width: 80px; height: 80px; border-radius: 50%; border: 12px solid var(--accent-purple); border-top-color: var(--accent-cyan); transform: rotate(45deg);"></div>
+                                <div class="mock-bar" style="width: 50%; margin-top: 1rem; margin-bottom: 0;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mockup-laptop-base"></div>
+
+                <!-- Floating Phone Mockup -->
+                <div class="mockup-phone">
+                    <div style="width: 60px; height: 16px; background: #1e293b; border-radius: 10px; align-self: center; margin-bottom: 0.5rem;"></div>
+                    <div style="flex: 1; background: #07090f; border-radius: 16px; padding: 0.75rem; display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="mock-bar" style="width: 50%;"></div>
+                        <div class="mock-card" style="padding: 0.75rem;">
+                            <div class="mock-bar" style="width: 80%;"></div>
+                            <div class="mock-bar short"></div>
+                            <div class="mock-bar value" style="height: 12px;"></div>
+                        </div>
+                        <div class="mock-card" style="padding: 0.75rem;">
+                            <div class="mock-bar" style="width: 80%;"></div>
+                            <div class="mock-bar short"></div>
+                            <div class="mock-bar value purple" style="height: 12px; width: 60%;"></div>
+                        </div>
+                        <div class="mock-chart-lines" style="height: 80px;">
+                            <div class="mock-line-col" style="height: 40%; background: var(--accent-purple);"></div>
+                            <div class="mock-line-col" style="height: 70%;"></div>
+                            <div class="mock-line-col" style="height: 90%; background: var(--accent-purple);"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. EL PROBLEMA (IDENTIFICACIÓN) -->
+    <section class="problem-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">El Problema</span>
+                <h2 class="section-title">Muchos negocios venden todos los días… pero no saben realmente cuánto ganan.</h2>
+                <p class="section-desc">Gestionar un negocio con herramientas tradicionales te oculta la información que necesitas para tomar decisiones de verdad.</p>
+            </div>
+            
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <span class="problem-icon">❌</span>
+                    <h3>Dependencia de Excel</h3>
+                    <p>Hojas de cálculo complejas, lentas y propensas a errores de dedo que terminan desactualizadas e inservibles.</p>
+                </div>
+                <div class="problem-card">
+                    <span class="problem-icon">❌</span>
+                    <h3>Inventario descontrolado</h3>
+                    <p>Falta de stock de insumos a mitad del servicio o pérdidas misteriosas de mercancía por falta de control automatizado.</p>
+                </div>
+                <div class="problem-card">
+                    <span class="problem-icon">❌</span>
+                    <h3>Costos mal calculados</h3>
+                    <p>Precios de venta basados en intuiciones en lugar del costo real acumulado de cada ingrediente o recurso.</p>
+                </div>
+                <div class="problem-card">
+                    <span class="problem-icon">❌</span>
+                    <h3>Utilidad real oculta</h3>
+                    <p>Ver la caja registradora llena al final del día te hace creer que estás ganando dinero, sin considerar costos y pasivos reales.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. LA SOLUCIÓN (AS PLATFORM) -->
+    <section class="solution-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">La Solución</span>
+                <h2 class="section-title">AS PLATFORM toma el control de tu negocio</h2>
+                <p class="section-desc">Diseñado para reemplazar los procesos contables complejos con un sistema automatizado en tiempo real.</p>
+            </div>
+
+            <div class="solution-grid">
+                <div class="solution-card">
+                    <div class="solution-icon">📦</div>
+                    <h3>Inventario Inteligente</h3>
+                    <p>Control automático y en tiempo real de insumos, stock y materias primas. Descuenta el inventario automáticamente tras cada venta.</p>
+                </div>
+                <div class="solution-card alt">
+                    <div class="solution-icon">💰</div>
+                    <h3>Rentabilidad Real</h3>
+                    <p>Calcula automáticamente la utilidad neta y los márgenes de contribución de cada producto de tu catálogo al centavo.</p>
+                </div>
+                <div class="solution-card">
+                    <div class="solution-icon">📊</div>
+                    <h3>Dashboard Estratégico</h3>
+                    <p>Visualiza gráficos dinámicos, tendencias de venta y el punto de equilibrio exacto para saber cuándo empiezas a generar ganancias.</p>
+                </div>
+                <div class="solution-card alt">
+                    <div class="solution-icon">☁️</div>
+                    <h3>En la Nube</h3>
+                    <p>Acceso inmediato y seguro desde tu celular, tablet o laptop. Tus datos están sincronizados en la nube en todo momento.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. TU DIFERENCIAL (MUY IMPORTANTE) -->
+    <section class="diff-section">
+        <div class="container">
+            <div class="diff-grid">
+                <div class="diff-content">
+                    <span class="diff-badge">Único en el mercado</span>
+                    <h2>No es solo un sistema de ventas común</h2>
+                    <p>
+                        A diferencia de otros puntos de venta u hojas de cálculo que calculan tus márgenes basándose en precios de costo estáticos, AS Platform guarda el costo real de cada venta en el momento exacto en que ocurre.
+                    </p>
+                    <p>
+                        Esto evita que los cambios futuros de precios de tus proveedores distorsionen tus reportes financieros históricos. Tendrás consistencia analítica absoluta.
+                    </p>
+                </div>
+                
+                <div class="excel-vs-as">
+                    <div class="comparison-row">
+                        <span class="comp-icon" style="color: #fb7185;">☠️</span>
+                        <div class="comp-text">
+                            <h4 style="color: #fb7185;">Hojas de Excel del Pasado</h4>
+                            <p>Si cambias el precio de compra de un insumo hoy, todos tus reportes de utilidad de los meses pasados se alteran y arruinan.</p>
+                        </div>
+                    </div>
+                    <div class="comparison-row" style="border-color: rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.02);">
+                        <span class="comp-icon" style="color: var(--accent-cyan);">🛡️</span>
+                        <div class="comp-text">
+                            <h4 style="color: var(--accent-cyan);">La Consistencia Histórica de AS</h4>
+                            <p>El costo de tu insumo se congela en la transacción en el momento de la venta. Tu historial financiero permanece exacto.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. MODO VITRINA (DEMO VISUAL) -->
+    <section class="vitrina-section">
+        <div class="container">
+            <div class="section-header" style="margin-bottom: 2rem;">
+                <span class="section-tag" style="color: var(--accent-purple);">Control Financiero</span>
+                <h2 class="section-title">El poder del análisis inteligente</h2>
+                <p class="section-desc">Una vista rápida de lo que AS Platform procesa detrás de escena con cada transacción en tu negocio.</p>
+            </div>
+
+            <!-- Visual blur preview card -->
+            <div class="vitrina-card">
+                <div class="vitrina-kpi-grid">
+                    <div class="vitrina-kpi">
+                        <h4>Ingresos Totales</h4>
+                        <div class="val cyan">$24,500,000</div>
+                    </div>
+                    <div class="vitrina-kpi locked">
+                        <h4>Utilidad Neta</h4>
+                        <div class="val">$8,120,000</div>
+                        <div class="lock-badge">🔒 PRO</div>
+                    </div>
+                    <div class="vitrina-kpi locked">
+                        <h4>Margen Promedio</h4>
+                        <div class="val">33.1%</div>
+                        <div class="lock-badge">🔒 PRO</div>
+                    </div>
+                </div>
+                <h3 class="vitrina-msg">El sistema ya calculó tu utilidad.</h3>
+                <p class="vitrina-submsg">Solo necesitas registrarte para desbloquear tu rentabilidad real.</p>
+                <a href="/register" class="btn-primary" style="padding: 0.9rem 2rem; font-size: 0.95rem;">
+                    Desbloquear mi Utilidad
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. TIPOS DE NEGOCIO -->
+    <section class="types-section">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Adaptabilidad</span>
+                <h2 class="section-title">Perfecto para tu tipo de negocio</h2>
+                <p class="section-desc">Nuestra interfaz y lógica de lenguaje se adaptan de forma inteligente a la naturaleza de tu operación.</p>
+            </div>
+
+            <div class="types-grid">
+                <div class="type-card">
+                    <span class="type-icon">🍔</span>
+                    <h3>Operaciones de Producción</h3>
+                    <p>Ideal para restaurantes, comidas rápidas, cafeterías y reposterías. Asocia ingredientes a tus platos terminados y controla mermas.</p>
+                </div>
+                <div class="type-card">
+                    <span class="type-icon">🏪</span>
+                    <h3>Operaciones de Reventa</h3>
+                    <p>Perfecto para tiendas de ropa, vending machines, minimarkets y comercializadoras. Maneja empaques, combos y stock.</p>
+                </div>
+                <div class="type-card">
+                    <span class="type-icon">🛠️</span>
+                    <h3>Operaciones de Servicio</h3>
+                    <p>Pensado para consultores, talleres mecánicos, salones de belleza y agencias. Controla tus gastos fijos y costos de recursos sin stock físico.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. PLANES -->
+    <section class="plans-section" style="background: linear-gradient(180deg, rgba(3,3,8,0) 0%, rgba(13,10,24,0.2) 100%);">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Planes y Precios</span>
+                <h2 class="section-title">Un plan para cada etapa de tu negocio</h2>
+                <p class="section-desc">Comienza gratis hoy mismo y escala tus funcionalidades PRO a medida que creces.</p>
+            </div>
+
+            <div class="plans-container">
+                <!-- FREE -->
+                <div class="plan-card">
+                    <div class="plan-header">
+                        <h3>FREE</h3>
+                        <div class="plan-price">$0 <span>/ siempre</span></div>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Perfecto para iniciar y registrar ventas básicas.</p>
+                    </div>
+                    <ul class="plan-features">
+                        <li><span class="chk">✓</span> Registro de ventas y cobros</li>
+                        <li><span class="chk">✓</span> Inventario básico de existencias</li>
+                        <li><span class="chk">✓</span> Límite de hasta 10 productos</li>
+                        <li><span class="crs">✕</span> Análisis de Utilidad Neta</li>
+                        <li><span class="crs">✕</span> Punto de Equilibrio en tiempo real</li>
+                        <li><span class="crs">✕</span> Sincronización Google Sheets</li>
+                    </ul>
+                    <a href="/register" class="btn-plan free">Comenzar gratis</a>
+                </div>
+
+                <!-- PRO -->
+                <div class="plan-card pro">
+                    <div class="plan-header">
+                        <h3 style="color: var(--accent-cyan);">PRO</h3>
+                        <div class="plan-price">$24,900 <span>/ mes</span></div>
+                        <p style="color: #94a3b8; font-size: 0.9rem;">Para negocios que necesitan control total y rentabilidad real.</p>
+                    </div>
+                    <ul class="plan-features">
+                        <li><span class="chk">✓</span> Productos e insumos ilimitados</li>
+                        <li><span class="chk">✓</span> <strong>Costo Histórico por Venta</strong></li>
+                        <li><span class="chk">✓</span> <strong>Márgenes y Utilidad Neta en Vivo</strong></li>
+                        <li><span class="chk">✓</span> <strong>Cálculo de Punto de Equilibrio</strong></li>
+                        <li><span class="chk">✓</span> Alertas inteligentes de Stock Bajo</li>
+                        <li><span class="chk">✓</span> Sincronización en la Nube y Soporte</li>
+                    </ul>
+                    <a href="/register" class="btn-plan pro">Obtener 7 días Gratis</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 8. TESTIMONIO / CONFIANZA -->
+    <section class="testi-section">
+        <div class="container">
+            <div class="testi-card">
+                <p class="testi-text">
+                    "AS Platform fue diseñado meticulosamente para reemplazar hojas de cálculo contables complejas y brindar control financiero en tiempo real a pequeños y medianos negocios que necesitan claridad y tranquilidad operativa."
+                </p>
+                <div class="testi-author">AS CORE TEAM</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 9. CTA FINAL -->
+    <section class="cta-section">
+        <div class="bg-glow-2" style="top: 0; left: 20%; width: 500px; height: 500px;"></div>
+        <div class="cta-box">
+            <h2>Empieza hoy a entender realmente cómo se mueve tu negocio</h2>
+            <p>
+                Regístrate de forma gratuita en menos de 1 minuto. No requieres tarjetas de crédito. Obtén acceso inmediato a tu panel financiero en vivo.
+            </p>
+            <a href="/register" class="btn-primary">
+                🚀 Crear cuenta gratis
+            </a>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 AS PLATFORM. Todos los derechos reservados.</p>
+        <p style="color: #333;">Desarrollado para claridad, rentabilidad y control financiero empresarial.</p>
+    </footer>
+</body>
+</html>

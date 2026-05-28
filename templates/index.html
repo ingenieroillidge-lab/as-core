@@ -3,34 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AS CORE - Dashboard</title>
+    <title>AS PLATFORM - Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
     <style>
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
         .banner-trial { animation: pulse 6s infinite; }
-        .blur-value { filter: blur(5px); pointer-events: none; user-select: none; color: #38bdf8; }
-        .lock-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); border-radius: 20px; cursor: pointer; transition: 0.3s; }
-        .lock-overlay:hover { background: rgba(0,0,0,0.6); }
+        .blur-value { filter: blur(6px); pointer-events: none; user-select: none; }
+        .lock-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(3, 3, 8, 0.55); border-radius: 20px; cursor: pointer; transition: all 0.3s ease; backdrop-filter: blur(1px); }
+        .lock-overlay:hover { background: rgba(3, 3, 8, 0.75); }
         .micro-copy { font-size: 0.65rem; color: #666; margin-top: 0.5rem; font-weight: 500; }
-        .progress-container { background: #1a1a1a; padding: 1rem; border-radius: 12px; margin-top: 1rem; border: 1px solid #333; }
-        .progress-bar { height: 6px; background: #333; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+        .progress-container { background: #111827; padding: 1rem; border-radius: 12px; margin-top: 1rem; border: 1px solid #1f2937; }
+        .progress-bar { height: 6px; background: #374151; border-radius: 3px; overflow: hidden; margin-top: 8px; }
         .progress-fill { height: 100%; background: #38bdf8; transition: 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-upgrade-modal { display: block; text-decoration: none; background: #38bdf8; color: black; padding: 1rem; border-radius: 12px; font-weight: 800; text-align: center; transition: 0.2s; }
+        .btn-upgrade-modal:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56,189,248,0.4); }
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-top: 2rem; }
+        .chart-card { position: relative; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 1.5rem; }
+        .chart-blur-container { position: relative; height: 220px; width: 100%; }
+        @media (max-width: 992px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
     </style>
-
+</head>
+<body>
     <nav>
         <div class="logo">AS PLATFORM</div>
         <ul class="nav-links">
-            {% if es_trial and dias_restantes <= 7 %}
-            <li><a href="/configuracion" class="banner-trial" style="background: #38bdf8; color: black; padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; text-decoration: none;">{{ banner_msg }}</a></li>
+            {% if es_trial and dias <= 7 %}
+            <li><a href="/upgrade_needed" class="banner-trial" style="background: #38bdf8; color: black; padding: 6px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; text-decoration: none;">{{ banner_msg }}</a></li>
             {% endif %}
             <li><a href="/" class="active">Dashboard</a></li>
             <li><a href="/ventas">Ventas</a></li>
             <li><a href="/inventario">Inventario</a></li>
-            {% if session.role == 'ADMIN' %}
+            {% if session.role in ['ADMIN', 'SUPER'] %}
             <li><a href="/analisis">Análisis</a></li>
             <li><a href="/configuracion">Configuración</a></li>
             {% endif %}
@@ -39,12 +46,13 @@
     </nav>
 
     <main>
-        <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+        {% if session.role in ['ADMIN', 'SUPER'] %}
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <div>
                 <h1>Estrategia y Control</h1>
-                <p style="color: #555; font-size: 0.8rem;">Análisis basado en tus costos reales y ventas históricas.</p>
+                <p style="color: #64748b; font-size: 0.85rem; margin-top: 0.25rem;">Análisis financiero en tiempo real de tu negocio.</p>
             </div>
-            <div id="usage-stats" class="progress-container" style="min-width: 200px;">
+            <div id="usage-stats" class="progress-container" style="min-width: 220px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.7rem;">
                     <span>Capacidad de Catálogo</span>
                     <span id="prod-count">0/10</span>
@@ -54,138 +62,230 @@
         </div>
 
         <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 2rem;">
-            <div class="card kpi"><h3>Ingresos Totales</h3><div class="value" id="ingresos">$0</div></div>
+            <div class="card kpi">
+                <h3>Ingresos Totales</h3>
+                <div class="value" id="ingresos">$0</div>
+                <div class="micro-copy">Total ventas brutas.</div>
+            </div>
             
             <div class="card kpi" style="position: relative;">
                 <h3>Utilidad Neta</h3>
                 <div class="value" id="utilidad">$0</div>
-                <div class="micro-copy">Descubre si realmente estás ganando dinero.</div>
-                <div id="lock-utilidad" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
-                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                <div class="micro-copy">Ingresos menos costos y fijos.</div>
+                <div id="lock-utilidad" class="lock-overlay" style="display: none;">
+                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
                 </div>
             </div>
 
             <div class="card kpi" style="position: relative;">
                 <h3>Margen (MCU)</h3>
                 <div class="value" id="margen">$0</div>
-                <div class="micro-copy">Identifica qué productos te dejan más.</div>
-                <div id="lock-margen" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
-                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                <div class="micro-copy">Contribución porcentual de venta.</div>
+                <div id="lock-margen" class="lock-overlay" style="display: none;">
+                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
                 </div>
             </div>
 
             <div class="card kpi" style="position: relative;">
                 <h3>P. Equilibrio</h3>
                 <div class="value" id="pe">0 uds</div>
-                <div class="micro-copy">Sabe cuánto debes vender para no perder.</div>
-                <div id="lock-pe" class="lock-overlay" style="display: none;" onclick="location.href='/analisis'">
-                    <span style="font-size: 1.2rem;">🔒 PRO</span>
+                <div class="micro-copy">Unidades requeridas sin pérdida.</div>
+                <div id="lock-pe" class="lock-overlay" style="display: none;">
+                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
                 </div>
             </div>
         </div>
-    </main>
-
-    <!-- MODAL DE CONVERSIÓN EN 2 PASOS -->
-    <div id="modal-upgrade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
-        <div class="card" style="max-width: 450px; text-align: center; padding: 3rem; border: 2px solid #38bdf8;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
-            <h2 id="modal-title">Lleva tu negocio al siguiente nivel</h2>
-            <p style="color: #888; margin-bottom: 2rem;">Desbloquea el análisis de rentabilidad real basado en tus costos históricos.</p>
-            <ul style="text-align: left; font-size: 0.9rem; margin-bottom: 2rem; list-style: none; padding: 0;">
-                <li>✅ Punto de Equilibrio exacto</li>
-                <li>✅ Margen de utilidad por producto</li>
-                <li>✅ Sincronización Google Sheets</li>
-            </ul>
-            <div style="font-size: 1.5rem; font-weight: 800; margin-bottom: 2rem;">$24.900 <span style="font-size: 0.8rem; color: #555;">/ mes</span></div>
-            <a href="/upgrade_needed" class="btn-upgrade" style="display: block; text-decoration: none; background: #38bdf8; color: black; padding: 1rem; border-radius: 12px; font-weight: 800;">Activar PRO Ahora</a>
-            <button onclick="document.getElementById('modal-upgrade').style.display='none'" style="background: none; border: none; color: #555; margin-top: 1.5rem; cursor: pointer;">Cerrar</button>
-        </div>
-    </div>
-
-    <script>
-        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
-        const dias = parseInt("{{ dias_restantes }}") || 0;
-
-        // LÓGICA DE CTA DINÁMICO
-        let ctaText = "Ver mi utilidad";
-        if (dias <= 1) ctaText = "Activar PRO ahora ⚡";
-        else if (dias <= 3) ctaText = "Desbloquear análisis 📊";
-
-        async function initDashboard() {
-            const res = await fetch('/api/resumen');
-            const data = await res.json();
-            
-            const pct = (data.cuotas.productos / data.cuotas.productos_max) * 100;
-            document.getElementById('prod-count').textContent = `${data.cuotas.productos}/${data.cuotas.productos_max}`;
-            document.getElementById('prod-fill').style.width = `${Math.min(pct, 100)}%`;
-
-            document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
-            
-            if (data.is_locked) {
-                const labels = {'utilidad': 'Utilidad Neta', 'margen': 'Margen', 'pe': 'P. Equilibrio'};
-                ['utilidad', 'margen', 'pe'].forEach(id => {
-                    const el = document.getElementById(id);
-                    el.classList.add('blur-value');
-                    el.textContent = id === 'pe' ? `${Math.ceil(data.punto_equilibrio)} uds` : formatCOP.format(data[id]);
-                    const lock = document.getElementById(`lock-${id}`);
-                    lock.style.display = 'flex';
-                    lock.innerHTML = `<span style="font-size: 0.7rem; font-weight: 800; color: #38bdf8;">${ctaText}</span><span style="font-size: 0.6rem; color: #555;">🔒 ${labels[id]}</span>`;
-                    lock.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
-                });
-            } else {
-                // [Lógica para PRO se mantiene...]
-            }
-        }
-        window.onload = initDashboard;
-    </script>
 
         <div class="dashboard-grid">
-            <div class="card"><h3>Tendencia Mensual</h3><canvas id="chartTendencia"></canvas></div>
-            <div class="card"><h3>Mix de Ventas</h3><div id="participacion-list"></div><canvas id="chartDistribucion" style="max-height: 200px;"></canvas></div>
+            <div class="chart-card">
+                <h3>Tendencia Mensual</h3>
+                <div class="chart-blur-container">
+                    <canvas id="chartTendencia" style="height: 100%; width: 100%;"></canvas>
+                    <div id="lock-chart-tendencia" class="lock-overlay" style="display: none;">
+                        <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Análisis PRO</span>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>Mix de Ventas</h3>
+                <div class="chart-blur-container">
+                    <canvas id="chartDistribucion" style="height: 100%; width: 100%;"></canvas>
+                    <div id="lock-chart-distribucion" class="lock-overlay" style="display: none;">
+                        <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Mix de Ventas PRO</span>
+                    </div>
+                </div>
+            </div>
         </div>
+
         {% else %}
-        <div class="header" style="text-align: center; margin-top: 4rem;">
+        <div class="header" style="text-align: center; margin-top: 6rem;">
             <h1>Bienvenido, {{ session.username }}</h1>
-            <p style="color: var(--text-secondary)">Usa el menú superior para acceder al punto de venta.</p>
-            <a href="/ventas" class="card" style="display: inline-block; margin-top: 2rem; padding: 2rem 4rem; text-decoration: none; border: 1px solid var(--accent-color);">
-                <h2 style="color: var(--accent-color);">Ir a Ventas →</h2>
+            <p style="color: #64748b; margin-top: 0.5rem; font-size: 1.1rem;">Usa el menú superior para registrar operaciones.</p>
+            <a href="/ventas" class="card" style="display: inline-block; margin-top: 3rem; padding: 2rem 4rem; text-decoration: none; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 20px; transition: 0.3s; background: rgba(56, 189, 248, 0.02);">
+                <h2 style="color: #38bdf8; margin: 0;">Registrar Venta →</h2>
             </a>
         </div>
         {% endif %}
     </main>
 
+    <!-- MODAL DE CONVERSIÓN -->
+    <div id="modal-upgrade" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(3,3,8,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+        <div class="card" style="max-width: 480px; text-align: center; padding: 3rem; border: 2px solid #38bdf8; border-radius: 28px; background: #0c0f1d;">
+            <div style="font-size: 3.5rem; margin-bottom: 1.5rem;">📊</div>
+            <h2>Toma el control real de tu utilidad</h2>
+            <p style="color: #64748b; margin: 1rem 0 2rem; line-height: 1.5;">Desbloquea el análisis de margen, punto de equilibrio y gráficos detallados basados en tus costos históricos.</p>
+            <ul style="text-align: left; font-size: 0.95rem; margin-bottom: 2.5rem; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px;">
+                <li>✅ Calcular punto de equilibrio dinámico</li>
+                <li>✅ Congelar costo histórico en cada venta</li>
+                <li>✅ Productos e insumos ilimitados</li>
+            </ul>
+            <div style="font-size: 1.8rem; font-weight: 800; margin-bottom: 2rem;">$24.900 <span style="font-size: 0.9rem; color: #64748b; font-weight: 400;">/ mes</span></div>
+            <a href="/upgrade_needed" class="btn-upgrade-modal">🚀 Activar PRO Ahora</a>
+            <button onclick="document.getElementById('modal-upgrade').style.display='none'" style="background: none; border: none; color: #4b5563; margin-top: 1.5rem; cursor: pointer; font-weight: 600; font-size: 0.9rem;">Cerrar Vista Previa</button>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
-    <style>
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        .locked-value { color: #555 !important; font-size: 1.2rem !important; cursor: pointer; }
-    </style>
     <script>
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
         async function initDashboard() {
-            const res = await fetch('/api/resumen');
-            const data = await res.json();
-            
-            const fields = ['ingresos', 'utilidad', 'margen', 'pe'];
-            const labels = {'utilidad': 'Utilidad Neta', 'margen': 'Margen (MCU)', 'pe': 'P. Equilibrio'};
+            try {
+                const res = await fetch('/api/resumen');
+                const data = await res.json();
+                
+                // Actualizar límite de catálogo
+                if (data.cuotas) {
+                    const pct = (data.cuotas.productos / data.cuotas.productos_max) * 100;
+                    const elCount = document.getElementById('prod-count');
+                    const elFill = document.getElementById('prod-fill');
+                    if (elCount) elCount.textContent = `${data.cuotas.productos}/${data.cuotas.productos_max}`;
+                    if (elFill) elFill.style.width = `${Math.min(pct, 100)}%`;
+                }
 
-            if (data.is_locked) {
-                document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
-                ['utilidad', 'margen', 'pe'].forEach(id => {
-                    document.getElementById(id).innerHTML = `<span class="locked-value" onclick="location.href='/analisis'">🔒 Ver mi ${labels[id]}</span>`;
-                });
-            } else {
-                document.getElementById('ingresos').textContent = formatCOP.format(data.ingresos);
-                document.getElementById('utilidad').textContent = formatCOP.format(data.utilidad);
-                document.getElementById('margen').textContent = formatCOP.format(data.margen_contribucion);
-                document.getElementById('pe').textContent = `${Math.ceil(data.punto_equilibrio)} uds`;
+                // Cargar ingresos
+                const elIngresos = document.getElementById('ingresos');
+                if (elIngresos) elIngresos.textContent = formatCOP.format(data.ingresos || 0);
+
+                if (data.is_locked) {
+                    // Si está en plan gratis, activamos la visualización teaser (blur + lock overlay)
+                    const lockedFields = ['utilidad', 'margen', 'pe'];
+                    const fakeValues = {
+                        'utilidad': '$8,420,000',
+                        'margen': '33.1%',
+                        'pe': '142 uds'
+                    };
+
+                    lockedFields.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.textContent = fakeValues[id];
+                            el.classList.add('blur-value');
+                        }
+                        const lockOverlay = document.getElementById(`lock-${id}`);
+                        if (lockOverlay) {
+                            lockOverlay.style.display = 'flex';
+                            lockOverlay.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
+                        }
+                    });
+
+                    // Lock chart containers as well
+                    const chartLocks = ['lock-chart-tendencia', 'lock-chart-distribucion'];
+                    chartLocks.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.style.display = 'flex';
+                            el.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
+                        }
+                    });
+
+                    const canvasTendencia = document.getElementById('chartTendencia');
+                    const canvasDistribucion = document.getElementById('chartDistribucion');
+                    if (canvasTendencia) canvasTendencia.classList.add('blur-value');
+                    if (canvasDistribucion) canvasDistribucion.classList.add('blur-value');
+
+                    // Draw dummy static charts under the blur
+                    drawCharts(
+                        { labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'], data: [1200000, 1900000, 3000000, 5000000, 6000000, 8420000] },
+                        { labels: ['Producto A', 'Producto B', 'Producto C'], data: [40, 35, 25] }
+                    );
+
+                } else {
+                    // Si es PRO, mostramos los datos reales sin desenfoque
+                    const elUtilidad = document.getElementById('utilidad');
+                    const elMargen = document.getElementById('margen');
+                    const elPe = document.getElementById('pe');
+
+                    if (elUtilidad) elUtilidad.textContent = formatCOP.format(data.utilidad || 0);
+                    if (elMargen) elMargen.textContent = formatCOP.format(data.margen || 0);
+                    if (elPe) elPe.textContent = `${Math.ceil(data.punto_equilibrio || 0)} uds`;
+
+                    // Cargar gráficos reales de la API
+                    const resG = await fetch('/api/dashboard/graficos');
+                    const dataG = await resG.json();
+                    drawCharts(dataG.tendencia, dataG.distribucion);
+                }
+            } catch (err) {
+                console.error("Error al cargar el dashboard:", err);
             }
         }
-            
-            const resG = await fetch('/api/dashboard/graficos');
-            const dataG = await resG.json();
-            // Lógica de gráficos aquí... (Omitida por brevedad pero funcional)
+
+        function drawCharts(tendencia, distribucion) {
+            const ctxT = document.getElementById('chartTendencia');
+            if (ctxT) {
+                new Chart(ctxT.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: tendencia.labels || [],
+                        datasets: [{
+                            label: 'Ventas ($)',
+                            data: tendencia.data || [],
+                            borderColor: '#38bdf8',
+                            backgroundColor: 'rgba(56, 189, 248, 0.05)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } }
+                        }
+                    }
+                });
+            }
+
+            const ctxD = document.getElementById('chartDistribucion');
+            if (ctxD) {
+                new Chart(ctxD.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: distribucion.labels || [],
+                        datasets: [{
+                            data: distribucion.data || [],
+                            backgroundColor: ['#38bdf8', '#818cf8', '#a855f7', '#fb7185', '#34d399'],
+                            borderColor: '#0f172a',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#64748b', boxWidth: 12, font: { size: 10 } }
+                            }
+                        }
+                    }
+                });
+            }
         }
+
         window.onload = initDashboard;
     </script>
 </body>

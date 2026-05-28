@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Interactiva - AS PLATFORM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #080810;
+            --card-bg: rgba(15, 23, 42, 0.6);
+            --accent-cyan: #38bdf8;
+            --accent-purple: #a855f7;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --success: #22c55e;
+            --border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Demo top banner */
+        .demo-banner {
+            background: linear-gradient(90deg, #1e1b4b, #581c87, #0f172a);
+            color: white;
+            padding: 0.75rem 2rem;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+            flex-wrap: wrap;
+        }
+
+        .demo-banner a {
+            background: var(--accent-cyan);
+            color: #030712;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+            transition: 0.3s ease;
+        }
+
+        .demo-banner a:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+        }
+
+        /* Nav */
+        nav {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span.badge {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.6rem;
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            padding: 2px 6px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .btn-exit {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.5rem 1.2rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-exit:hover {
+            color: white;
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        /* Layout */
+        .demo-container {
+            flex: 1;
+            max-width: 1280px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 2rem;
+        }
+
+        /* Left Side: Mock Dashboard */
+        .dashboard-main {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dashboard-header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+        }
+
+        .dashboard-header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .status-indicator {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.4; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255,255,255,0.12);
+        }
+
+        .card h3 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .card .value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+        }
+
+        .card .trend {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+        }
+
+        .trend.up { color: var(--success); }
+
+        /* Charts section */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .chart-card {
+            min-height: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-card h3 {
+            margin-bottom: 1rem;
+        }
+
+        .chart-container {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Right Side: Simulator Panel */
+        .simulator-panel {
+            background: var(--card-bg);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 28px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            align-self: start;
+        }
+
+        .sim-header h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sim-header p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-cyan);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .btn-simulate {
+            background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
+            color: #030712;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 16px -4px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-simulate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px -4px rgba(56, 189, 248, 0.5);
+        }
+
+        /* Activity log */
+        .activity-log {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 220px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .activity-log h3 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .log-item {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-item .time { color: var(--text-secondary); font-size: 0.7rem; }
+        .log-item .amount { color: var(--success); font-weight: 700; }
+
+        /* Scrollbar styles */
+        .activity-log::-webkit-scrollbar {
+            width: 4px;
+        }
+        .activity-log::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        @media (max-width: 992px) {
+            .demo-container {
+                grid-template-columns: 1fr;
+            }
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            .simulator-panel {
+                order: -1;
+                align-self: stretch;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .demo-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-banner">
+        <span>⚡ Modo Demo Activo. Los datos del negocio son simulados en tiempo real.</span>
+        <a href="/register">Crear cuenta gratis ahora</a>
+    </div>
+
+    <nav>
+        <div class="logo">
+            AS PLATFORM <span class="badge">DEMO PRO</span>
+        </div>
+        <a href="/" class="btn-exit">Salir de la Demo</a>
+    </nav>
+
+    <div class="demo-container">
+        <!-- Left Side: Dashboard -->
+        <div class="dashboard-main">
+            <div class="dashboard-header">
+                <div>
+                    <h1>Café & Hamburguesas La Estación</h1>
+                    <p>Dashboard Financiero y Operativo — Simulación de Ventas Diarias</p>
+                </div>
+                <div class="status-indicator">
+                    <div class="pulse-dot"></div>
+                    <span>Conexión en Vivo</span>
+                </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="kpi-grid">
+                <div class="card">
+                    <h3>Ingresos Totales</h3>
+                    <div class="value" id="kpi-ingresos">$2.450.000</div>
+                    <div class="trend up">
+                        <span>↑ +12.4% hoy</span>
+                    </div>
+                </div>
+                <div class="card" style="border-color: rgba(56, 189, 248, 0.2);">
+                    <h3>Utilidad Neta (PRO)</h3>
+                    <div class="value" id="kpi-utilidad" style="color: var(--accent-cyan); text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);">$820.750</div>
+                    <div class="trend up">
+                        <span>↑ 33.5% margen neto</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Margen MCU Promedio</h3>
+                    <div class="value" id="kpi-margen">33.5%</div>
+                    <div class="trend" style="color: var(--accent-purple);">
+                        <span>Costos congelados en venta</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Punto de Equilibrio</h3>
+                    <div class="value" id="kpi-pe">185 uds</div>
+                    <div class="trend" style="color: var(--text-secondary);">
+                        <span>Costos Fijos: $450.000 / mes</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="card chart-card">
+                    <h3>Tendencia de Ventas (Últimas Horas)</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-ventas"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <h3>Mix de Ventas</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-productos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Simulator Panel -->
+        <div class="simulator-panel">
+            <div class="sim-header">
+                <h2>Simulador de Caja</h2>
+                <p>Registra una venta simulada para ver cómo recalculamos tus márgenes y utilidades al instante.</p>
+            </div>
+
+            <form id="sim-form" onsubmit="event.preventDefault(); simulateManualSale();">
+                <div class="form-group">
+                    <label for="sim-producto">Seleccionar Producto</label>
+                    <select id="sim-producto">
+                        <option value="prod1" data-price="4500" data-cost="2800">Café Expreso Doble ($4,500)</option>
+                        <option value="prod2" data-price="18900" data-cost="11500">Hamburguesa Especial ($18,900)</option>
+                        <option value="prod3" data-price="3500" data-cost="1900">Empanada Criolla ($3,500)</option>
+                        <option value="prod4" data-price="12500" data-cost="7200">Combo Desayuno Clásico ($12,500)</option>
+                        <option value="prod5" data-price="6000" data-cost="3600">Porción Papas Fritas ($6,000)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="sim-cantidad">Cantidad</label>
+                    <input type="number" id="sim-cantidad" min="1" max="100" value="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="sim-metodo">Método de Pago</label>
+                    <select id="sim-metodo">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia Bancaria</option>
+                        <option value="Tarjeta">Tarjeta Débito/Crédito</option>
+                        <option value="Nequi">Nequi</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-simulate">⚡ Registrar Venta Simulada</button>
+            </form>
+
+            <div class="activity-log">
+                <h3>Ventas de Hoy</h3>
+                <div id="log-container">
+                    <div class="log-item">
+                        <div>
+                            <strong>Empanada Criolla</strong> x2
+                            <div class="time">Hace unos segundos</div>
+                        </div>
+                        <div class="amount">+$7,000</div>
+                    </div>
+                    <div class="log-item">
+                        <div>
+                            <strong>Hamburguesa Especial</strong> x1
+                            <div class="time">Hace 2 minutos</div>
+                        </div>
+                        <div class="amount">+$18,900</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+
+        // Simulated state variables
+        let totalRevenue = 2450000;
+        let fixedCosts = 450000;
+        let totalCost = 1629250; // Total variable cost
+        let totalSalesCount = 280;
+
+        // Fictional products map
+        const productStats = {
+            'Café Expreso Doble': { sales: 110, revenue: 495000, cost: 308000 },
+            'Hamburguesa Especial': { sales: 65, revenue: 1228500, cost: 747500 },
+            'Empanada Criolla': { sales: 80, revenue: 280000, cost: 152000 },
+            'Combo Desayuno Clásico': { sales: 25, revenue: 312500, cost: 180000 },
+            'Porción Papas Fritas': { sales: 20, revenue: 120000, cost: 72000 }
+        };
+
+        // Charts handles
+        let salesChart, prodChart;
+
+        // Initialize Charts
+        function initCharts() {
+            // Trend Chart
+            const ctxVentas = document.getElementById('chart-ventas').getContext('2d');
+            salesChart = new Chart(ctxVentas, {
+                type: 'line',
+                data: {
+                    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', 'Ahora'],
+                    datasets: [{
+                        label: 'Ventas por Hora ($)',
+                        data: [210000, 480000, 890000, 1340000, 1690000, 2150000, totalRevenue],
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.05)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Product Mix Chart
+            const ctxProds = document.getElementById('chart-productos').getContext('2d');
+            prodChart = new Chart(ctxProds, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(productStats),
+                    datasets: [{
+                        data: Object.values(productStats).map(p => p.sales),
+                        backgroundColor: ['#38bdf8', '#818cf8', '#a855f7', '#fb7185', '#34d399'],
+                        borderColor: '#0c111d',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#94a3b8', boxWidth: 12, font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Recalculate KPIs based on simulator state
+        function updateKPIs() {
+            const netUtility = totalRevenue - totalCost - fixedCosts;
+            const marginPercentage = ((totalRevenue - totalCost) / totalRevenue * 100).toFixed(1);
+            
+            // Weighted average margin per unit to find point of equilibrium
+            const mcp = (totalRevenue - totalCost) / totalSalesCount;
+            const peUnits = Math.ceil(fixedCosts / mcp);
+
+            document.getElementById('kpi-ingresos').textContent = formatCOP.format(totalRevenue);
+            document.getElementById('kpi-utilidad').textContent = formatCOP.format(netUtility);
+            document.getElementById('kpi-margen').textContent = `${marginPercentage}%`;
+            document.getElementById('kpi-pe').textContent = `${peUnits} uds`;
+
+            // Update trend chart value
+            salesChart.data.datasets[0].data[6] = totalRevenue;
+            salesChart.update();
+
+            // Update doughnut chart
+            prodChart.data.datasets[0].data = Object.values(productStats).map(p => p.sales);
+            prodChart.update();
+        }
+
+        // Push sales simulation transaction to UI log
+        function pushLogItem(pName, qty, totalVal) {
+            const container = document.getElementById('log-container');
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            
+            const itemHtml = `
+                <div class="log-item">
+                    <div>
+                        <strong>${pName}</strong> x${qty}
+                        <div class="time">Hoy a las ${timeStr}</div>
+                    </div>
+                    <div class="amount">+${formatCOP.format(totalVal)}</div>
+                </div>
+            `;
+            container.insertAdjacentHTML('afterbegin', itemHtml);
+            
+            // Limit log items count
+            if (container.children.length > 5) {
+                container.lastElementChild.remove();
+            }
+        }
+
+        // Process manual simulation sale
+        function simulateManualSale() {
+            const selectEl = document.getElementById('sim-producto');
+            const pName = selectEl.options[selectEl.selectedIndex].text.split(' ($')[0];
+            const pPrice = parseFloat(selectEl.options[selectEl.selectedIndex].getAttribute('data-price'));
+            const pCost = parseFloat(selectEl.options[selectEl.selectedIndex].getAttribute('data-cost'));
+            const qty = parseInt(document.getElementById('sim-cantidad').value) || 1;
+
+            const revenueGained = pPrice * qty;
+            const costGained = pCost * qty;
+
+            // Increment values
+            totalRevenue += revenueGained;
+            totalCost += costGained;
+            totalSalesCount += qty;
+
+            // Product stats increment
+            if (productStats[pName]) {
+                productStats[pName].sales += qty;
+                productStats[pName].revenue += revenueGained;
+                productStats[pName].cost += costGained;
+            }
+
+            pushLogItem(pName, qty, revenueGained);
+            updateKPIs();
+            document.getElementById('sim-cantidad').value = 1;
+        }
+
+        // Auto background simulation helper
+        function autoSimulate() {
+            const products = Object.keys(productStats);
+            const randomProduct = products[Math.floor(Math.random() * products.length)];
+            const priceAndCost = getPriceAndCostByName(randomProduct);
+            const qty = Math.floor(Math.random() * 2) + 1; // 1 or 2
+
+            const revenueGained = priceAndCost.price * qty;
+            const costGained = priceAndCost.cost * qty;
+
+            totalRevenue += revenueGained;
+            totalCost += costGained;
+            totalSalesCount += qty;
+
+            productStats[randomProduct].sales += qty;
+            productStats[randomProduct].revenue += revenueGained;
+            productStats[randomProduct].cost += costGained;
+
+            pushLogItem(randomProduct, qty, revenueGained);
+            updateKPIs();
+        }
+
+        function getPriceAndCostByName(name) {
+            const selectEl = document.getElementById('sim-producto');
+            for(let option of selectEl.options) {
+                if (option.text.includes(name)) {
+                    return {
+                        price: parseFloat(option.getAttribute('data-price')),
+                        cost: parseFloat(option.getAttribute('data-cost'))
+                    };
+                }
+            }
+            return { price: 5000, cost: 3000 };
+        }
+
+        window.onload = () => {
+            initCharts();
+            updateKPIs();
+            
+            // Ticks up a transaction automatically every 8 seconds to show the live charts shifting
+            setInterval(autoSimulate, 8000);
+        };
+    </script>
+</body>
+</html>
