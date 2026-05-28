@@ -1,4 +1,5 @@
 :root {
+    color-scheme: dark;
     --bg-color: #090d16;
     --card-bg: #111827;
     --accent-color: #38bdf8;
@@ -208,19 +209,24 @@ input, select, textarea {
     border: 1px solid var(--border-color);
     padding: 0.75rem 1rem;
     border-radius: 8px;
-    color: var(--text-primary);
+    color: #f9fafb;
     font-size: 0.9rem;
     outline: none;
     transition: border-color 0.2s ease;
+    color-scheme: dark;
 }
 
 input:focus, select:focus, textarea:focus {
     border-color: var(--accent-color);
 }
 
+/* Fix: Windows renders <option> natively (white bg).
+   color-scheme: dark instructs the OS to use its dark-mode
+   native picker. The explicit color+background are a belt-and-
+   suspenders fallback for browsers that do render them. */
 select option {
-    background-color: #111827;
-    color: var(--text-primary);
+    background-color: #1f2937;
+    color: #f9fafb;
 }
 
 /* Buttons */
