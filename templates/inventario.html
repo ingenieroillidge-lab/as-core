@@ -3,20 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventario - AS CORE</title>
+    <title>Inventario - AS PLATFORM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        .stock-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+        .stock-ok   { background: rgba(16,185,129,0.1); color: #10b981; }
+        .stock-low  { background: rgba(245,158,11,0.1);  color: #f59e0b; }
+        .stock-zero { background: rgba(239,68,68,0.1);   color: #ef4444; }
+        .tooltip-container { position: relative; display: inline-block; cursor: help; margin-left: 6px; }
+        .tooltip-icon { font-size: 0.68rem; background: rgba(255,255,255,0.06); color: #6b7280; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); transition: 0.2s; }
+        .tooltip-icon:hover { background: rgba(56,189,248,0.15); color: #38bdf8; border-color: #38bdf8; }
+        .tooltip-text { visibility: hidden; width: 230px; background: #0f172a; color: #f8fafc; text-align: left; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; position: absolute; z-index: 100; bottom: 130%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.25s; font-size: 0.73rem; font-weight: 400; line-height: 1.4; box-shadow: 0 10px 25px rgba(0,0,0,0.55); pointer-events: none; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        @keyframes popIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .pop { animation: popIn 0.25s ease; }
+    </style>
 </head>
 <body>
     <nav>
-        <div class="logo">AS CORE</div>
+        <div class="logo">AS PLATFORM</div>
         <ul class="nav-links">
-            {% if session.role == 'ADMIN' %}
+            {% if session.role in ['ADMIN', 'SUPER'] %}
             <li><a href="/">Dashboard</a></li>
             {% endif %}
             <li><a href="/ventas">Ventas</a></li>
-            <li><a href="/inventario" class="active" data-lang="inventario">Inventario</a></li>
-            {% if session.role == 'ADMIN' %}
+            <li><a href="/inventario" class="active">Inventario</a></li>
+            {% if session.role in ['ADMIN', 'SUPER'] %}
             <li><a href="/analisis">Análisis</a></li>
             <li><a href="/configuracion">Configuración</a></li>
             {% endif %}
@@ -25,76 +44,264 @@
     </nav>
 
     <main>
-        <div class="header">
-            <h1 data-lang="inventario">Estado del Inventario</h1>
-            <p style="color: var(--text-secondary)">Vista de existencias para {{ session.username }}.</p>
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1>Almacén e Inventario</h1>
+                <p style="color: var(--text-secondary); margin-top: 0.25rem; font-size: 0.875rem;">
+                    Stock en tiempo real — se descuenta automáticamente al registrar ventas.
+                </p>
+            </div>
+            {% if session.role in ['ADMIN', 'SUPER'] %}
+            <button onclick="document.getElementById('panel-agregar').style.display='block'; this.style.display='none';"
+                    id="btn-show-add" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px;">
+                + Nuevo Insumo
+            </button>
+            {% endif %}
         </div>
 
-        <div class="table-container">
+        <!-- Panel Agregar Insumo (oculto por defecto) -->
+        {% if session.role in ['ADMIN', 'SUPER'] %}
+        <div id="panel-agregar" style="display: none; margin-top: 1.5rem;">
+            <div class="card" style="max-width: 680px; border-color: rgba(56,189,248,0.2);">
+                <h3 style="margin-bottom: 1.25rem; color: #38bdf8;">Registrar Nuevo Insumo o Materia Prima</h3>
+                <form id="form-nuevo-insumo" style="max-width: 100%;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Nombre del Insumo</label>
+                            <input type="text" id="ins-nombre" placeholder="Ej: Carne de Res (g)" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Unidad de Medida
+                                <span class="tooltip-container">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">La unidad en la que compras y almacenas este insumo. Ej: si compras aceite por litros, pon "litros".</span>
+                                </span>
+                            </label>
+                            <select id="ins-unidad">
+                                <option value="gramos">Gramos (g)</option>
+                                <option value="unidades" selected>Unidades (ud)</option>
+                                <option value="mililitros">Mililitros (ml)</option>
+                                <option value="kilogramos">Kilogramos (kg)</option>
+                                <option value="libras">Libras (lb)</option>
+                                <option value="litros">Litros (L)</option>
+                                <option value="porciones">Porciones</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Costo de Adquisición ($)
+                                <span class="tooltip-container">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text">Precio al que compras 1 unidad/gramo/ml de este insumo. Sirve para calcular el costo real de cada venta.</span>
+                                </span>
+                            </label>
+                            <input type="number" id="ins-costo" placeholder="Ej: 25 (por gramo)" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad en Bodega Ahora</label>
+                            <input type="number" id="ins-stock" placeholder="Ej: 5000" step="0.01" required>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                        <button type="submit" id="btn-guardar-ins" style="background: #10b981; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.875rem;">
+                            Guardar Insumo
+                        </button>
+                        <button type="button" onclick="document.getElementById('panel-agregar').style.display='none'; document.getElementById('btn-show-add').style.display='inline-block';"
+                                style="background: rgba(255,255,255,0.04); color: #9ca3af; border: 1px solid var(--border-color); padding: 0.75rem 1.25rem; border-radius: 8px; font-size: 0.875rem;">
+                            Cancelar
+                        </button>
+                    </div>
+                    <div id="ins-feedback" style="margin-top: 1rem;"></div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Tabla de Inventario -->
+        <div class="table-container" style="margin-top: 2rem;">
             <table>
                 <thead>
                     <tr>
-                        <th data-lang="insumos">Insumo</th>
-                        <th data-lang="stock">Stock Actual</th>
-                        {% if session.role == 'ADMIN' %}
+                        <th>Insumo / Artículo</th>
+                        <th>Stock Actual
+                            <span class="tooltip-container">
+                                <span class="tooltip-icon">?</span>
+                                <span class="tooltip-text">Cantidad disponible en bodega. Se descuenta automáticamente cada vez que se registra una venta vinculada a este insumo.</span>
+                            </span>
+                        </th>
+                        <th>Unidad</th>
+                        {% if session.role in ['ADMIN', 'SUPER'] %}
                         <th>Costo Unit.</th>
+                        <th>Estado</th>
                         <th>Acción</th>
                         {% endif %}
                     </tr>
                 </thead>
-                <tbody id="inventory-body"></tbody>
+                <tbody id="inventory-body">
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary); font-size: 0.875rem;">
+                            Cargando inventario…
+                        </td>
+                    </tr>
+                </tbody>
             </table>
         </div>
 
-        {% if session.role == 'ADMIN' %}
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;">
-            <div class="card">
-                <h3 data-lang="reponer">Reponer Existencias</h3>
-                <form id="reponer-form" style="margin-top: 1rem;">
-                    <div class="form-group"><label data-lang="insumos">Insumo</label><select id="insumo-id-rep" required></select></div>
-                    <div class="form-group"><label>Cantidad</label><input type="number" id="cantidad-reponer" step="0.01" required></div>
-                    <button type="submit">Registrar Entrada</button>
+        <!-- Reponer stock (solo ADMIN) -->
+        {% if session.role in ['ADMIN', 'SUPER'] %}
+        <div style="margin-top: 2rem;">
+            <div class="card" style="max-width: 480px;">
+                <h3 style="margin-bottom: 1.25rem;">Reponer Existencias</h3>
+                <form id="reponer-form" style="max-width: 100%;">
+                    <div class="form-group">
+                        <label>Seleccionar Insumo</label>
+                        <select id="insumo-id-rep" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad a Añadir</label>
+                        <input type="number" id="cantidad-reponer" step="0.01" placeholder="Ej: 2000" required>
+                    </div>
+                    <button type="submit" style="background: #0ea5e9; margin-top: 0.25rem; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 0.875rem;">
+                        Registrar Entrada de Stock
+                    </button>
+                    <div id="rep-feedback" style="margin-top: 1rem;"></div>
                 </form>
             </div>
         </div>
         {% endif %}
     </main>
 
-    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
         const ROLE = "{{ session.role }}";
 
+        function getStockBadge(stock) {
+            if (stock <= 0) return '<span class="stock-badge stock-zero">Sin stock</span>';
+            if (stock <= 50) return '<span class="stock-badge stock-low">Stock bajo</span>';
+            return '<span class="stock-badge stock-ok">Disponible</span>';
+        }
+
         async function loadInventory() {
-            aplicarTraduccionOperativa();
             const res = await fetch('/api/inventario');
             const data = await res.json();
             const tbody = document.getElementById('inventory-body');
             const selectRep = document.getElementById('insumo-id-rep');
-            
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-secondary); font-size: 0.875rem;">
+                            📦 No hay insumos registrados aún.<br>
+                            <span style="font-size: 0.8rem;">Haz clic en <strong>+ Nuevo Insumo</strong> o usa el asistente del Dashboard para comenzar.</span>
+                        </td>
+                    </tr>`;
+                return;
+            }
+
             tbody.innerHTML = '';
+            if (selectRep) selectRep.innerHTML = '';
+
             data.forEach(item => {
                 const tr = document.createElement('tr');
+                tr.className = 'pop';
                 tr.innerHTML = `
-                    <td>${item.nombre}</td>
-                    <td><strong>${item.stock_actual} ${item.unidad}</strong></td>
-                    ${ROLE === 'ADMIN' ? `<td>${formatCOP.format(item.costo_unitario_base || 0)}</td>` : ''}
-                    ${ROLE === 'ADMIN' ? `<td><button onclick="fillRep(${item.id})">Reponer</button></td>` : ''}
+                    <td><strong>${item.nombre}</strong></td>
+                    <td style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.05rem;">${parseFloat(item.stock_actual).toLocaleString('es-CO')}</td>
+                    <td style="color: var(--text-secondary); font-size: 0.8rem;">${item.unidad || '—'}</td>
+                    ${ROLE !== 'OPERADOR' ? `<td style="color: var(--text-secondary);">${item.costo_unitario_base !== undefined ? formatCOP.format(item.costo_unitario_base) : '—'}</td>` : ''}
+                    ${ROLE !== 'OPERADOR' ? `<td>${getStockBadge(item.stock_actual)}</td>` : ''}
+                    ${ROLE !== 'OPERADOR' ? `<td><button onclick="fillRep(${item.id}, '${item.nombre}')" style="background: none; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: 0.2s;" onmouseover="this.style.borderColor='#38bdf8'; this.style.color='#38bdf8';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">Reponer</button></td>` : ''}
                 `;
                 tbody.appendChild(tr);
-                if (selectRep) selectRep.add(new Option(item.nombre, item.id));
+
+                if (selectRep) {
+                    selectRep.add(new Option(`${item.nombre} (${item.unidad})`, item.id));
+                }
             });
         }
 
-        function fillRep(id) { document.getElementById('insumo-id-rep').value = id; }
+        function fillRep(id, nombre) {
+            const sel = document.getElementById('insumo-id-rep');
+            if (sel) sel.value = id;
+            document.getElementById('cantidad-reponer')?.focus();
+            document.getElementById('reponer-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
 
-        if (document.getElementById('reponer-form')) {
-            document.getElementById('reponer-form').onsubmit = async (e) => {
+        // Agregar nuevo insumo
+        const formNuevo = document.getElementById('form-nuevo-insumo');
+        if (formNuevo) {
+            formNuevo.onsubmit = async (e) => {
                 e.preventDefault();
-                const data = { insumo_id: document.getElementById('insumo-id-rep').value, cantidad: document.getElementById('cantidad-reponer').value };
-                await fetch('/api/reponer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
-                loadInventory(); e.target.reset();
+                const btn = document.getElementById('btn-guardar-ins');
+                btn.disabled = true;
+                btn.textContent = 'Guardando…';
+
+                const payload = {
+                    nombre: document.getElementById('ins-nombre').value,
+                    unidad_base: document.getElementById('ins-unidad').value,
+                    costo_unitario_base: parseFloat(document.getElementById('ins-costo').value),
+                    stock_inicial: parseFloat(document.getElementById('ins-stock').value)
+                };
+
+                const res = await fetch('/api/inventario', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    document.getElementById('ins-feedback').innerHTML = `
+                        <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); color: #10b981; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                            ✅ Insumo registrado correctamente.
+                        </div>`;
+                    e.target.reset();
+                    setTimeout(() => {
+                        document.getElementById('ins-feedback').innerHTML = '';
+                        document.getElementById('panel-agregar').style.display = 'none';
+                        document.getElementById('btn-show-add').style.display = 'inline-block';
+                        loadInventory();
+                    }, 1800);
+                } else {
+                    document.getElementById('ins-feedback').innerHTML = `
+                        <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;">
+                            ❌ Error al guardar el insumo.
+                        </div>`;
+                }
+                btn.disabled = false;
+                btn.textContent = 'Guardar Insumo';
+            };
+        }
+
+        // Reponer stock
+        const formReponer = document.getElementById('reponer-form');
+        if (formReponer) {
+            formReponer.onsubmit = async (e) => {
+                e.preventDefault();
+                const payload = {
+                    insumo_id: document.getElementById('insumo-id-rep').value,
+                    cantidad: document.getElementById('cantidad-reponer').value
+                };
+
+                const res = await fetch('/api/reponer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    document.getElementById('rep-feedback').innerHTML = `
+                        <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); color: #10b981; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                            ✅ Stock actualizado correctamente.
+                        </div>`;
+                    e.target.reset();
+                    loadInventory();
+                    setTimeout(() => document.getElementById('rep-feedback').innerHTML = '', 3000);
+                } else {
+                    document.getElementById('rep-feedback').innerHTML = `
+                        <div style="background: rgba(239,68,68,0.08); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;">
+                            ❌ Error al actualizar el stock.
+                        </div>`;
+                }
             };
         }
 

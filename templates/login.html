@@ -3,37 +3,260 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Business OS</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Iniciar Sesión - AS PLATFORM</title>
+    <meta name="description" content="Accede a tu plataforma de control financiero y operativo para tu negocio.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; background: #0a0a0a; margin: 0; }
-        .login-card { background: #1a1a1a; padding: 3rem; border-radius: 24px; border: 1px solid #333; width: 100%; max-width: 400px; text-align: center; }
-        .error { color: #fb7185; margin-bottom: 1rem; font-size: 0.9rem; }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #f9fafb;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .auth-wrapper {
+            display: flex;
+            align-items: stretch;
+            width: 100%;
+            max-width: 860px;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+        }
+
+        /* Left panel – brand / value proposition */
+        .auth-brand {
+            background: #0f172a;
+            padding: 3rem;
+            width: 45%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border-right: 1px solid #1f2937;
+        }
+
+        .brand-logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #f9fafb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-tagline {
+            margin-top: 2.5rem;
+        }
+
+        .brand-tagline h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 800;
+            line-height: 1.3;
+            color: #f9fafb;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-tagline p {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .brand-benefits {
+            margin-top: auto;
+            padding-top: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .benefit-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+            line-height: 1.4;
+        }
+
+        .benefit-icon {
+            color: #38bdf8;
+            flex-shrink: 0;
+            font-size: 0.9rem;
+            margin-top: 1px;
+        }
+
+        /* Right panel – form */
+        .auth-form-panel {
+            background: #111827;
+            padding: 3rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .form-header {
+            margin-bottom: 2rem;
+        }
+
+        .form-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .form-header p {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.35rem;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #ef4444;
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            margin-bottom: 1.1rem;
+        }
+
+        label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #9ca3af;
+            letter-spacing: 0.3px;
+        }
+
+        input {
+            background: #090d16;
+            border: 1px solid #1f2937;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            color: #f9fafb;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+            width: 100%;
+        }
+
+        input:focus {
+            border-color: #38bdf8;
+        }
+
+        input::placeholder {
+            color: #374151;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: #38bdf8;
+            color: #090d16;
+            font-weight: 700;
+            font-size: 0.95rem;
+            padding: 0.9rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .btn-primary:hover { opacity: 0.95; }
+        .btn-primary:active { transform: scale(0.99); }
+
+        .register-link {
+            margin-top: 1.75rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        .register-link a {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        @media (max-width: 640px) {
+            .auth-wrapper { flex-direction: column; border-radius: 16px; }
+            .auth-brand { width: 100%; padding: 1.75rem; border-right: none; border-bottom: 1px solid #1f2937; }
+            .brand-benefits { display: none; }
+            .auth-form-panel { padding: 1.75rem; }
+        }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <h1 style="font-size: 1.8rem; margin-bottom: 0.5rem;">Business OS</h1>
-        <p style="color: #888; margin-bottom: 2rem;">Ingresa tus credenciales para continuar</p>
-        
-        {% if error %}
-            <div class="error">{{ error }}</div>
-        {% endif %}
+    <div class="auth-wrapper">
+        <!-- Brand Panel -->
+        <div class="auth-brand">
+            <div class="brand-logo">📊 AS PLATFORM</div>
+            <div class="brand-tagline">
+                <h2>Control total de tu negocio</h2>
+                <p>Inventario, ventas, costos y análisis financiero en una sola plataforma diseñada para negocios reales.</p>
+            </div>
+            <div class="brand-benefits">
+                <div class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>Costos de producción guardados en el momento exacto de cada venta</span>
+                </div>
+                <div class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>Punto de equilibrio y utilidad neta en tiempo real</span>
+                </div>
+                <div class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>Control de inventario automático al registrar ventas</span>
+                </div>
+            </div>
+        </div>
 
-        <form action="/login" method="POST">
-            <div class="form-group" style="text-align: left;">
-                <label>Usuario</label>
-                <input type="text" name="username" required>
+        <!-- Form Panel -->
+        <div class="auth-form-panel">
+            <div class="form-header">
+                <h1>Bienvenido de vuelta</h1>
+                <p>Ingresa tus credenciales para acceder a tu panel.</p>
             </div>
-            <div class="form-group" style="text-align: left; margin-top: 1rem;">
-                <label>Contraseña</label>
-                <input type="password" name="password" required>
+
+            {% if error %}
+            <div class="error-msg">⚠️ {{ error }}</div>
+            {% endif %}
+
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label for="username">Usuario</label>
+                    <input type="text" id="username" name="username" placeholder="Tu nombre de usuario" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn-primary">Entrar al Panel →</button>
+            </form>
+
+            <div class="register-link">
+                ¿No tienes cuenta?<a href="/register">Regístrate gratis</a>
             </div>
-            <button type="submit" style="width: 100%; margin-top: 2rem; height: 3.5rem;">Entrar al Sistema</button>
-        </form>
-        <div style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: #888;">
-            ¿No tienes cuenta? <a href="/register" style="color: #38bdf8; text-decoration: none; font-weight: 700;">Regístrate gratis</a>
         </div>
     </div>
 </body>

@@ -244,9 +244,14 @@ def demo_page():
 @app.route('/api/resumen')
 @login_required
 def g_res():
-    status = get_negocio_status_ext(session['negocio_id'])
-    data = financiero_service.obtener_resumen_financiero(session['negocio_id'], request.args.get('mes'))
-    count_prod = ejecutar_query("SELECT COUNT(*) FROM productos WHERE negocio_id=?", (session['negocio_id'],), fetch=True)[0][0]
+    nid = session['negocio_id']
+    status = get_negocio_status_ext(nid)
+    data = financiero_service.obtener_resumen_financiero(nid, request.args.get('mes'))
+    
+    count_prod = ejecutar_query("SELECT COUNT(*) FROM productos WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+    count_insumo = ejecutar_query("SELECT COUNT(*) FROM inventario WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+    count_receta = ejecutar_query("SELECT COUNT(*) FROM producto_insumo WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+    count_venta = ejecutar_query("SELECT COUNT(*) FROM ventas WHERE negocio_id=?", (nid,), fetch=True)[0][0]
     
     return jsonify({
         "ingresos": data['ingresos'],
@@ -257,6 +262,13 @@ def g_res():
         "cuotas": {
             "productos": count_prod,
             "productos_max": 10
+        },
+        "onboarding": {
+            "negocio_configurado": True,
+            "producto_creado": count_prod > 0,
+            "insumo_creado": count_insumo > 0,
+            "receta_creada": count_receta > 0,
+            "venta_registrada": count_venta > 0
         }
     })
 
@@ -294,6 +306,31 @@ def post_venta():
 def g_inv():
     res = inventario_service.obtener_inventario(session['negocio_id'])
     return jsonify([{"id": x[0], "nombre": x[2], "stock_actual": x[4], "unidad": x[3]} for x in res] if res else [])
+
+@app.route('/api/inventario', methods=['POST'])
+@login_required
+def post_inventario():
+    nid = session['negocio_id']
+    d = request.json
+    codigo = d.get('codigo', f"INS-{d['nombre'][:3].upper()}")
+    ejecutar_query(
+        "INSERT INTO inventario (negocio_id, codigo, nombre, unidad_base, costo_unitario_base, stock_inicial, stock_actual) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (nid, codigo, d['nombre'], d.get('unidad_base', 'unidades'), float(d.get('costo_unitario_base', 0)), float(d.get('stock_inicial', 0)), float(d.get('stock_inicial', 0)))
+    )
+    res = ejecutar_query("SELECT id FROM inventario WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (d['nombre'], nid), fetch=True)
+    new_id = res[0][0] if res else None
+    return jsonify({"message": "ok", "id": new_id})
+
+@app.route('/api/recetas', methods=['POST'])
+@login_required
+def post_receta():
+    nid = session['negocio_id']
+    d = request.json
+    ejecutar_query(
+        "INSERT INTO producto_insumo (producto_id, insumo_id, cantidad_usada, negocio_id) VALUES (?, ?, ?, ?)",
+        (int(d['producto_id']), int(d['insumo_id']), float(d['cantidad_usada']), nid)
+    )
+    return jsonify({"message": "ok"})
 
 @app.route('/api/config/negocio', methods=['GET', 'POST'])
 @login_required

@@ -22,6 +22,23 @@
         .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-top: 2rem; }
         .chart-card { position: relative; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 24px; padding: 1.5rem; }
         .chart-blur-container { position: relative; height: 220px; width: 100%; }
+
+        /* Tooltip Styles */
+        .tooltip-container { position: relative; display: inline-block; cursor: help; margin-left: 6px; }
+        .tooltip-icon { font-size: 0.7rem; background: rgba(255,255,255,0.08); color: #94a3b8; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 700; border: 1px solid rgba(255,255,255,0.15); transition: 0.2s; }
+        .tooltip-icon:hover { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border-color: #38bdf8; }
+        .tooltip-text { visibility: hidden; width: 240px; background-color: #0f172a; color: #f8fafc; text-align: left; border: 1px solid #1e293b; padding: 12px; border-radius: 10px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: 400; line-height: 1.4; box-shadow: 0 10px 25px rgba(0,0,0,0.55); pointer-events: none; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* Checklist Styles */
+        .check-item { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #94a3b8; padding: 6px 0; }
+        .check-item.done { color: #10b981; text-decoration: line-through; opacity: 0.8; }
+        .check-item .icon { font-size: 0.95rem; }
+
+        /* Wizard style adjustments */
+        .wizard-step { animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
         @media (max-width: 992px) {
             .dashboard-grid { grid-template-columns: 1fr; }
         }
@@ -61,6 +78,34 @@
             </div>
         </div>
 
+        <!-- CHECKLIST WIDGET DE ONBOARDING -->
+        <div id="onboarding-checklist-card" class="card" style="display: none; margin-top: 2rem; border-color: rgba(56, 189, 248, 0.2); background: rgba(15, 23, 42, 0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <div>
+                    <h3 style="color: #38bdf8; font-weight: 800; text-transform: none; font-size: 1.1rem; margin-bottom: 0.25rem;">🚀 Configuración Inicial del Negocio</h3>
+                    <p style="color: #64748b; font-size: 0.8rem;">Sigue este asistente para registrar productos, insumos y habilitar tus indicadores financieros.</p>
+                </div>
+                <button id="btn-start-wizard" onclick="openWizard()" style="background: #38bdf8; color: #070a13; padding: 0.55rem 1.1rem; border-radius: 10px; font-weight: 700; font-size: 0.8rem; border: none; cursor: pointer; transition: 0.2s;">⚙️ Abrir Asistente</button>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem;">
+                <div id="check-negocio" class="check-item">
+                    <span class="icon">🟡</span> <span>1. Registrar Negocio</span>
+                </div>
+                <div id="check-producto" class="check-item">
+                    <span class="icon">🟡</span> <span>2. Crear Producto</span>
+                </div>
+                <div id="check-insumo" class="check-item">
+                    <span class="icon">🟡</span> <span>3. Configurar Insumo</span>
+                </div>
+                <div id="check-receta" class="check-item">
+                    <span class="icon">🟡</span> <span>4. Vincular Ingrediente</span>
+                </div>
+                <div id="check-venta" class="check-item">
+                    <span class="icon">🟡</span> <span>5. Registrar Venta</span>
+                </div>
+            </div>
+        </div>
+
         <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 2rem;">
             <div class="card kpi">
                 <h3>Ingresos Totales</h3>
@@ -69,7 +114,7 @@
             </div>
             
             <div class="card kpi" style="position: relative;">
-                <h3>Utilidad Neta</h3>
+                <h3>Utilidad Neta <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Dinero real que te queda de ganancia después de restar el costo de tus insumos y tus costos fijos mensuales (servicios, alquiler, etc.).</span></span></h3>
                 <div class="value" id="utilidad">$0</div>
                 <div class="micro-copy">Ingresos menos costos y fijos.</div>
                 <div id="lock-utilidad" class="lock-overlay" style="display: none;">
@@ -78,7 +123,7 @@
             </div>
 
             <div class="card kpi" style="position: relative;">
-                <h3>Margen (MCU)</h3>
+                <h3>Margen (MCU) <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">El margen de contribución es la rentabilidad de tus ventas. Dinero disponible para cubrir costos fijos tras pagar los insumos directos.</span></span></h3>
                 <div class="value" id="margen">$0</div>
                 <div class="micro-copy">Contribución porcentual de venta.</div>
                 <div id="lock-margen" class="lock-overlay" style="display: none;">
@@ -87,7 +132,7 @@
             </div>
 
             <div class="card kpi" style="position: relative;">
-                <h3>P. Equilibrio</h3>
+                <h3>P. Equilibrio <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Cantidad mínima de productos que debes vender para no perder dinero. A partir de aquí tu negocio empieza a ganar dinero neto.</span></span></h3>
                 <div class="value" id="pe">0 uds</div>
                 <div class="micro-copy">Unidades requeridas sin pérdida.</div>
                 <div id="lock-pe" class="lock-overlay" style="display: none;">
@@ -145,9 +190,129 @@
         </div>
     </div>
 
+    <!-- WIZARD CONFIGURACIÓN INICIAL MULTI-PASO -->
+    <div id="modal-wizard" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(3,3,8,0.85); z-index: 1001; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+        <div class="card" style="max-width: 520px; width: 100%; padding: 2.5rem; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 28px; background: #0c0f1d;">
+            <!-- Progress indicator -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 800; color: #38bdf8; display: flex; align-items: center; gap: 8px;">⚙️ Configuración Inicial</h2>
+                <span id="wizard-step-indicator" style="font-size: 0.75rem; background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 4px 10px; border-radius: 20px; font-weight: 700;">Paso 1 de 5</span>
+            </div>
+
+            <!-- Paso 1: Configurar Negocio -->
+            <div id="wizard-step-1" class="wizard-step">
+                <h3 style="margin-bottom: 0.5rem; color: white;">Paso 1: Confirma los datos de tu negocio</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem;">Verifica los datos comerciales registrados en la plataforma.</p>
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label>Nombre del Negocio</label>
+                    <input type="text" id="wiz-negocio-nombre" required autocomplete="off">
+                </div>
+                <div class="form-group" style="margin-bottom: 1.75rem;">
+                    <label>Tipo de Operación</label>
+                    <select id="wiz-negocio-tipo">
+                        <option value="PRODUCCIÓN">Producción (Restaurante, alimentos, fritos)</option>
+                        <option value="REVENTA">Reventa (Ropa, minimarket, calzado, reventa)</option>
+                        <option value="SERVICIOS">Servicios (Barbería, consultoría, software)</option>
+                        <option value="HÍBRIDO">Híbrido (Mezcla de fabricación y reventa)</option>
+                    </select>
+                </div>
+                <button onclick="saveWizStep1()" style="width: 100%; background: #38bdf8; color: #000; font-weight: 700; border: none; padding: 0.9rem; border-radius: 12px; cursor: pointer;">Guardar y Continuar →</button>
+            </div>
+
+            <!-- Paso 2: Crear Primer Producto -->
+            <div id="wizard-step-2" class="wizard-step" style="display: none;">
+                <h3 style="margin-bottom: 0.5rem; color: white;">Paso 2: Crea tu primer producto</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem;">Es el artículo final que ofreces al público y te genera ingresos.</p>
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="wiz-prod-nombre" placeholder="Ej: Hamburguesa de Carne 150g" required autocomplete="off">
+                </div>
+                <div class="form-group" style="margin-bottom: 1.75rem;">
+                    <label>Precio de Venta al Público ($)</label>
+                    <input type="number" id="wiz-prod-precio" placeholder="Ej: 18900" required>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button onclick="prevWizStep(1)" style="flex: 1; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color); padding: 0.9rem; border-radius: 12px; cursor: pointer;">Atrás</button>
+                    <button onclick="saveWizStep2()" style="flex: 2; background: #38bdf8; color: #000; font-weight: 700; padding: 0.9rem; border-radius: 12px; cursor: pointer; border: none;">Crear Producto →</button>
+                </div>
+            </div>
+
+            <!-- Paso 3: Crear Primer Insumo -->
+            <div id="wizard-step-3" class="wizard-step" style="display: none;">
+                <h3 style="margin-bottom: 0.5rem; color: white;">Paso 3: Registra tu materia prima o insumo</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem;">Los insumos son tus materias primas o productos en stock (ej. pan, carne, bebidas en reventa).</p>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Nombre del Insumo / Artículo en Stock</label>
+                    <input type="text" id="wiz-ins-nombre" placeholder="Ej: Carne de Res Molida" required autocomplete="off">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label>Unidad de Medida</label>
+                        <select id="wiz-ins-unidad">
+                            <option value="gramos">Gramos (g)</option>
+                            <option value="unidades">Unidades (ud)</option>
+                            <option value="mililitros">Mililitros (ml)</option>
+                            <option value="libras">Libras (lb)</option>
+                            <option value="kilogramos">Kilogramos (kg)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Costo de Adquisición ($)</label>
+                        <input type="number" id="wiz-ins-costo" placeholder="Ej: 15" required>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.75rem;">
+                    <label>Inventario Inicial en Bodega</label>
+                    <input type="number" id="wiz-ins-stock" placeholder="Ej: 5000" required>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button onclick="prevWizStep(2)" style="flex: 1; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color); padding: 0.9rem; border-radius: 12px; cursor: pointer;">Atrás</button>
+                    <button onclick="saveWizStep3()" style="flex: 2; background: #38bdf8; color: #000; font-weight: 700; padding: 0.9rem; border-radius: 12px; cursor: pointer; border: none;">Crear Insumo →</button>
+                </div>
+            </div>
+
+            <!-- Paso 4: Crear Relación Receta -->
+            <div id="wizard-step-4" class="wizard-step" style="display: none;">
+                <h3 style="margin-bottom: 0.5rem; color: white;">Paso 4: Vincula el insumo con tu producto</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem;">Define qué cantidad de materia prima usa el producto terminado para poder descontar el stock al vender.</p>
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 1rem 1.25rem; border-radius: 16px; margin-bottom: 1.5rem; font-size: 0.85rem; line-height: 1.6;">
+                    <div>🍔 Producto a Vender: <strong id="wiz-recipe-prod-label" style="color: #38bdf8;">-</strong></div>
+                    <div style="margin-top: 5px;">🥕 Insumo Utilizado: <strong id="wiz-recipe-ins-label" style="color: #38bdf8;">-</strong></div>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.75rem;">
+                    <label id="wiz-recipe-qty-label">Cantidad requerida para fabricar 1 unidad</label>
+                    <input type="number" id="wiz-recipe-qty" placeholder="Ej: 150" step="0.01" required>
+                </div>
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button onclick="prevWizStep(3)" style="flex: 1; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border-color); padding: 0.9rem; border-radius: 12px; cursor: pointer;">Atrás</button>
+                    <button onclick="skipWizStep4()" style="flex: 1; background: rgba(255,255,255,0.02); color: #94a3b8; border: 1px dashed var(--border-color); padding: 0.9rem; border-radius: 12px; cursor: pointer;">Omitir (Sin Insumos)</button>
+                    <button onclick="saveWizStep4()" style="flex: 2; min-width: 150px; background: #38bdf8; color: #000; font-weight: 700; padding: 0.9rem; border-radius: 12px; cursor: pointer; border: none;">Vincular Receta →</button>
+                </div>
+            </div>
+
+            <!-- Paso 5: Registrar Primera Venta -->
+            <div id="wizard-step-5" class="wizard-step" style="display: none;">
+                <h3 style="margin-bottom: 0.5rem; color: white;">Paso 5: ¡Todo listo para arrancar!</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 2rem;">Has configurado tu primer producto e ingrediente. Ahora solo debes simular o registrar tu primera venta en caja para activar los indicadores financieros.</p>
+                <div style="text-align: center; margin-bottom: 2rem; font-size: 4.5rem;">🎉</div>
+                <button onclick="finishWizard()" style="width: 100%; background: #10b981; color: white; font-weight: 800; border: none; padding: 1rem; border-radius: 12px; cursor: pointer; font-size: 1.1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">🚀 Ir a Registrar Venta</button>
+            </div>
+
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <button onclick="closeWizard()" style="background: none; border: none; color: #4b5563; cursor: pointer; font-size: 0.8rem; font-weight: 600;">Omitir y ver panel básico</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+
+        // Wizard temporary states
+        let createdProductName = "";
+        let createdProductId = null;
+        let createdInsumoName = "";
+        let createdInsumoId = null;
 
         async function initDashboard() {
             try {
@@ -166,6 +331,29 @@
                 // Cargar ingresos
                 const elIngresos = document.getElementById('ingresos');
                 if (elIngresos) elIngresos.textContent = formatCOP.format(data.ingresos || 0);
+
+                // Lógica de Onboarding
+                if (data.onboarding) {
+                    const ob = data.onboarding;
+                    const isFullyOnboarded = ob.negocio_configurado && ob.producto_creado && ob.insumo_creado && ob.receta_creada && ob.venta_registrada;
+                    
+                    if (!isFullyOnboarded) {
+                        document.getElementById('onboarding-checklist-card').style.display = 'block';
+                        
+                        updateCheckItem('check-negocio', ob.negocio_configurado);
+                        updateCheckItem('check-producto', ob.producto_creado);
+                        updateCheckItem('check-insumo', ob.insumo_creado);
+                        updateCheckItem('check-receta', ob.receta_creada);
+                        updateCheckItem('check-venta', ob.venta_registrada);
+
+                        // Si es la primera vez que entra y no tiene ningún producto, abrimos automáticamente el wizard
+                        if (!ob.producto_creado) {
+                            setTimeout(openWizard, 600);
+                        }
+                    } else {
+                        document.getElementById('onboarding-checklist-card').style.display = 'none';
+                    }
+                }
 
                 if (data.is_locked) {
                     // Si está en plan gratis, activamos la visualización teaser (blur + lock overlay)
@@ -228,6 +416,154 @@
             } catch (err) {
                 console.error("Error al cargar el dashboard:", err);
             }
+        }
+
+        function updateCheckItem(id, isDone) {
+            const el = document.getElementById(id);
+            if (el) {
+                if (isDone) {
+                    el.classList.add('done');
+                    el.querySelector('.icon').textContent = '✅';
+                } else {
+                    el.classList.remove('done');
+                    el.querySelector('.icon').textContent = '🟡';
+                }
+            }
+        }
+
+        // ==========================
+        // FUNCIONES DEL WIZARD DE ONBOARDING
+        // ==========================
+        
+        async function openWizard() {
+            document.getElementById('modal-wizard').style.display = 'flex';
+            showWizStep(1);
+            
+            // Cargar datos actuales del negocio
+            const res = await fetch('/api/config/negocio');
+            const data = await res.json();
+            if (data) {
+                document.getElementById('wiz-negocio-nombre').value = data.nombre || '';
+                document.getElementById('wiz-negocio-tipo').value = data.tipo || 'HÍBRIDO';
+            }
+        }
+
+        function closeWizard() {
+            document.getElementById('modal-wizard').style.display = 'none';
+        }
+
+        function showWizStep(stepNum) {
+            document.querySelectorAll('.wizard-step').forEach(step => step.style.display = 'none');
+            document.getElementById(`wizard-step-${stepNum}`).style.display = 'block';
+            document.getElementById('wizard-step-indicator').textContent = `Paso ${stepNum} de 5`;
+        }
+
+        function prevWizStep(stepNum) {
+            showWizStep(stepNum);
+        }
+
+        async function saveWizStep1() {
+            const nombre = document.getElementById('wiz-negocio-nombre').value;
+            const tipo = document.getElementById('wiz-negocio-tipo').value;
+            if(!nombre) return alert('Por favor, ingresa el nombre de tu negocio.');
+            
+            await fetch('/api/config/negocio', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre, tipo })
+            });
+            showWizStep(2);
+        }
+
+        async function saveWizStep2() {
+            const nombre = document.getElementById('wiz-prod-nombre').value;
+            const precio = document.getElementById('wiz-prod-precio').value;
+            if(!nombre || !precio) return alert('Ingresa el nombre y el precio de venta del producto.');
+            
+            const res = await fetch('/api/productos', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre, precio: parseFloat(precio) })
+            });
+            
+            if (res.ok) {
+                createdProductName = nombre;
+                // Buscar el ID del producto que acabamos de crear
+                const resP = await fetch('/api/productos');
+                const products = await resP.json();
+                const matched = products.find(p => p.nombre === nombre);
+                if (matched) {
+                    createdProductId = matched.id;
+                }
+                showWizStep(3);
+            } else {
+                alert('Ocurrió un error al registrar el producto.');
+            }
+        }
+
+        async function saveWizStep3() {
+            const nombre = document.getElementById('wiz-ins-nombre').value;
+            const unidad = document.getElementById('wiz-ins-unidad').value;
+            const costo = document.getElementById('wiz-ins-costo').value;
+            const stock = document.getElementById('wiz-ins-stock').value;
+            
+            if(!nombre || !costo || !stock) return alert('Ingresa todos los detalles de tu ingrediente/insumo.');
+
+            const res = await fetch('/api/inventario', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre,
+                    unidad_base: unidad,
+                    costo_unitario_base: parseFloat(costo),
+                    stock_inicial: parseFloat(stock)
+                })
+            });
+
+            if(res.ok) {
+                const data = await res.json();
+                createdInsumoName = nombre;
+                createdInsumoId = data.id;
+
+                // Preparar etiquetas del Paso 4
+                document.getElementById('wiz-recipe-prod-label').textContent = createdProductName;
+                document.getElementById('wiz-recipe-ins-label').textContent = createdInsumoName;
+                document.getElementById('wiz-recipe-qty-label').textContent = `¿Qué cantidad de "${createdInsumoName}" (${unidad}) utiliza 1 unidad de "${createdProductName}"?`;
+
+                showWizStep(4);
+            } else {
+                alert('Error al registrar el insumo.');
+            }
+        }
+
+        async function saveWizStep4() {
+            const qty = document.getElementById('wiz-recipe-qty').value;
+            if(!qty) return alert('Ingresa la cantidad utilizada.');
+
+            const res = await fetch('/api/recetas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    producto_id: createdProductId,
+                    insumo_id: createdInsumoId,
+                    cantidad_usada: parseFloat(qty)
+                })
+            });
+
+            if (res.ok) {
+                showWizStep(5);
+            } else {
+                alert('Error al crear la relación de receta.');
+            }
+        }
+
+        function skipWizStep4() {
+            showWizStep(5);
+        }
+
+        function finishWizard() {
+            closeWizard();
+            location.href = "/ventas";
         }
 
         function drawCharts(tendencia, distribucion) {

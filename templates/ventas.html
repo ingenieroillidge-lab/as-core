@@ -3,19 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ventas - AS CORE</title>
+    <title>Ventas - AS PLATFORM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        .sale-feedback {
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            line-height: 1.5;
+            animation: popIn 0.3s ease;
+        }
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.97) translateY(4px); }
+            to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .sale-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.85rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+            animation: popIn 0.3s ease;
+        }
+        .sale-history-item:last-child { border-bottom: none; }
+        .sale-badge {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .empty-state .emoji { font-size: 2.5rem; display: block; margin-bottom: 1rem; }
+        #daily-total-card {
+            background: rgba(56, 189, 248, 0.04);
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-top: 1.5rem;
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <nav>
-        <div class="logo">AS CORE</div>
+        <div class="logo">AS PLATFORM</div>
         <ul class="nav-links">
             {% if session.role == 'ADMIN' %}
             <li><a href="/">Dashboard</a></li>
             {% endif %}
             <li><a href="/ventas" class="active">Ventas</a></li>
-            <li><a href="/inventario" data-lang="inventario">Inventario</a></li>
+            <li><a href="/inventario">Inventario</a></li>
             {% if session.role == 'ADMIN' %}
             <li><a href="/analisis">Análisis</a></li>
             <li><a href="/configuracion">Configuración</a></li>
@@ -26,16 +73,25 @@
 
     <main>
         <div class="header">
-            <h1>Registro de Ventas</h1>
-            <p style="color: var(--text-secondary)">Punto de venta directo para {{ session.username }}.</p>
+            <h1>Punto de Venta</h1>
+            <p style="color: var(--text-secondary); margin-top: 0.25rem; font-size: 0.875rem;">
+                Registra cada venta — el inventario y las métricas se actualizan automáticamente.
+            </p>
+        </div>
+
+        <!-- Alerta si no hay productos configurados -->
+        <div id="no-products-alert" style="display:none; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 2rem; font-size: 0.875rem; color: #f59e0b;">
+            ⚠️ <strong>No tienes productos configurados.</strong> 
+            <a href="/" style="color: #38bdf8; font-weight: 700; text-decoration: none; margin-left: 4px;">Ir al Dashboard para configurar tu catálogo →</a>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            <!-- FORMULARIO DE VENTA -->
             <div class="card">
                 <h3>Nueva Venta</h3>
-                <form id="venta-form" style="margin-top: 1rem;">
+                <form id="venta-form" style="margin-top: 1.25rem; max-width: 100%;">
                     <div class="form-group">
-                        <label>Producto</label>
+                        <label>Producto a Vender</label>
                         <select id="v-producto" required></select>
                     </div>
                     <div class="form-group">
@@ -45,52 +101,184 @@
                     <div class="form-group">
                         <label>Método de Pago</label>
                         <select id="v-metodo">
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Transferencia">Transferencia</option>
+                            <option value="Efectivo">💵 Efectivo</option>
+                            <option value="Transferencia">🏦 Transferencia Bancaria</option>
+                            <option value="Nequi">📱 Nequi / Daviplata</option>
                         </select>
                     </div>
-                    <button type="submit" style="margin-top: 2rem; width: 100%; height: 3.5rem; font-size: 1.1rem; font-weight: 800;">Registrar Venta</button>
+                    <div id="venta-preview" style="display:none; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
+                        Total estimado: <strong id="preview-total" style="color: var(--text-primary);">$0</strong>
+                    </div>
+                    <button type="submit" id="btn-registrar" style="margin-top: 0.5rem; width: 100%; height: 3.5rem; font-size: 1rem; font-weight: 800; letter-spacing: 0.2px;">
+                        ✅ Registrar Venta
+                    </button>
                 </form>
             </div>
 
+            <!-- HISTORIAL DE HOY -->
             <div class="card">
-                <h3>Últimas Ventas de Hoy</h3>
-                <div id="status-venta" style="margin-top: 1rem;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                    <h3 style="margin-bottom: 0;">Ventas de Hoy</h3>
+                    <span id="sale-count-badge" style="display:none; background: rgba(56,189,248,0.1); color: #38bdf8; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;">0 ventas</span>
+                </div>
+
+                <div id="feedback-area"></div>
+
+                <div id="sale-history-list">
+                    <div class="empty-state">
+                        <span class="emoji">🛒</span>
+                        Registra tu primera venta del día.<br>Los indicadores se actualizarán en tiempo real.
+                    </div>
+                </div>
+
+                <div id="daily-total-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Total del Día</span>
+                        <span id="daily-total" style="font-size: 1.4rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #10b981;">$0</span>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
 
-    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        
+        let productMap = {}; // id -> {nombre, precio}
+        let todaySales = [];
+        let saleCount = 0;
+        let dailyTotal = 0;
+
         async function loadProds() {
-            aplicarTraduccionOperativa();
             const res = await fetch('/api/productos');
             const data = await res.json();
             const select = document.getElementById('v-producto');
-            data.forEach(p => select.add(new Option(`${p.nombre} - $${p.precio}`, p.id)));
+            
+            if (!data || data.length === 0) {
+                document.getElementById('no-products-alert').style.display = 'block';
+                document.getElementById('btn-registrar').disabled = true;
+                document.getElementById('btn-registrar').style.opacity = '0.4';
+                return;
+            }
+
+            select.innerHTML = '';
+            data.forEach(p => {
+                select.add(new Option(`${p.nombre}  —  ${formatCOP.format(p.precio)}`, p.id));
+                productMap[p.id] = { nombre: p.nombre, precio: p.precio };
+            });
+
+            updatePreview();
         }
+
+        function updatePreview() {
+            const selVal = document.getElementById('v-producto').value;
+            const qty = parseFloat(document.getElementById('v-cantidad').value) || 1;
+            const product = productMap[selVal];
+            const preview = document.getElementById('venta-preview');
+            const previewTotal = document.getElementById('preview-total');
+            
+            if (product) {
+                preview.style.display = 'block';
+                previewTotal.textContent = formatCOP.format(product.precio * qty);
+            }
+        }
+
+        document.getElementById('v-producto').addEventListener('change', updatePreview);
+        document.getElementById('v-cantidad').addEventListener('input', updatePreview);
+
+        const EMOTIONAL_MESSAGES = [
+            "¡Perfecto! Tu negocio ya está generando datos reales.",
+            "¡Excelente! Cada venta construye tu historial financiero.",
+            "¡Muy bien! Sigue así — tus costos y utilidades se calculan en tiempo real.",
+            "¡Genial! Esa venta ya redujo tu punto de equilibrio del día.",
+            "¡Impecable! Así se construye un negocio con control total.",
+        ];
+
+        let msgIndex = 0;
 
         document.getElementById('venta-form').onsubmit = async (e) => {
             e.preventDefault();
-            const data = {
-                producto_id: document.getElementById('v-producto').value,
-                cantidad: document.getElementById('v-cantidad').value,
-                metodo_pago: document.getElementById('v-metodo').value
-            };
+            const btn = document.getElementById('btn-registrar');
+            btn.disabled = true;
+            btn.textContent = "Procesando...";
+
+            const productoId = document.getElementById('v-producto').value;
+            const cantidad   = document.getElementById('v-cantidad').value;
+            const metodo     = document.getElementById('v-metodo').value;
+            const product    = productMap[productoId];
+
             const res = await fetch('/api/ventas', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ producto_id: productoId, cantidad, metodo_pago: metodo })
             });
             const resD = await res.json();
+
             if (res.ok) {
-                document.getElementById('status-venta').innerHTML = `<div style="color: var(--success); background: rgba(52, 211, 153, 0.1); padding: 1rem; border-radius: 12px;">✅ Venta registrada: <strong>$${resD.total}</strong></div>`;
+                saleCount++;
+                dailyTotal += resD.total;
+
+                // Mensaje emocional rotativo
+                const msg = EMOTIONAL_MESSAGES[msgIndex % EMOTIONAL_MESSAGES.length];
+                msgIndex++;
+
+                document.getElementById('feedback-area').innerHTML = `
+                    <div class="sale-feedback" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); color: #10b981; margin-bottom: 1.25rem;">
+                        <div style="font-weight: 800; margin-bottom: 4px;">✅ Venta registrada: ${formatCOP.format(resD.total)}</div>
+                        <div style="font-size: 0.8rem; color: #6ee7b7; font-weight: 400;">${msg}</div>
+                    </div>
+                `;
+
+                // Agregar al historial
+                addToHistory(product ? product.nombre : 'Producto', resD.total, metodo);
+
+                // Mostrar total del día
+                const dailyCard = document.getElementById('daily-total-card');
+                dailyCard.style.display = 'block';
+                document.getElementById('daily-total').textContent = formatCOP.format(dailyTotal);
+
+                // Actualizar badge
+                const badge = document.getElementById('sale-count-badge');
+                badge.style.display = 'inline-block';
+                badge.textContent = `${saleCount} venta${saleCount !== 1 ? 's' : ''}`;
+
                 e.target.reset();
+                document.getElementById('v-cantidad').value = '1';
+                updatePreview();
             } else {
-                alert("Error: " + resD.error);
+                document.getElementById('feedback-area').innerHTML = `
+                    <div class="sale-feedback" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; margin-bottom: 1.25rem;">
+                        ❌ <strong>Error:</strong> ${resD.error || 'Ocurrió un problema al registrar la venta.'}
+                    </div>
+                `;
             }
+
+            btn.disabled = false;
+            btn.textContent = "✅ Registrar Venta";
         };
+
+        function addToHistory(nombre, total, metodo) {
+            const list = document.getElementById('sale-history-list');
+            // Quitar estado vacío si existe
+            const empty = list.querySelector('.empty-state');
+            if (empty) empty.remove();
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+            const item = document.createElement('div');
+            item.className = 'sale-history-item';
+            item.innerHTML = `
+                <div>
+                    <strong style="font-size: 0.875rem;">${nombre}</strong>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">${timeStr} · ${metodo}</div>
+                </div>
+                <span class="sale-badge">${formatCOP.format(total)}</span>
+            `;
+            // Insertar al principio
+            list.insertBefore(item, list.firstChild);
+        }
 
         window.onload = loadProds;
     </script>

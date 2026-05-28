@@ -4,217 +4,358 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crear Cuenta Gratis - AS PLATFORM</title>
+    <meta name="description" content="Registra tu negocio y comienza a controlar ventas, inventario y finanzas en tiempo real.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #030308;
-            --card-bg: rgba(15, 23, 42, 0.6);
-            --accent-cyan: #38bdf8;
-            --accent-purple: #a855f7;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --border-color: rgba(255, 255, 255, 0.08);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #f9fafb;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            position: relative;
-            overflow-x: hidden;
+            justify-content: center;
             padding: 2rem 1rem;
         }
 
-        /* Ambient background glow */
-        .bg-glow {
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(0,0,0,0) 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: -1;
-            filter: blur(80px);
-        }
-
-        .register-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            padding: 3rem;
-            border-radius: 28px;
+        .auth-wrapper {
+            display: flex;
+            align-items: stretch;
             width: 100%;
-            max-width: 480px;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-            position: relative;
+            max-width: 900px;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
         }
 
-        .logo {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-align: center;
-            margin-bottom: 0.5rem;
-            letter-spacing: 1px;
-        }
-
-        .subtitle {
-            color: var(--text-secondary);
-            text-align: center;
-            font-size: 0.95rem;
-            margin-bottom: 2.5rem;
-            line-height: 1.5;
-        }
-
-        .error {
-            color: #fb7185;
-            background: rgba(251, 113, 133, 0.1);
-            border: 1px solid rgba(251, 113, 133, 0.2);
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            font-size: 0.85rem;
-            text-align: center;
-            font-weight: 500;
-        }
-
-        form {
+        /* Left brand panel */
+        .auth-brand {
+            background: #0f172a;
+            padding: 3rem;
+            width: 42%;
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 2rem;
+            border-right: 1px solid #1f2937;
+        }
+
+        .brand-logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #f9fafb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-pitch h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.55rem;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-pitch p {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .steps-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: auto;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .step-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: #38bdf8;
+            font-size: 0.7rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .step-text strong {
+            font-size: 0.82rem;
+            font-weight: 700;
+            display: block;
+            color: #e5e7eb;
+        }
+
+        .step-text span {
+            font-size: 0.75rem;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        /* Right form panel */
+        .auth-form-panel {
+            background: #111827;
+            padding: 3rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .form-header {
+            margin-bottom: 1.75rem;
+        }
+
+        .form-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .form-header p {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.35rem;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
         }
 
         label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            font-size: 0.8rem;
             font-weight: 600;
-            letter-spacing: 0.5px;
+            color: #9ca3af;
+            letter-spacing: 0.3px;
         }
 
         input, select {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            padding: 0.85rem 1.1rem;
-            border-radius: 14px;
-            color: white;
+            background: #090d16;
+            border: 1px solid #1f2937;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            color: #f9fafb;
+            font-size: 0.9rem;
             outline: none;
+            transition: border-color 0.2s ease;
+            width: 100%;
+        }
+
+        input:focus, select:focus { border-color: #38bdf8; }
+        input::placeholder { color: #374151; }
+
+        select option { background-color: #0f172a; color: #f9fafb; }
+
+        .operation-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+            margin-top: 0.2rem;
+        }
+
+        .op-card {
+            border: 2px solid #1f2937;
+            border-radius: 10px;
+            padding: 0.85rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #090d16;
+        }
+
+        .op-card:hover { border-color: #374151; }
+        .op-card.selected { border-color: #38bdf8; background: rgba(56, 189, 248, 0.05); }
+        .op-card .op-icon { font-size: 1.2rem; display: block; margin-bottom: 0.3rem; }
+        .op-card .op-name { font-size: 0.78rem; font-weight: 700; color: #e5e7eb; display: block; }
+        .op-card .op-desc { font-size: 0.68rem; color: #6b7280; display: block; margin-top: 2px; }
+
+        input[type="hidden"] {}
+
+        .btn-primary {
+            width: 100%;
+            background: #38bdf8;
+            color: #090d16;
+            font-weight: 800;
             font-size: 0.95rem;
-            transition: all 0.3s ease;
-        }
-
-        input:focus, select:focus {
-            border-color: var(--accent-cyan);
-            background: rgba(255, 255, 255, 0.05);
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
-        }
-
-        select option {
-            background-color: #0d1117;
-            color: white;
-        }
-
-        button {
-            background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
-            color: #030712;
-            font-weight: 700;
-            padding: 1.1rem;
-            border-radius: 14px;
+            padding: 0.95rem;
+            border-radius: 8px;
             border: none;
             cursor: pointer;
-            font-size: 1rem;
-            margin-top: 1.5rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 10px 20px -5px rgba(56, 189, 248, 0.3);
+            margin-top: 1.25rem;
+            transition: opacity 0.2s, transform 0.1s;
         }
 
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 25px -5px rgba(56, 189, 248, 0.5);
-            opacity: 0.95;
-        }
+        .btn-primary:hover { opacity: 0.95; }
+        .btn-primary:active { transform: scale(0.99); }
 
         .login-link {
+            margin-top: 1.5rem;
             text-align: center;
-            margin-top: 2rem;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            font-size: 0.8rem;
+            color: #6b7280;
         }
 
         .login-link a {
-            color: var(--accent-cyan);
+            color: #38bdf8;
             text-decoration: none;
-            font-weight: 700;
+            font-weight: 600;
             margin-left: 4px;
         }
 
-        .login-link a:hover {
-            text-decoration: underline;
+        @media (max-width: 640px) {
+            .auth-wrapper { flex-direction: column; }
+            .auth-brand { width: 100%; padding: 1.75rem; border-right: none; border-bottom: 1px solid #1f2937; }
+            .steps-list { display: none; }
+            .auth-form-panel { padding: 1.75rem; }
+            .operation-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="bg-glow"></div>
+    <div class="auth-wrapper">
+        <!-- Brand Panel -->
+        <div class="auth-brand">
+            <div class="brand-logo">📊 AS PLATFORM</div>
 
-    <div class="register-card">
-        <div class="logo">AS PLATFORM</div>
-        <div class="subtitle">Regístrate gratis hoy y desbloquea el análisis de rentabilidad real de tu negocio.</div>
-
-        {% if error %}
-            <div class="error">⚠️ {{ error }}</div>
-        {% endif %}
-
-        <form action="/register" method="POST">
-            <div class="form-group">
-                <label for="business_name">Nombre de tu Negocio</label>
-                <input type="text" id="business_name" name="business_name" placeholder="Ej: Hamburguesas El Corral" required autocomplete="off">
+            <div class="brand-pitch">
+                <h2>Tu negocio merece datos reales</h2>
+                <p>Deja los cuadernos y el Excel. Controla cada peso que entra y sale de tu negocio con claridad total.</p>
             </div>
 
-            <div class="form-group">
-                <label for="operation_type">Tipo de Operación</label>
-                <select id="operation_type" name="operation_type">
-                    <option value="PRODUCCIÓN">Producción (Restaurantes, fritos, alimentos)</option>
-                    <option value="REVENTA">Reventa (Tiendas, minimarket, ropa)</option>
-                    <option value="SERVICIOS">Servicios (Gimnasios, barberías, consultoría)</option>
-                    <option value="HÍBRIDO" selected>Híbrido (Mezcla de stock y procesos)</option>
-                </select>
+            <div class="steps-list">
+                <div class="step-item">
+                    <div class="step-num">1</div>
+                    <div class="step-text">
+                        <strong>Crea tu cuenta gratis</strong>
+                        <span>Sin tarjeta de crédito. En menos de 2 minutos.</span>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">2</div>
+                    <div class="step-text">
+                        <strong>Configura productos e insumos</strong>
+                        <span>Nuestro asistente te guía paso a paso.</span>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">3</div>
+                    <div class="step-text">
+                        <strong>Registra tu primera venta</strong>
+                        <span>Ve cómo tus finanzas cobran vida en tiempo real.</span>
+                    </div>
+                </div>
+                <div class="step-item">
+                    <div class="step-num">PRO</div>
+                    <div class="step-text">
+                        <strong>Desbloquea análisis avanzado</strong>
+                        <span>Margen, punto de equilibrio y reportes detallados.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Panel -->
+        <div class="auth-form-panel">
+            <div class="form-header">
+                <h1>Crear cuenta gratis</h1>
+                <p>Empieza hoy. Sin compromisos, sin tarjeta.</p>
             </div>
 
-            <div class="form-group">
-                <label for="username">Usuario Administrador</label>
-                <input type="text" id="username" name="username" placeholder="Tu nombre de usuario" required autocomplete="off">
+            {% if error %}
+            <div class="error-msg">⚠️ {{ error }}</div>
+            {% endif %}
+
+            <form action="/register" method="POST">
+                <div class="form-group">
+                    <label for="business_name">Nombre de tu Negocio</label>
+                    <input type="text" id="business_name" name="business_name"
+                           placeholder="Ej: Fritos La Esquina, Tienda La 22…" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label>Tipo de Operación</label>
+                    <div class="operation-grid" id="op-grid">
+                        <div class="op-card selected" onclick="selectOp(this, 'PRODUCCIÓN')">
+                            <span class="op-icon">🍳</span>
+                            <span class="op-name">Producción</span>
+                            <span class="op-desc">Restaurantes, fritos, alimentos</span>
+                        </div>
+                        <div class="op-card" onclick="selectOp(this, 'REVENTA')">
+                            <span class="op-icon">🛒</span>
+                            <span class="op-name">Reventa</span>
+                            <span class="op-desc">Tiendas, minimarket, ropa</span>
+                        </div>
+                        <div class="op-card" onclick="selectOp(this, 'SERVICIOS')">
+                            <span class="op-icon">💼</span>
+                            <span class="op-name">Servicios</span>
+                            <span class="op-desc">Barberías, consultoría, salud</span>
+                        </div>
+                        <div class="op-card" onclick="selectOp(this, 'HÍBRIDO')">
+                            <span class="op-icon">🔀</span>
+                            <span class="op-name">Híbrido</span>
+                            <span class="op-desc">Mezcla de producción y reventa</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="operation_type" name="operation_type" value="PRODUCCIÓN">
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Usuario Administrador</label>
+                    <input type="text" id="username" name="username"
+                           placeholder="Ej: samuel_admin" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" name="password"
+                           placeholder="Mínimo 6 caracteres" required>
+                </div>
+
+                <button type="submit" class="btn-primary">🚀 Crear mi negocio gratis</button>
+            </form>
+
+            <div class="login-link">
+                ¿Ya tienes cuenta?<a href="/login">Iniciar sesión</a>
             </div>
-
-            <div class="form-group">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" placeholder="Mínimo 6 caracteres" required>
-            </div>
-
-            <button type="submit">🚀 Crear cuenta y empezar gratis</button>
-        </form>
-
-        <div class="login-link">
-            ¿Ya tienes una cuenta? <a href="/login">Iniciar sesión</a>
         </div>
     </div>
+
+    <script>
+        function selectOp(card, value) {
+            document.querySelectorAll('.op-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            document.getElementById('operation_type').value = value;
+        }
+    </script>
 </body>
 </html>
