@@ -440,12 +440,14 @@ def h_conf():
                 "maneja_cartera": row[4] if len(row) > 4 and row[4] is not None else 0,
                 "maneja_lotes": row[5] if len(row) > 5 and row[5] is not None else 0,
                 "metodo_salida_lotes": row[6] if len(row) > 6 and row[6] else "FEFO",
-                "bloquear_lotes_vencidos": row[7] if len(row) > 7 and row[7] else "SI"
+                "bloquear_lotes_vencidos": row[7] if len(row) > 7 and row[7] else "SI",
+                "user_role": session.get('role', 'USER')
             })
         return jsonify({
             "nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "",
             "color_acento": "#38bdf8", "maneja_cartera": 0, "maneja_lotes": 0,
-            "metodo_salida_lotes": "FEFO", "bloquear_lotes_vencidos": "SI"
+            "metodo_salida_lotes": "FEFO", "bloquear_lotes_vencidos": "SI",
+            "user_role": session.get('role', 'USER')
         })
 
 # ==========================

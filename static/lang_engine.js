@@ -132,6 +132,11 @@ async function aplicarTraduccionOperativa() {
         // Mostrar módulo de Informes Configurable siempre en el menú
         insertarLinkNavegacion('/informes', '📊 Informes', '#38bdf8');
 
+        // Si el usuario es SUPER ADMIN, insertar enlace directo al panel Super Admin
+        if (config.user_role === 'SUPER') {
+            insertarLinkNavegacion('/super-admin', '⚡ Super Admin', '#a855f7');
+        }
+
         return config;
     } catch(e) {
         console.error("Error al aplicar la identidad comercial:", e);
