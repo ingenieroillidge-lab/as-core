@@ -63,6 +63,7 @@
                                 <th>Empresa</th>
                                 <th>Plan</th>
                                 <th>Estado</th>
+                                <th>Vencimiento</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
@@ -100,11 +101,71 @@
             tbody.innerHTML = data.map(n => `
                 <tr>
                     <td><strong>${n.nombre}</strong></td>
-                    <td>${n.plan}</td>
-                    <td><span class="status-pill status-${n.status.toLowerCase()}">${n.status}</span></td>
-                    <td><button style="background: none; border: 1px solid #333; font-size: 0.7rem;">Gestionar</button></td>
+                    <td>
+                        <select onchange="cambiarPlan(${n.id}, this.value)" style="background: #111; color: white; border: 1px solid #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
+                            <option value="PRO" ${n.plan === 'PRO' ? 'selected' : ''}>PRO</option>
+                            <option value="FREE" ${n.plan === 'FREE' ? 'selected' : ''}>FREE</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select onchange="cambiarEstado(${n.id}, this.value)" style="background: #111; color: ${n.status === 'ACTIVO' ? '#34d399' : '#fb7185'}; border: 1px solid #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 700;">
+                            <option value="ACTIVO" ${n.status === 'ACTIVO' ? 'selected' : ''}>ACTIVO</option>
+                            <option value="SUSPENDIDO" ${n.status === 'SUSPENDIDO' ? 'selected' : ''}>SUSPENDIDO</option>
+                        </select>
+                    </td>
+                    <td style="font-size: 0.8rem; color: #888;">${n.fecha_vencimiento || 'Sin fecha'}</td>
+                    <td>
+                        <button onclick="extenderPro(${n.id})" style="background: #38bdf8; color: black; border: none; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                            + Renovar Pago
+                        </button>
+                    </td>
                 </tr>
             `).join('');
+        }
+
+        async function cambiarPlan(id, plan) {
+            let dias_pro = 30;
+            if (plan === 'PRO') {
+                const inputDias = prompt("¿Por cuántos días deseas activar el plan PRO para esta empresa?", "30");
+                if (inputDias === null) return loadNegocios();
+                dias_pro = parseInt(inputDias) || 30;
+            }
+            const res = await fetch(`/api/super/negocio/${id}/update`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ plan: plan, dias_pro: dias_pro })
+            });
+            if (res.ok) {
+                alert('Plan actualizado correctamente');
+                loadNegocios();
+            }
+        }
+
+        async function cambiarEstado(id, status) {
+            const res = await fetch(`/api/super/negocio/${id}/update`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status: status })
+            });
+            if (res.ok) {
+                alert('Estado actualizado correctamente');
+                loadNegocios();
+            }
+        }
+
+        async function extenderPro(id) {
+            const inputDias = prompt("Pago manual recibido. ¿Cuántos días PRO deseas registrar a la empresa?", "30");
+            if (inputDias === null) return;
+            const dias = parseInt(inputDias) || 30;
+            const res = await fetch(`/api/super/negocio/${id}/update`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ plan: 'PRO', dias_pro: dias })
+            });
+            if (res.ok) {
+                alert(`¡Se han registrado ${dias} días PRO exitosamente!`);
+                loadNegocios();
+            }
         }
 
         document.getElementById('form-nuevo-negocio').onsubmit = async (e) => {
