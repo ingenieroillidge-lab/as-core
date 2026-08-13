@@ -52,10 +52,15 @@
                 </p>
             </div>
             {% if session.role in ['ADMIN', 'SUPER'] %}
-            <button onclick="document.getElementById('panel-agregar').style.display='block'; this.style.display='none';"
-                    id="btn-show-add" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px;">
-                + Nuevo Insumo
-            </button>
+            <div style="display: flex; gap: 0.5rem;">
+                <a href="/configuracion" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                    📥 Cargue Masivo (Drive / CSV)
+                </a>
+                <button onclick="document.getElementById('panel-agregar').style.display='block'; this.style.display='none';"
+                        id="btn-show-add" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px;">
+                    + Nuevo Insumo
+                </button>
+            </div>
             {% endif %}
         </div>
 

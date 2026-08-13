@@ -40,6 +40,7 @@
 
         <div class="config-tabs">
             <button class="tab-btn active" onclick="showSection('sec-perfil')">Perfil y Marca</button>
+            <button class="tab-btn" onclick="showSection('sec-cargue')">📥 Cargue Masivo (Drive / Excel)</button>
             <button class="tab-btn" onclick="showSection('sec-usuarios')">Gestión de Usuarios</button>
             <button class="tab-btn" onclick="showSection('sec-mantenimiento')" style="color: #fb7185;">Mantenimiento</button>
         </div>
@@ -53,14 +54,14 @@
                         <div class="form-group"><label>Nombre del Negocio</label><input type="text" id="conf-nombre" required></div>
                         <div class="form-group"><label>Tipo de Operación</label>
                             <select id="conf-tipo" required>
-                                <option value="PRODUCCIÓN">Producción</option>
-                                <option value="REVENTA">Reventa</option>
-                                <option value="SERVICIOS">Servicios</option>
-                                <option value="HÍBRIDO">Híbrido</option>
+                                <option value="PRODUCCIÓN">Producción / Alimentos / Fritos (Con Insumos)</option>
+                                <option value="REVENTA">Reventa / Comercialización Directa (Sin Recetario)</option>
+                                <option value="SERVICIOS">Servicios / Barbería / Consultoría</option>
+                                <option value="HÍBRIDO">Híbrido (Mezcla de Fabricación y Reventa)</option>
                             </select>
                         </div>
-                        <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven"></div>
-                        <button type="submit">Guardar Perfil</button>
+                        <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+                        <button type="submit" style="margin-top: 1.5rem; background: #38bdf8; color: black; font-weight: 800;">Guardar Perfil</button>
                     </form>
                 </div>
                 <div class="card">
@@ -68,12 +69,74 @@
                     <form id="form-branding">
                         <div class="form-group">
                             <label>Color de Acento</label>
-                            <div style="display: flex; gap: 1rem; align-items: center;">
+                            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.5rem;">
                                 <input type="color" id="conf-color-acento" style="width: 50px; height: 50px; border: none; cursor: pointer; background: none;">
                                 <code id="acento-hex">#38bdf8</code>
                             </div>
                         </div>
                         <button type="submit" style="margin-top: 2rem;">Aplicar Colores</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN CARGUE MASIVO Y PLANTILLAS -->
+        <div id="sec-cargue" class="config-section">
+            <div class="grid-forms">
+                <!-- Tarjeta 1: Descarga de Plantillas Oficiales -->
+                <div class="card">
+                    <h3>📄 1. Plantillas Oficiales de Cargue</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1.5rem;">
+                        Descarga estas plantillas en formato CSV/Excel, diligéncialas con tus productos o insumos y súbelas para importar masivamente tu catálogo.
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <a href="/api/plantilla/productos" class="btn" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; text-align: center; border: 1px solid rgba(56, 189, 248, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
+                            📥 Descargar Plantilla de Productos (.csv)
+                        </a>
+                        <a href="/api/plantilla/inventario" class="btn" style="background: rgba(52, 211, 153, 0.1); color: #34d399; text-align: center; border: 1px solid rgba(52, 211, 153, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
+                            📥 Descargar Plantilla de Insumos (.csv)
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Tarjeta 2: Subir Archivo CSV / Excel -->
+                <div class="card">
+                    <h3>📤 2. Subir Archivo (.csv)</h3>
+                    <form id="form-import-csv" style="margin-top: 1rem;">
+                        <div class="form-group">
+                            <label>Tipo de Datos a Importar</label>
+                            <select id="imp-csv-tipo" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                <option value="productos">Catálogo de Productos</option>
+                                <option value="inventario">Almacén e Insumos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label>Seleccionar Archivo CSV</label>
+                            <input type="file" id="imp-csv-file" accept=".csv" required style="width: 100%; padding: 8px; margin-top: 5px;">
+                        </div>
+                        <button type="submit" style="margin-top: 1.5rem; background: #38bdf8; color: black; font-weight: 800; width: 100%;">Subir e Importar Registros</button>
+                    </form>
+                </div>
+
+                <!-- Tarjeta 3: Conectar Hoja de Google Sheets -->
+                <div class="card" style="grid-column: span 2;">
+                    <h3>🟢 3. Sincronización Directa con Google Sheets / Drive</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1rem;">
+                        Publica tu hoja de cálculo en Google Sheets como pública ("Cualquier persona con el enlace puede ver") y pega la URL aquí para importar automáticamente.
+                    </p>
+                    <form id="form-import-gsheets" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="flex: 1; min-width: 250px;">
+                            <label>Tipo de Importación</label>
+                            <select id="imp-gs-tipo" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                <option value="productos">Catálogo de Productos</option>
+                                <option value="inventario">Almacén e Insumos</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 300px;">
+                            <label>Enlace Público de Google Sheets</label>
+                            <input type="url" id="imp-gs-url" placeholder="https://docs.google.com/spreadsheets/d/..." required style="width: 100%; padding: 8px; margin-top: 5px;">
+                        </div>
+                        <button type="submit" style="background: #34d399; color: black; font-weight: 800; padding: 0.8rem 1.5rem; border-radius: 8px; border: none; cursor: pointer;">Sincronizar Desde Google Sheets</button>
                     </form>
                 </div>
             </div>
@@ -139,9 +202,12 @@
             const res = await fetch('/api/config/negocio');
             const data = await res.json();
             if (data) {
-                document.getElementById('conf-nombre').value = data.nombre;
-                document.getElementById('conf-tipo').value = data.tipo;
+                document.getElementById('conf-nombre').value = data.nombre || '';
+                document.getElementById('conf-tipo').value = data.tipo || 'HÍBRIDO';
                 document.getElementById('conf-sheet-url-ven').value = data.sheet_url_ventas || '';
+                if (document.getElementById('imp-gs-url')) {
+                    document.getElementById('imp-gs-url').value = data.sheet_url_ventas || '';
+                }
                 document.getElementById('conf-color-acento').value = data.color_acento || '#38bdf8';
                 document.getElementById('acento-hex').textContent = data.color_acento || '#38bdf8';
             }
@@ -198,8 +264,11 @@
                 sheet_url_ventas: document.getElementById('conf-sheet-url-ven').value,
                 color_acento: document.getElementById('conf-color-acento').value
             };
-            await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
-            location.reload();
+            const res = await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            if (res.ok) {
+                alert('¡Configuración guardada exitosamente!');
+                location.reload();
+            }
         };
 
         document.getElementById('form-branding').onsubmit = async (e) => {
@@ -212,6 +281,44 @@
             await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             aplicarTemaVisual();
             document.getElementById('acento-hex').textContent = data.color_acento;
+        };
+
+        document.getElementById('form-import-csv').onsubmit = async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('tipo', document.getElementById('imp-csv-tipo').value);
+            formData.append('file', document.getElementById('imp-csv-file').files[0]);
+
+            const res = await fetch('/api/importar/csv', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                e.target.reset();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        };
+
+        document.getElementById('form-import-gsheets').onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                tipo: document.getElementById('imp-gs-tipo').value,
+                url: document.getElementById('imp-gs-url').value
+            };
+            const res = await fetch('/api/importar/google-sheets', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const resData = await res.json();
+            if (res.ok) {
+                alert(resData.message);
+            } else {
+                alert('Error: ' + resData.error);
+            }
         };
 
         async function doBackup() { await fetch('/api/mantenimiento/backup', {method:'POST'}); alert('Backup creado en la carpeta /backups'); }

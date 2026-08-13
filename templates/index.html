@@ -466,12 +466,16 @@
             const nombre = document.getElementById('wiz-negocio-nombre').value;
             const tipo = document.getElementById('wiz-negocio-tipo').value;
             if(!nombre) return alert('Por favor, ingresa el nombre de tu negocio.');
-            
+
             await fetch('/api/config/negocio', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ nombre, tipo })
             });
+
+            if (window.aplicarTraduccionOperativa) {
+                await aplicarTraduccionOperativa();
+            }
             showWizStep(2);
         }
 
@@ -479,23 +483,28 @@
             const nombre = document.getElementById('wiz-prod-nombre').value;
             const precio = document.getElementById('wiz-prod-precio').value;
             if(!nombre || !precio) return alert('Ingresa el nombre y el precio de venta del producto.');
-            
+
             const res = await fetch('/api/productos', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ nombre, precio: parseFloat(precio) })
             });
-            
+
             if (res.ok) {
                 createdProductName = nombre;
-                // Buscar el ID del producto que acabamos de crear
                 const resP = await fetch('/api/productos');
                 const products = await resP.json();
                 const matched = products.find(p => p.nombre === nombre);
                 if (matched) {
                     createdProductId = matched.id;
                 }
-                showWizStep(3);
+
+                const tipo = document.getElementById('wiz-negocio-tipo').value;
+                if (tipo === 'REVENTA' || tipo === 'SERVICIOS') {
+                    showWizStep(5);
+                } else {
+                    showWizStep(3);
+                }
             } else {
                 alert('Ocurrió un error al registrar el producto.');
             }

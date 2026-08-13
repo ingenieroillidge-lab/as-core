@@ -43,7 +43,8 @@ async function aplicarTraduccionOperativa() {
     const config = await res.json();
     if (!config) return;
 
-    const lang = LENGUAJE_OPERATIVO[config.tipo] || LENGUAJE_OPERATIVO['HÍBRIDO'];
+    const tipoNorm = (config.tipo || 'HÍBRIDO').toUpperCase();
+    const lang = LENGUAJE_OPERATIVO[tipoNorm] || LENGUAJE_OPERATIVO['HÍBRIDO'];
 
     // Traducir navegación y encabezados comunes
     const navInsumos = document.querySelector('a[href="/inventario"]');
@@ -58,5 +59,23 @@ async function aplicarTraduccionOperativa() {
         if (lang[key]) el.textContent = lang[key];
     });
 
-    console.log(`Sistema adaptado a modo: ${config.tipo}`);
+    // Ocultar/Adaptar elementos que requieren recetas en negocios de Reventa pura
+    if (tipoNorm === 'REVENTA' || tipoNorm === 'SERVICIOS') {
+        document.querySelectorAll('[data-mode="receta"]').forEach(el => {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('.receta-only').forEach(el => {
+            el.style.display = 'none';
+        });
+    } else {
+        document.querySelectorAll('[data-mode="receta"]').forEach(el => {
+            el.style.display = '';
+        });
+        document.querySelectorAll('.receta-only').forEach(el => {
+            el.style.display = '';
+        });
+    }
+
+    console.log(`Sistema adaptado a modo: ${tipoNorm}`);
+    return config;
 }

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, session, redirect, url_for
+from flask import Flask, jsonify, request, render_template, session, redirect, url_for, Response
 import services.ventas_service as ventas_service
 import services.inventario_service as inventario_service
 import services.financiero_service as financiero_service
@@ -6,6 +6,9 @@ from database import conectar, crear_tablas, ejecutar_query
 from datetime import datetime, timedelta
 from functools import wraps
 import sys
+import io
+import csv
+import urllib.request
 
 app = Flask(__name__)
 app.secret_key = "as_platform_high_conversion_2024"
@@ -340,11 +343,206 @@ def h_conf():
     nid = session['negocio_id']
     if request.method == 'POST':
         d = request.json
-        ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=? WHERE negocio_id=?", (d['nombre'], d['tipo'], d.get('sheet_url_ventas'), nid))
+        nombre = (d.get('nombre') or 'Mi Negocio').strip()
+        tipo = (d.get('tipo') or 'HÍBRIDO').strip()
+        sheet_url = (d.get('sheet_url_ventas') or '').strip()
+        color = (d.get('color_acento') or '#38bdf8').strip()
+
+        c_res = ejecutar_query("SELECT id FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
+        if c_res:
+            ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=?, color_acento=? WHERE negocio_id=?", 
+                           (nombre, tipo, sheet_url, color, nid))
+        else:
+            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento) VALUES (?, ?, ?, ?, ?)", 
+                           (nid, nombre, tipo, sheet_url, color))
+
+        ejecutar_query("UPDATE negocios SET nombre=? WHERE id=?", (nombre, nid))
         return jsonify({"message": "ok"})
     else:
         res = ejecutar_query("SELECT nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
-        return jsonify({"nombre": res[0][0], "tipo": res[0][1], "sheet_url_ventas": res[0][2], "color_acento": res[0][3]}) if res else jsonify({"nombre": "Mi Negocio", "tipo": "HÍBRIDO"})
+        if res and res[0]:
+            return jsonify({
+                "nombre": res[0][0] or "Mi Negocio",
+                "tipo": res[0][1] or "HÍBRIDO",
+                "sheet_url_ventas": res[0][2] or "",
+                "color_acento": res[0][3] or "#38bdf8"
+            })
+        return jsonify({"nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "", "color_acento": "#38bdf8"})
+
+# ==========================
+# API: CARGUE MASIVO (PLANTILLAS, CSV Y GOOGLE SHEETS)
+# ==========================
+
+@app.route('/api/plantilla/<tipo>')
+@login_required
+def descargar_plantilla(tipo):
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    if tipo == 'productos':
+        writer.writerow(['Nombre del Producto', 'Precio de Venta', 'Codigo', 'Categoria', 'Tipo'])
+        writer.writerow(['Hamburguesa Clasica', '18900', 'PROD-001', 'Comidas', 'TRANSFORMADO'])
+        writer.writerow(['Gaseosa 350ml', '4500', 'PROD-002', 'Bebidas', 'DIRECTO'])
+        filename = 'plantilla_cargue_productos.csv'
+    elif tipo == 'inventario':
+        writer.writerow(['Nombre del Insumo', 'Unidad de Medida', 'Costo Unitario Base', 'Stock Inicial', 'Stock Minimo'])
+        writer.writerow(['Carne de Res Molida', 'gramos', '25', '5000', '500'])
+        writer.writerow(['Pan de Hamburguesa', 'unidades', '800', '100', '10'])
+        filename = 'plantilla_cargue_inventario.csv'
+    else:
+        writer.writerow(['Fecha (YYYY-MM-DD)', 'Producto Nombre', 'Cantidad', 'Metodo Pago', 'Total'])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d"), 'Hamburguesa Clasica', '1', 'EFECTIVO', '18900'])
+        filename = 'plantilla_cargue_ventas.csv'
+
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
+
+@app.route('/api/importar/csv', methods=['POST'])
+@login_required
+def importar_csv():
+    nid = session['negocio_id']
+    tipo_importacion = request.form.get('tipo', 'productos')
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No se adjuntó ningún archivo"}), 400
+
+    file = request.files['file']
+    if not file.filename.endswith('.csv'):
+        return jsonify({"error": "Formato no válido. Debe ser un archivo .csv"}), 400
+
+    try:
+        content = file.stream.read().decode('utf-8-sig', errors='ignore')
+        reader = csv.reader(io.StringIO(content))
+        rows = list(reader)
+        if len(rows) <= 1:
+            return jsonify({"error": "El archivo CSV está vacío o solo contiene la fila de encabezados"}), 400
+
+        imported_count = 0
+        for row in rows[1:]:
+            if not row or not any(row): continue
+
+            if tipo_importacion == 'productos':
+                nombre = row[0].strip() if len(row) > 0 else ''
+                try:
+                    precio = float(row[1].replace('$', '').replace(',', '').strip()) if len(row) > 1 and row[1].strip() else 0.0
+                except:
+                    precio = 0.0
+                codigo = row[2].strip() if len(row) > 2 else None
+                cat = row[3].strip() if len(row) > 3 else 'General'
+                tipo_p = row[4].strip() if len(row) > 4 else 'TRANSFORMADO'
+
+                if nombre:
+                    ejecutar_query(
+                        "INSERT INTO productos (negocio_id, nombre, precio, codigo, categoria, tipo_producto) VALUES (?, ?, ?, ?, ?, ?)",
+                        (nid, nombre, precio, codigo, cat, tipo_p)
+                    )
+                    imported_count += 1
+
+            elif tipo_importacion == 'inventario':
+                nombre = row[0].strip() if len(row) > 0 else ''
+                unidad = row[1].strip() if len(row) > 1 else 'unidades'
+                try:
+                    costo = float(row[2].replace('$', '').replace(',', '').strip()) if len(row) > 2 and row[2].strip() else 0.0
+                except:
+                    costo = 0.0
+                try:
+                    stock = float(row[3].strip()) if len(row) > 3 and row[3].strip() else 0.0
+                except:
+                    stock = 0.0
+                try:
+                    st_min = float(row[4].strip()) if len(row) > 4 and row[4].strip() else 5.0
+                except:
+                    st_min = 5.0
+
+                if nombre:
+                    ejecutar_query(
+                        "INSERT INTO inventario (negocio_id, nombre, unidad_base, costo_unitario_base, stock_actual, stock_inicial, stock_minimo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (nid, nombre, unidad, costo, stock, stock, st_min)
+                    )
+                    imported_count += 1
+
+        return jsonify({"message": f"¡Éxito! Se importaron {imported_count} registros."})
+    except Exception as e:
+        return jsonify({"error": f"Error procesando archivo CSV: {str(e)}"}), 500
+
+@app.route('/api/importar/google-sheets', methods=['POST'])
+@login_required
+def importar_google_sheets():
+    nid = session['negocio_id']
+    d = request.json
+    url = (d.get('url') or '').strip()
+    tipo_importacion = d.get('tipo', 'productos')
+
+    if not url:
+        return jsonify({"error": "Debe proporcionar la URL de la hoja de Google Sheets"}), 400
+
+    try:
+        if 'docs.google.com/spreadsheets' in url and '/export?' not in url:
+            sheet_id = url.split('/d/')[1].split('/')[0]
+            csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+        else:
+            csv_url = url
+
+        req = urllib.request.Request(csv_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            csv_data = response.read().decode('utf-8-sig', errors='ignore')
+
+        reader = csv.reader(io.StringIO(csv_data))
+        rows = list(reader)
+        if len(rows) <= 1:
+            return jsonify({"error": "La hoja de Google Sheets está vacía o no tiene acceso público"}), 400
+
+        imported_count = 0
+        for row in rows[1:]:
+            if not row or not any(row): continue
+
+            if tipo_importacion == 'productos':
+                nombre = row[0].strip() if len(row) > 0 else ''
+                try:
+                    precio = float(row[1].replace('$', '').replace(',', '').strip()) if len(row) > 1 and row[1].strip() else 0.0
+                except:
+                    precio = 0.0
+                codigo = row[2].strip() if len(row) > 2 else None
+                cat = row[3].strip() if len(row) > 3 else 'General'
+
+                if nombre:
+                    ejecutar_query(
+                        "INSERT INTO productos (negocio_id, nombre, precio, codigo, categoria) VALUES (?, ?, ?, ?, ?)",
+                        (nid, nombre, precio, codigo, cat)
+                    )
+                    imported_count += 1
+            elif tipo_importacion == 'inventario':
+                nombre = row[0].strip() if len(row) > 0 else ''
+                unidad = row[1].strip() if len(row) > 1 else 'unidades'
+                try:
+                    costo = float(row[2].replace('$', '').replace(',', '').strip()) if len(row) > 2 and row[2].strip() else 0.0
+                except:
+                    costo = 0.0
+                try:
+                    stock = float(row[3].strip()) if len(row) > 3 and row[3].strip() else 0.0
+                except:
+                    stock = 0.0
+
+                if nombre:
+                    ejecutar_query(
+                        "INSERT INTO inventario (negocio_id, nombre, unidad_base, costo_unitario_base, stock_actual, stock_inicial) VALUES (?, ?, ?, ?, ?, ?)",
+                        (nid, nombre, unidad, costo, stock, stock)
+                    )
+                    imported_count += 1
+
+        c_res = ejecutar_query("SELECT id FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
+        if c_res:
+            ejecutar_query("UPDATE configuracion_negocio SET sheet_url_ventas=? WHERE negocio_id=?", (url, nid))
+        else:
+            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, sheet_url_ventas, nombre_comercial, tipo_operacion) VALUES (?, ?, 'Mi Negocio', 'HÍBRIDO')", (nid, url))
+
+        return jsonify({"message": f"¡Sincronización exitosa! Se cargaron {imported_count} filas desde Google Sheets."})
+    except Exception as e:
+        return jsonify({"error": f"No se pudo descargar la hoja de Google Sheets. Asegúrate de compartirla como pública ('Cualquier persona con el enlace'): {str(e)}"}), 500
 
 # ==========================
 # API: SUPER ADMIN ENDPOINTS
