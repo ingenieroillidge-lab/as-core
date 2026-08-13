@@ -41,7 +41,9 @@ def crear_tablas():
         f"CREATE TABLE IF NOT EXISTS compras_entradas (id {id_t}, negocio_id INTEGER, fecha_compra TEXT NOT NULL, proveedor TEXT, numero_factura TEXT, insumo_id INTEGER NOT NULL, codigo_lote TEXT NOT NULL, cantidad_comprada REAL NOT NULL, costo_unitario_compra REAL NOT NULL, costo_total_compra REAL NOT NULL, fecha_vencimiento TEXT, observaciones TEXT, usuario_id INTEGER)",
         f"CREATE TABLE IF NOT EXISTS lotes_inventario (id {id_t}, negocio_id INTEGER, compra_id INTEGER, insumo_id INTEGER NOT NULL, codigo_lote TEXT NOT NULL, fecha_compra TEXT, fecha_vencimiento TEXT, cantidad_inicial REAL NOT NULL, cantidad_disponible REAL NOT NULL, costo_unitario REAL NOT NULL, proveedor TEXT, numero_factura TEXT, estado TEXT DEFAULT 'ACTIVO')",
         f"CREATE TABLE IF NOT EXISTS movimientos_lote (id {id_t}, negocio_id INTEGER, lote_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo TEXT NOT NULL, cantidad REAL NOT NULL, costo_unitario_lote REAL NOT NULL, costo_subtotal REAL NOT NULL, referencia TEXT, venta_id INTEGER, usuario_id INTEGER)",
-        f"CREATE TABLE IF NOT EXISTS informes_guardados (id {id_t}, negocio_id INTEGER, nombre_informe TEXT NOT NULL, tipo_objeto TEXT NOT NULL, columnas_json TEXT NOT NULL, filtros_json TEXT NOT NULL, agrupacion_json TEXT, fecha_creacion TEXT)"
+        f"CREATE TABLE IF NOT EXISTS informes_guardados (id {id_t}, negocio_id INTEGER, nombre_informe TEXT NOT NULL, tipo_objeto TEXT NOT NULL, columnas_json TEXT NOT NULL, filtros_json TEXT NOT NULL, agrupacion_json TEXT, fecha_creacion TEXT)",
+        f"CREATE TABLE IF NOT EXISTS suscripciones (id {id_t}, negocio_id INTEGER NOT NULL, plan TEXT NOT NULL, precio_mensual REAL DEFAULT 24900.0, fecha_inicio TEXT, fecha_vencimiento TEXT, estado TEXT DEFAULT 'ACTIVO', metodo_pago TEXT DEFAULT 'WOMPI', trial_activo INTEGER DEFAULT 0, fecha_fin_trial TEXT, auto_renovar INTEGER DEFAULT 1)",
+        f"CREATE TABLE IF NOT EXISTS log_impersonacion (id {id_t}, super_user_id INTEGER NOT NULL, target_negocio_id INTEGER NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, motivo TEXT DEFAULT 'SOPORTE')"
     ]
 
     for sql in tablas_sql:
@@ -95,6 +97,11 @@ def crear_tablas():
     agregar_columna('ventas', 'observacion', 'TEXT')
     agregar_columna('ventas', 'cliente_id', 'INTEGER')
 
+    # Columnas de negocios
+    agregar_columna('negocios', 'tipo_cuenta', "TEXT DEFAULT 'CLIENTE'")
+    agregar_columna('negocios', 'es_interna', 'INTEGER DEFAULT 0')
+    agregar_columna('negocios', 'es_datos_prueba', 'INTEGER DEFAULT 0')
+
     # Columnas de configuracion_negocio
     agregar_columna('configuracion_negocio', 'nombre_comercial', 'TEXT')
     agregar_columna('configuracion_negocio', 'color_acento', 'TEXT DEFAULT \'#38bdf8\'')
@@ -103,25 +110,44 @@ def crear_tablas():
     agregar_columna('configuracion_negocio', 'metodo_salida_lotes', "TEXT DEFAULT 'FEFO'")
     agregar_columna('configuracion_negocio', 'bloquear_lotes_vencidos', "TEXT DEFAULT 'SI'")
 
-    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes', 'compras_entradas', 'lotes_inventario', 'movimientos_lote', 'informes_guardados']
+    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes', 'compras_entradas', 'lotes_inventario', 'movimientos_lote', 'informes_guardados', 'suscripciones']
     for t in tablas_con_negocio:
         agregar_columna(t, 'negocio_id', 'INTEGER')
 
-    # 3. DATOS INICIALES Y ASEGURAR SUPER ADMIN
+    # 3. DATOS INICIALES Y ASEGURAR EMPRESA INTERNA (AS SOLUTIONS) & SUPER ADMIN
     placeholder = "%s" if IS_PG else "?"
     cursor.execute("SELECT COUNT(*) FROM negocios")
     if cursor.fetchone()[0] == 0:
         hoy = datetime.now()
         vence = (hoy + timedelta(days=3650)).strftime("%Y-%m-%d")
-        cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 1)", 
-                       ("Empresa Maestra", hoy.strftime("%Y-%m-%d"), vence))
+        cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo, tipo_cuenta, es_interna) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 0, 'INTERNA', 1)", 
+                       ("AS Solutions", hoy.strftime("%Y-%m-%d"), vence))
         conn.commit()
 
         cursor.execute("SELECT id FROM negocios ORDER BY id DESC LIMIT 1")
         nid = cursor.fetchone()[0]
 
-        cursor.execute(f"INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES ({placeholder}, 'Empresa Maestra', 'HÍBRIDO', '#38bdf8')", (nid,))
+        cursor.execute(f"INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES ({placeholder}, 'AS Solutions', 'SERVICIOS', '#38bdf8')", (nid,))
         conn.commit()
+
+        # Precargar servicios SaaS estándar
+        servicios_saas = [
+            ("AS-PRO", "Suscripción Mensual AS Platform PRO", 24900.0, "DIRECTO", "Suscripciones"),
+            ("AS-ENT", "Suscripción Enterprise Personalizada", 150000.0, "DIRECTO", "Suscripciones"),
+            ("AS-SETUP", "Servicio de Implementación & Setup Inicial", 80000.0, "DIRECTO", "Servicios")
+        ]
+        for cod, nom, pre, tp, cat in servicios_saas:
+            cursor.execute(f"INSERT INTO productos (negocio_id, codigo, nombre, precio, tipo_producto, categoria) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                           (nid, cod, nom, pre, tp, cat))
+        conn.commit()
+
+    cursor.execute("SELECT id FROM negocios WHERE es_interna=1 OR LOWER(nombre) LIKE '%as solutions%' OR LOWER(nombre) LIKE '%empresa maestra%' ORDER BY id ASC LIMIT 1")
+    row = cursor.fetchone()
+    nid = row[0] if row else 1
+
+    # Actualizar empresa interna
+    cursor.execute(f"UPDATE negocios SET tipo_cuenta='INTERNA', es_interna=1 WHERE id={placeholder}", (nid,))
+    conn.commit()
 
     cursor.execute("SELECT id FROM negocios ORDER BY id ASC LIMIT 1")
     row = cursor.fetchone()

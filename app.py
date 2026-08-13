@@ -1103,13 +1103,19 @@ def handle_super_negocios():
         if request.method == 'POST':
             d = request.json
             plan = d.get('plan', 'FREE')
+            tipo_cuenta = d.get('tipo_cuenta', 'CLIENTE')
             hoy = datetime.now()
             vence = (hoy + timedelta(days=365 if plan == 'PRO' else 7)).strftime("%Y-%m-%d")
 
-            ejecutar_query("INSERT INTO negocios (nombre, status, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES (?,?,?,?,?,?)",
-                           (d['nombre'], 'ACTIVO', plan, hoy.strftime("%Y-%m-%d"), vence, 1 if plan == 'FREE' else 0))
+            ejecutar_query("INSERT INTO negocios (nombre, status, plan, fecha_registro, fecha_vencimiento, trial_activo, tipo_cuenta, es_interna) VALUES (?,?,?,?,?,?,?,0)",
+                           (d['nombre'], 'ACTIVO', plan, hoy.strftime("%Y-%m-%d"), vence, 1 if plan == 'FREE' else 0, tipo_cuenta))
             nid_res = ejecutar_query("SELECT id FROM negocios WHERE nombre=? ORDER BY id DESC LIMIT 1", (d['nombre'],), fetch=True)
             nid = nid_res[0][0] if nid_res else 1
+
+            # Crear suscripción SaaS
+            ejecutar_query("INSERT INTO suscripciones (negocio_id, plan, precio_mensual, fecha_inicio, fecha_vencimiento, estado, trial_activo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           (nid, plan, 24900.0 if plan == 'PRO' else 0.0, hoy.strftime("%Y-%m-%d"), vence, 'ACTIVO' if plan == 'PRO' else 'TRIAL', 1 if plan == 'FREE' else 0))
+
             # Crear primer Admin
             admin_user = (d.get('admin_user') or '').strip()
             admin_pass = (d.get('admin_pass') or '').strip()
@@ -1118,25 +1124,19 @@ def handle_super_negocios():
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
             return jsonify({"message": "Nuevo cliente registrado exitosamente"})
         else:
-            # Asegurar asignación de samuel_super a Empresa Maestra si no tiene usuario vinculado
-            n_maestra = ejecutar_query("SELECT id FROM negocios WHERE LOWER(nombre)='empresa maestra' ORDER BY id ASC LIMIT 1", fetch=True)
-            if n_maestra:
-                nid_m = n_maestra[0][0]
-                u_m = ejecutar_query("SELECT id FROM usuarios WHERE negocio_id=? LIMIT 1", (nid_m,), fetch=True)
-                if not u_m:
-                    ejecutar_query("UPDATE usuarios SET negocio_id=? WHERE LOWER(username)='samuel_super'", (nid_m,))
-
             res = ejecutar_query("""
                 SELECT n.id, n.nombre, n.status, n.plan, n.fecha_vencimiento,
                        COALESCE(
                            (SELECT username FROM usuarios WHERE negocio_id = n.id AND role = 'ADMIN' LIMIT 1),
                            (SELECT username FROM usuarios WHERE negocio_id = n.id LIMIT 1),
                            'samuel_super'
-                       ) as admin_user
+                       ) as admin_user,
+                       COALESCE(n.tipo_cuenta, 'CLIENTE') as tipo_cuenta,
+                       COALESCE(n.es_interna, 0) as es_interna
                 FROM negocios n
             """, fetch=True)
             if not res:
-                return jsonify([])
+                return jsonify({"empresas": [], "metricas_saas": {}})
             out = []
             for x in res:
                 out.append({
@@ -1145,11 +1145,86 @@ def handle_super_negocios():
                     "status": x[2] or "ACTIVO",
                     "plan": x[3] or "FREE",
                     "fecha_vencimiento": x[4] if len(x) > 4 and x[4] else "N/A",
-                    "admin_user": x[5] if len(x) > 5 and x[5] else "samuel_super"
+                    "admin_user": x[5] if len(x) > 5 and x[5] else "samuel_super",
+                    "tipo_cuenta": x[6],
+                    "es_interna": bool(x[7])
                 })
-            return jsonify(out)
+
+            # Métricas MRR / ARR exclusivas de clientes reales
+            mrr_res = ejecutar_query("SELECT SUM(precio_mensual) FROM suscripciones s JOIN negocios n ON s.negocio_id = n.id WHERE s.plan='PRO' AND n.tipo_cuenta='CLIENTE' AND n.es_interna=0", fetch=True)
+            mrr = mrr_res[0][0] or 0.0 if mrr_res else 0.0
+
+            clientes_pro = len([e for e in out if e['plan'] == 'PRO' and e['tipo_cuenta'] == 'CLIENTE' and not e['es_interna']])
+            trials = len([e for e in out if e['plan'] == 'FREE' and e['tipo_cuenta'] == 'CLIENTE' and not e['es_interna']])
+
+            metricas = {
+                "mrr": mrr,
+                "arr": mrr * 12,
+                "clientes_pro": clientes_pro,
+                "trials_activos": trials,
+                "conversion_rate": round((clientes_pro / (clientes_pro + trials) * 100), 1) if (clientes_pro + trials) > 0 else 0.0
+            }
+
+            return jsonify({"empresas": out, "metricas_saas": metricas})
     except Exception as e:
         print(f"Error super negocios: {e}", file=sys.stderr)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/super/impersonate/<int:target_negocio_id>', methods=['POST'])
+@login_required
+@super_required
+def iniciar_impersonacion(target_negocio_id):
+    try:
+        res = ejecutar_query("SELECT id, nombre FROM negocios WHERE id=?", (target_negocio_id,), fetch=True)
+        if not res:
+            return jsonify({"error": "Empresa no encontrada"}), 404
+
+        n_id, n_nom = res[0]
+        f_inicio = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Guardar sesión original
+        session['impersonating_from'] = {
+            "user_id": session['user_id'],
+            "username": session['username'],
+            "role": session['role'],
+            "negocio_id": session['negocio_id']
+        }
+        session['negocio_id'] = n_id
+        session['is_impersonating'] = True
+        session['target_nombre'] = n_nom
+
+        # Auditoría
+        ejecutar_query("INSERT INTO log_impersonacion (super_user_id, target_negocio_id, fecha_inicio, motivo) VALUES (?, ?, ?, 'SOPORTE')",
+                       (session['impersonating_from']['user_id'], n_id, f_inicio))
+
+        return jsonify({"message": f"Modo soporte iniciado para {n_nom}", "redirect": "/"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/super/exit_impersonate', methods=['POST'])
+@login_required
+def salir_impersonacion():
+    try:
+        if session.get('is_impersonating') and 'impersonating_from' in session:
+            orig = session['impersonating_from']
+            f_fin = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Cerrar auditoría
+            ejecutar_query("UPDATE log_impersonacion SET fecha_fin=? WHERE super_user_id=? AND target_negocio_id=? AND fecha_fin IS NULL",
+                           (f_fin, orig['user_id'], session['negocio_id']))
+
+            session['user_id'] = orig['user_id']
+            session['username'] = orig['username']
+            session['role'] = orig['role']
+            session['negocio_id'] = orig['negocio_id']
+
+            session.pop('is_impersonating', None)
+            session.pop('target_nombre', None)
+            session.pop('impersonating_from', None)
+
+            return jsonify({"message": "Sesión Super Admin restaurada con éxito", "redirect": "/super-admin"})
+        return jsonify({"message": "No estabas en modo impersonación", "redirect": "/"})
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/super/negocio/<int:negocio_id>/update', methods=['POST'])
@@ -1162,11 +1237,20 @@ def update_super_negocio(negocio_id):
     dias_pro = d.get('dias_pro', 30)
 
     if plan:
+        hoy = datetime.now().strftime("%Y-%m-%d")
         if plan == 'PRO':
             nueva_fecha = (datetime.now() + timedelta(days=int(dias_pro))).strftime("%Y-%m-%d")
             ejecutar_query("UPDATE negocios SET plan='PRO', fecha_vencimiento=?, trial_activo=0 WHERE id=?", (nueva_fecha, negocio_id))
+            # Actualizar suscripción
+            ejecutar_query("UPDATE suscripciones SET plan='PRO', estado='ACTIVO', precio_mensual=24900.0, fecha_vencimiento=? WHERE negocio_id=?", (nueva_fecha, negocio_id))
         else:
             ejecutar_query("UPDATE negocios SET plan='FREE' WHERE id=?", (negocio_id,))
+            ejecutar_query("UPDATE suscripciones SET plan='FREE', estado='SUSPENDIDO', precio_mensual=0.0 WHERE negocio_id=?", (negocio_id,))
+
+    if status:
+        ejecutar_query("UPDATE negocios SET status=? WHERE id=?", (status, negocio_id))
+
+    return jsonify({"message": "Negocio actualizado correctamente"})
 
     if status:
         ejecutar_query("UPDATE negocios SET status=? WHERE id=?", (status, negocio_id))
@@ -1270,9 +1354,13 @@ def responder_ticket_soporte(ticket_id):
 
 @app.context_processor
 def inject_global_info():
+    info = {"plan": "FREE", "dias_restantes": 0, "es_trial": False, "is_impersonating": False, "target_nombre": ""}
     if 'negocio_id' in session:
-        return get_negocio_status_ext(session['negocio_id'])
-    return {"plan": "FREE", "dias_restantes": 0, "es_trial": False}
+        info.update(get_negocio_status_ext(session['negocio_id']))
+    if session.get('is_impersonating'):
+        info['is_impersonating'] = True
+        info['target_nombre'] = session.get('target_nombre', 'Cliente')
+    return info
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

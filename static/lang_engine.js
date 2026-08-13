@@ -48,7 +48,29 @@ async function aplicarTraduccionOperativa() {
         const tipoNorm = (config.tipo || 'HÍBRIDO').toUpperCase();
         const lang = LENGUAJE_OPERATIVO[tipoNorm] || LENGUAJE_OPERATIVO['HÍBRIDO'];
 
-        // 1. ACTUALIZAR ENCABEZADO / LOGO DE LA BARRA NAVEGADORA CON EL NOMBRE DE LA EMPRESA
+        // 1. BARRA SUPERIOR FIJA SI ESTÁ EN MODO IMPERSONACIÓN / SOPORTE ADMINISTRATIVO
+        const isImp = document.body && document.body.dataset.isImpersonating === 'true';
+        if (isImp || window.IS_IMPERSONATING) {
+            let impBar = document.getElementById('impersonate-admin-banner');
+            if (!impBar) {
+                impBar = document.createElement('div');
+                impBar.id = 'impersonate-admin-banner';
+                impBar.style.cssText = 'position: sticky; top: 0; z-index: 99999; background: linear-gradient(90deg, #7c3aed, #db2777); color: white; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-family: sans-serif;';
+                impBar.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🛡️ MODO SOPORTE ADMINISTRATIVO</span>
+                        <span style="opacity: 0.8;">|</span>
+                        <span>Gestionando: <strong>${nombreNegocio}</strong></span>
+                    </div>
+                    <button onclick="salirModoSoporte()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 4px 12px; border-radius: 6px; font-weight: 800; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;">
+                        ← Volver a Super Admin
+                    </button>
+                `;
+                document.body.insertBefore(impBar, document.body.firstChild);
+            }
+        }
+
+        // 2. ACTUALIZAR ENCABEZADO / LOGO DE LA BARRA NAVEGADORA CON EL NOMBRE DE LA EMPRESA
         const logoContainer = document.querySelector('.navbar .logo') || document.querySelector('header .logo') || document.querySelector('.logo');
         if (logoContainer) {
             logoContainer.innerHTML = `
@@ -140,6 +162,21 @@ async function aplicarTraduccionOperativa() {
         return config;
     } catch(e) {
         console.error("Error al aplicar la identidad comercial:", e);
+    }
+}
+
+// Función global para salir del modo impersonación/soporte
+async function salirModoSoporte() {
+    try {
+        const res = await fetch('/api/super/exit_impersonate', { method: 'POST' });
+        const data = await res.json();
+        if (data.redirect) {
+            window.location.href = data.redirect;
+        } else {
+            window.location.reload();
+        }
+    } catch(e) {
+        window.location.href = '/super-admin';
     }
 }
 
