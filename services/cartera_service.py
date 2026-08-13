@@ -1,5 +1,62 @@
 from database import ejecutar_query
-from datetime import datetime
+from datetime import datetime, timedelta
+
+def crear_o_actualizar_cliente(nombre, negocio_id, tipo="PERSONA", documento="", telefono="", whatsapp="", email="", direccion="", limite_credito=0.0, dias_credito_predeterminado=15):
+    try:
+        nombre = (nombre or '').strip()
+        if not nombre:
+            return False, "El nombre del cliente es obligatorio."
+
+        c_res = ejecutar_query("SELECT id FROM clientes WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (nombre, negocio_id), fetch=True)
+        if c_res:
+            cid = c_res[0][0]
+            ejecutar_query(
+                """UPDATE clientes SET 
+                   tipo=?, documento=?, telefono=?, whatsapp=?, email=?, direccion=?, limite_credito=?, dias_credito_predeterminado=?
+                   WHERE id=? AND negocio_id=?""",
+                (tipo, documento, telefono, whatsapp if whatsapp else telefono, email, direccion, float(limite_credito or 0), int(dias_credito_predeterminado or 15), cid, negocio_id)
+            )
+            return True, cid
+        else:
+            ejecutar_query(
+                """INSERT INTO clientes (negocio_id, nombre, tipo, documento, telefono, whatsapp, email, direccion, limite_credito, dias_credito_predeterminado, estado)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO')""",
+                (negocio_id, nombre, tipo, documento, telefono, whatsapp if whatsapp else telefono, email, direccion, float(limite_credito or 0), int(dias_credito_predeterminado or 15))
+            )
+            cid_res = ejecutar_query("SELECT id FROM clientes WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (nombre, negocio_id), fetch=True)
+            return True, cid_res[0][0] if cid_res else None
+    except Exception as e:
+        return False, f"Error al guardar cliente: {str(e)}"
+
+def obtener_clientes(negocio_id):
+    try:
+        res = ejecutar_query(
+            """SELECT id, nombre, tipo, documento, telefono, whatsapp, email, direccion, limite_credito, dias_credito_predeterminado, estado
+               FROM clientes WHERE negocio_id=? ORDER BY nombre ASC""",
+            (negocio_id,), fetch=True
+        ) or []
+
+        out = []
+        for x in res:
+            cid, nom, tipo, doc, tel, ws, em, dir_c, lim, dias, est = x
+            # Obtener resumen de cartera de este cliente
+            cartera_res = ejecutar_query(
+                "SELECT SUM(saldo_pendiente) FROM ventas WHERE cliente_nombre=? AND negocio_id=? AND saldo_pendiente > 0.01",
+                (nom, negocio_id), fetch=True
+            )
+            saldo_tot = cartera_res[0][0] or 0.0 if cartera_res else 0.0
+
+            out.append({
+                "id": cid, "nombre": nom, "tipo": tipo, "documento": doc or "",
+                "telefono": tel or "", "whatsapp": ws or tel or "", "email": em or "",
+                "direccion": dir_c or "", "limite_credito": lim or 0.0,
+                "dias_credito_predeterminado": dias or 15, "estado": est,
+                "cartera_pendiente": saldo_tot
+            })
+        return out
+    except Exception as e:
+        print(f"Error al obtener clientes: {e}")
+        return []
 
 def registrar_abono(venta_id, monto, metodo_pago, usuario_id, negocio_id, observacion="", fecha_custom=None):
     try:
@@ -55,14 +112,15 @@ def registrar_abono(venta_id, monto, metodo_pago, usuario_id, negocio_id, observ
 
 def obtener_resumen_cartera(negocio_id, mes_filtro=None):
     try:
-        hoy_str = datetime.now().strftime("%Y-%m-%d")
-        mes_actual = mes_filtro if mes_filtro else datetime.now().strftime("%Y-%m")
+        hoy_dt = datetime.now()
+        hoy_str = hoy_dt.strftime("%Y-%m-%d")
+        mes_actual = mes_filtro if mes_filtro else hoy_dt.strftime("%Y-%m")
 
         # 1. Cuentas a crédito / Cartera total
         ventas_credito = ejecutar_query(
             """SELECT v.id, v.total, v.saldo_pendiente, v.fecha, v.fecha_limite_pago, v.cliente_nombre, v.estado_pago
                FROM ventas v
-               WHERE v.negocio_id=? AND (v.metodo_pago='CRÉDITO' OR v.saldo_pendiente > 0 OR v.estado_pago IN ('PENDIENTE', 'PARCIAL'))""",
+               WHERE v.negocio_id=? AND (v.metodo_pago='CRÉDITO' OR v.saldo_pendiente > 0.01 OR v.estado_pago IN ('PENDIENTE', 'PARCIAL'))""",
             (negocio_id,), fetch=True
         ) or []
 
@@ -72,11 +130,12 @@ def obtener_resumen_cartera(negocio_id, mes_filtro=None):
         total_dias = 0
         conteo_cuentas = 0
 
-        # Rango de edades de cartera
-        edad_0_30 = 0.0
-        edad_31_60 = 0.0
-        edad_61_90 = 0.0
-        edad_90_mas = 0.0
+        # 5 Escalones de vencimiento
+        escalon_en_plazo = 0.0       # Vence > 7 días
+        escalon_por_vencer = 0.0     # Vence 1 - 7 días
+        escalon_vencida_1_30 = 0.0   # Vencida 1 - 30 días
+        escalon_critica_30_90 = 0.0  # Vencida 31 - 90 días
+        escalon_critica_90_mas = 0.0 # Vencida > 90 días
 
         for v_id, total, saldo, fecha, vence, cliente, estado in ventas_credito:
             saldo_p = saldo if saldo is not None else (total if estado in ('PENDIENTE', 'PARCIAL') else 0.0)
@@ -86,30 +145,42 @@ def obtener_resumen_cartera(negocio_id, mes_filtro=None):
             cartera_total += saldo_p
             conteo_cuentas += 1
 
-            # Días de antigüedad desde la venta
+            # Días de antigüedad desde la fecha de venta
             try:
                 f_venta = datetime.strptime(fecha[:10], "%Y-%m-%d")
-                dias_antiguedad = (datetime.now() - f_venta).days
+                dias_antiguedad = (hoy_dt - f_venta).days
             except:
                 dias_antiguedad = 0
 
             total_dias += max(0, dias_antiguedad)
 
-            # Clasificación por vencimiento
-            if vence and vence < hoy_str:
-                cartera_vencida += saldo_p
-            else:
-                cartera_por_vencer += saldo_p
+            # Clasificación por 5 Escalones de Vencimiento
+            if vence and str(vence).strip():
+                try:
+                    f_vence = datetime.strptime(vence[:10], "%Y-%m-%d")
+                    dias_diferencia = (f_vence - hoy_dt).days  # Positivo si no ha vencido, negativo si ya venció
 
-            # Clasificación por edad de cartera
-            if dias_antiguedad <= 30:
-                edad_0_30 += saldo_p
-            elif dias_antiguedad <= 60:
-                edad_31_60 += saldo_p
-            elif dias_antiguedad <= 90:
-                edad_61_90 += saldo_p
+                    if dias_diferencia > 7:
+                        escalon_en_plazo += saldo_p
+                        cartera_por_vencer += saldo_p
+                    elif dias_diferencia >= 0:
+                        escalon_por_vencer += saldo_p
+                        cartera_por_vencer += saldo_p
+                    else:
+                        dias_vencido = abs(dias_diferencia)
+                        cartera_vencida += saldo_p
+                        if dias_vencido <= 30:
+                            escalon_vencida_1_30 += saldo_p
+                        elif dias_vencido <= 90:
+                            escalon_critica_30_90 += saldo_p
+                        else:
+                            escalon_critica_90_mas += saldo_p
+                except:
+                    escalon_en_plazo += saldo_p
+                    cartera_por_vencer += saldo_p
             else:
-                edad_90_mas += saldo_p
+                escalon_en_plazo += saldo_p
+                cartera_por_vencer += saldo_p
 
         dias_promedio = round(total_dias / conteo_cuentas) if conteo_cuentas > 0 else 0
 
@@ -146,11 +217,12 @@ def obtener_resumen_cartera(negocio_id, mes_filtro=None):
             "recaudo_mes": recaudo_mes,
             "dias_promedio": dias_promedio,
             "cuentas_activas": conteo_cuentas,
-            "edad_cartera": {
-                "dias_0_30": edad_0_30,
-                "dias_31_60": edad_31_60,
-                "dias_61_90": edad_61_90,
-                "dias_90_mas": edad_90_mas
+            "escalones": {
+                "en_plazo": escalon_en_plazo,
+                "por_vencer": escalon_por_vencer,
+                "vencida_1_30": escalon_vencida_1_30,
+                "critica_30_90": escalon_critica_30_90,
+                "critica_90_mas": escalon_critica_90_mas
             },
             "top_deudores": top_deudores
         }
@@ -159,7 +231,7 @@ def obtener_resumen_cartera(negocio_id, mes_filtro=None):
         return {
             "cartera_total": 0.0, "cartera_vencida": 0.0, "cartera_por_vencer": 0.0,
             "recaudo_mes": 0.0, "dias_promedio": 0, "cuentas_activas": 0,
-            "edad_cartera": {"dias_0_30": 0, "dias_31_60": 0, "dias_61_90": 0, "dias_90_mas": 0},
+            "escalones": {"en_plazo": 0, "por_vencer": 0, "vencida_1_30": 0, "critica_30_90": 0, "critica_90_mas": 0},
             "top_deudores": []
         }
 
@@ -170,7 +242,7 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                    v.estado_pago, v.cliente_nombre, v.fecha_limite_pago, v.observacion
             FROM ventas v
             LEFT JOIN productos p ON v.producto_id = p.id
-            WHERE v.negocio_id=? AND (v.metodo_pago='CRÉDITO' OR v.saldo_pendiente > 0 OR v.estado_pago IN ('PENDIENTE', 'PARCIAL'))
+            WHERE v.negocio_id=? AND (v.metodo_pago='CRÉDITO' OR v.saldo_pendiente > 0.01 OR v.estado_pago IN ('PENDIENTE', 'PARCIAL'))
         """
         params = [negocio_id]
 
@@ -195,6 +267,13 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
 
             es_vencido = bool(vence and vence < hoy_str and saldo_p > 0.01)
 
+            # Buscar teléfono/WhatsApp del cliente en el maestro si existe
+            ws_num = ""
+            if cliente:
+                cli_res = ejecutar_query("SELECT whatsapp, telefono FROM clientes WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (cliente, negocio_id), fetch=True)
+                if cli_res:
+                    ws_num = cli_res[0][0] or cli_res[0][1] or ""
+
             out.append({
                 "id": v_id,
                 "fecha": fecha,
@@ -204,6 +283,7 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                 "saldo": max(0.0, saldo_p),
                 "estado": estado or "PENDIENTE",
                 "cliente": cliente or "Cliente General",
+                "whatsapp": ws_num,
                 "vencimiento": vence or "Sin fecha",
                 "es_vencido": es_vencido,
                 "observacion": obs or ""

@@ -112,7 +112,13 @@
                     <div id="campos-credito" style="display: none; background: rgba(52, 211, 153, 0.05); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
                         <h4 style="color: #34d399; margin-bottom: 0.75rem; font-size: 0.9rem;">📑 Datos de Venta a Crédito</h4>
                         <div class="form-group">
-                            <label>Cliente / Deudor *</label>
+                            <label>Seleccionar Cliente del Maestro *</label>
+                            <select id="v-cliente-select" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;" onchange="onClienteSelectChange()">
+                                <option value="">➕ Escribir un cliente nuevo...</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="group-cliente-nombre" style="margin-top: 0.75rem;">
+                            <label>Nombre del Cliente / Deudor *</label>
                             <input type="text" id="v-cliente" placeholder="Ej: Juan Pérez / Empresa X" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;">
                         </div>
                         <div class="form-group" style="margin-top: 0.75rem;">
@@ -190,6 +196,7 @@
                 const conf = await resConf.json();
                 if (conf && conf.maneja_cartera == 1) {
                     document.getElementById('opt-credito').style.display = 'block';
+                    loadClientes();
                 }
             } catch(e) {}
 
@@ -211,6 +218,35 @@
             });
 
             updatePreview();
+        }
+
+        let clientesMaster = [];
+        async function loadClientes() {
+            try {
+                const res = await fetch('/api/clientes');
+                clientesMaster = await res.json();
+                const sel = document.getElementById('v-cliente-select');
+                if (sel) {
+                    sel.innerHTML = '<option value="">➕ Escribir un cliente nuevo...</option>' +
+                        clientesMaster.map(c => `<option value="${c.id}">${c.nombre} (${c.dias_credito_predeterminado} días plazo)</option>`).join('');
+                }
+            } catch(e) {}
+        }
+
+        function onClienteSelectChange() {
+            const selVal = document.getElementById('v-cliente-select').value;
+            const inputNom = document.getElementById('v-cliente');
+            const inputLim = document.getElementById('v-limite');
+
+            if (selVal) {
+                const found = clientesMaster.find(c => c.id == selVal);
+                if (found) {
+                    inputNom.value = found.nombre;
+                    const hoy = new Date();
+                    hoy.setDate(hoy.getDate() + (found.dias_credito_predeterminado || 15));
+                    inputLim.value = hoy.toISOString().substring(0, 10);
+                }
+            }
         }
 
         function updatePreview() {

@@ -83,5 +83,55 @@ def obtener_rentabilidad_productos(negocio_id):
 
 def realizar_cierre_caja(negocio_id, fecha_cierre=None):
     if not fecha_cierre: fecha_cierre = datetime.now().strftime("%Y-%m-%d")
-    pagos = ejecutar_query("SELECT metodo_pago, SUM(total) FROM ventas WHERE negocio_id=? AND fecha LIKE ? GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True)
-    return {"fecha": fecha_cierre, "total": sum(x[1] for x in pagos), "detalle": {x[0]: x[1] for x in pagos}}
+    pagos = ejecutar_query("SELECT metodo_pago, SUM(total) FROM ventas WHERE negocio_id=? AND metodo_pago != 'CRÉDITO' AND fecha LIKE ? GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True) or []
+    abonos = ejecutar_query("SELECT metodo_pago, SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND fecha LIKE ? GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True) or []
+
+    detalle = {}
+    total = 0.0
+    for m, val in pagos:
+        if val:
+            detalle[m] = detalle.get(m, 0.0) + float(val)
+            total += float(val)
+    for m, val in abonos:
+        if val:
+            lbl = f"{m} (Abonos)"
+            detalle[lbl] = detalle.get(lbl, 0.0) + float(val)
+            total += float(val)
+
+    return {"fecha": fecha_cierre, "total": total, "detalle": detalle}
+
+def obtener_diagnostico_inteligencia(negocio_id):
+    try:
+        import services.cartera_service as cartera_service
+        rf = obtener_resumen_financiero(negocio_id)
+        rc = cartera_service.obtener_resumen_cartera(negocio_id)
+
+        utilidad = rf.get('utilidad', 0.0)
+        cartera_vencida = rc.get('cartera_vencida', 0.0)
+        cartera_total = rc.get('cartera_total', 0.0)
+        recaudo_mes = rc.get('recaudo_mes', 0.0)
+
+        alertas = []
+        tipo_diag = "NORMAL"
+
+        if utilidad > 0 and cartera_vencida > 0 and cartera_vencida > recaudo_mes * 0.5:
+            tipo_diag = "ALERTA_LIQUIDEZ"
+            alertas.append(f"💡 Diagnóstico AS: Tu negocio es rentable (Utilidad: ${utilidad:,.0f}), pero tienes un problema de liquidez por cartera vencida (${cartera_vencida:,.0f}).")
+        elif cartera_vencida > 0:
+            alertas.append(f"⚠️ Atención de Cartera: Tienes ${cartera_vencida:,.0f} en cartera vencida que requieren cobro inmediato.")
+        elif utilidad < 0:
+            alertas.append("🔴 Alerta de Rentabilidad: Tus costos fijos e insumos están superando tus ingresos. Revisa tus precios de venta o costos.")
+        else:
+            alertas.append("🟢 Operación Saludable: Tus ventas y recaudos se encuentran dentro de los parámetros esperados.")
+
+        return {
+            "tipo": tipo_diag,
+            "utilidad": utilidad,
+            "recaudo_mes": recaudo_mes,
+            "cartera_total": cartera_total,
+            "cartera_vencida": cartera_vencida,
+            "mensaje": alertas[0] if alertas else "Operación en orden."
+        }
+    except Exception as e:
+        print(f"Error diagnostico inteligencia: {e}")
+        return {"tipo": "NORMAL", "mensaje": "Operación estándar."}

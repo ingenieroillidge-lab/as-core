@@ -332,6 +332,9 @@ def post_venta():
     if s:
         # Si la venta es a Crédito o se proporcionaron datos de cliente/crédito
         if metodo == 'CRÉDITO' or cliente or fecha_limite or abono_inicial > 0:
+            if cliente:
+                cartera_service.crear_o_actualizar_cliente(cliente, session['negocio_id'])
+
             v_res = ejecutar_query(
                 "SELECT id, total FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
                 (session['negocio_id'],), fetch=True
@@ -474,6 +477,34 @@ def post_cartera_abono():
         return jsonify({"message": "Abono registrado con éxito", "data": result})
     else:
         return jsonify({"error": result}), 400
+
+@app.route('/api/clientes', methods=['GET', 'POST'])
+@login_required
+def h_clientes():
+    nid = session['negocio_id']
+    if request.method == 'POST':
+        d = request.json
+        ok, res = cartera_service.crear_o_actualizar_cliente(
+            d.get('nombre'), nid,
+            tipo=d.get('tipo', 'PERSONA'),
+            documento=d.get('documento', ''),
+            telefono=d.get('telefono', ''),
+            whatsapp=d.get('whatsapp', ''),
+            email=d.get('email', ''),
+            direccion=d.get('direccion', ''),
+            limite_credito=d.get('limite_credito', 0),
+            dias_credito_predeterminado=d.get('dias_credito_predeterminado', 15)
+        )
+        return jsonify({"message": "ok", "id": res}) if ok else (jsonify({"error": res}), 400)
+    else:
+        return jsonify(cartera_service.obtener_clientes(nid))
+
+@app.route('/api/diagnostico')
+@login_required
+def get_diagnostico():
+    nid = session['negocio_id']
+    diag = financiero_service.obtener_diagnostico_inteligencia(nid)
+    return jsonify(diag)
 
 # ==========================
 # API: CARGUE MASIVO (PLANTILLAS, CSV Y GOOGLE SHEETS)

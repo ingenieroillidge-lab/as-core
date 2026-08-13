@@ -36,7 +36,8 @@ def crear_tablas():
         f"CREATE TABLE IF NOT EXISTS movimientos_inventario (id {id_t}, negocio_id INTEGER, fecha TEXT, insumo_id INTEGER, tipo TEXT, cantidad REAL, referencia TEXT, usuario_id INTEGER)",
         f"CREATE TABLE IF NOT EXISTS configuracion_negocio (id {id_t}, negocio_id INTEGER, nombre_comercial TEXT, tipo_operacion TEXT DEFAULT 'HÍBRIDO', sheet_url_ventas TEXT, color_acento TEXT DEFAULT '#38bdf8', maneja_cartera INTEGER DEFAULT 0)",
         f"CREATE TABLE IF NOT EXISTS abonos_cartera (id {id_t}, negocio_id INTEGER, venta_id INTEGER, fecha TEXT, monto REAL, metodo_pago TEXT, usuario_id INTEGER, observacion TEXT)",
-        f"CREATE TABLE IF NOT EXISTS tickets_soporte (id {id_t}, negocio_id INTEGER, usuario_id INTEGER, fecha TEXT, modulo TEXT, pregunta TEXT, respuesta_bot TEXT, estado TEXT DEFAULT 'PENDIENTE', respuesta_admin TEXT)"
+        f"CREATE TABLE IF NOT EXISTS tickets_soporte (id {id_t}, negocio_id INTEGER, usuario_id INTEGER, fecha TEXT, modulo TEXT, pregunta TEXT, respuesta_bot TEXT, estado TEXT DEFAULT 'PENDIENTE', respuesta_admin TEXT)",
+        f"CREATE TABLE IF NOT EXISTS clientes (id {id_t}, negocio_id INTEGER, nombre TEXT NOT NULL, tipo TEXT DEFAULT 'PERSONA', documento TEXT, telefono TEXT, whatsapp TEXT, email TEXT, direccion TEXT, limite_credito REAL DEFAULT 0, dias_credito_predeterminado INTEGER DEFAULT 15, estado TEXT DEFAULT 'ACTIVO')"
     ]
 
     for sql in tablas_sql:
@@ -88,13 +89,14 @@ def crear_tablas():
     agregar_columna('ventas', 'saldo_pendiente', 'REAL DEFAULT 0')
     agregar_columna('ventas', 'fecha_limite_pago', 'TEXT')
     agregar_columna('ventas', 'observacion', 'TEXT')
+    agregar_columna('ventas', 'cliente_id', 'INTEGER')
 
     # Columnas de configuracion_negocio
     agregar_columna('configuracion_negocio', 'nombre_comercial', 'TEXT')
     agregar_columna('configuracion_negocio', 'color_acento', 'TEXT DEFAULT \'#38bdf8\'')
     agregar_columna('configuracion_negocio', 'maneja_cartera', 'INTEGER DEFAULT 0')
 
-    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte']
+    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes']
     for t in tablas_con_negocio:
         agregar_columna(t, 'negocio_id', 'INTEGER')
 

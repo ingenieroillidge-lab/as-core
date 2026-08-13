@@ -122,41 +122,49 @@
             </div>
         </div>
 
-        <!-- SECCIÓN DE ANÁLISIS DE EDAD Y TOP DEUDORES -->
+        <!-- SECCIÓN DE 5 ESCALONES DE VENCIMIENTO Y TOP DEUDORES -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
             <div class="card">
-                <h3>📊 Antigüedad / Edad de Cartera</h3>
+                <h3>🚨 Escalones de Vencimiento de Cartera</h3>
                 <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div>
+                    <div onclick="filtrarPorEscalon('en_plazo')" style="cursor: pointer;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span>0 a 30 días</span><strong id="edad-0-30">$0</strong>
+                            <span style="color: #34d399;">🟢 En Plazo (> 7 días)</span><strong id="esc-en-plazo">$0</strong>
                         </div>
                         <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-0-30" style="background: #34d399; width: 0%; height: 100%;"></div>
+                            <div id="bar-en-plazo" style="background: #34d399; width: 0%; height: 100%;"></div>
                         </div>
                     </div>
-                    <div>
+                    <div onclick="filtrarPorEscalon('por_vencer')" style="cursor: pointer;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span>31 a 60 días</span><strong id="edad-31-60">$0</strong>
+                            <span style="color: #f59e0b;">🟡 Por Vencer (1 a 7 días)</span><strong id="esc-por-vencer">$0</strong>
                         </div>
                         <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-31-60" style="background: #38bdf8; width: 0%; height: 100%;"></div>
+                            <div id="bar-por-vencer" style="background: #f59e0b; width: 0%; height: 100%;"></div>
                         </div>
                     </div>
-                    <div>
+                    <div onclick="filtrarPorEscalon('vencida_1_30')" style="cursor: pointer;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span>61 a 90 días</span><strong id="edad-61-90">$0</strong>
+                            <span style="color: #fb7185;">🔴 Vencida (1 a 30 días)</span><strong id="esc-vencida-1-30">$0</strong>
                         </div>
                         <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-61-90" style="background: #f59e0b; width: 0%; height: 100%;"></div>
+                            <div id="bar-vencida-1-30" style="background: #fb7185; width: 0%; height: 100%;"></div>
                         </div>
                     </div>
-                    <div>
+                    <div onclick="filtrarPorEscalon('critica_30_90')" style="cursor: pointer;">
                         <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span>+90 días (Crítica)</span><strong id="edad-90-mas">$0</strong>
+                            <span style="color: #ef4444;">🔴 Crítica (+30 a 90 días)</span><strong id="esc-critica-30-90">$0</strong>
                         </div>
                         <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-90-mas" style="background: #fb7185; width: 0%; height: 100%;"></div>
+                            <div id="bar-critica-30-90" style="background: #ef4444; width: 0%; height: 100%;"></div>
+                        </div>
+                    </div>
+                    <div onclick="filtrarPorEscalon('critica_90_mas')" style="cursor: pointer;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
+                            <span style="color: #dc2626; font-weight: 800;">🚨 Crítica (+90 días)</span><strong id="esc-critica-90-mas" style="color: #dc2626;">$0</strong>
+                        </div>
+                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-critica-90-mas" style="background: #dc2626; width: 0%; height: 100%;"></div>
                         </div>
                     </div>
                 </div>
@@ -288,20 +296,24 @@
                 document.getElementById('kpi-recaudo').textContent = formatCOP.format(dataKpi.recaudo_mes || 0);
                 document.getElementById('kpi-dias').textContent = `${dataKpi.dias_promedio || 0} días`;
 
-                // Edad de cartera
-                const ec = dataKpi.edad_cartera || {};
+                // 5 Escalones de Vencimiento
+                const esc = dataKpi.escalones || {};
                 const total = dataKpi.cartera_total || 1;
-                document.getElementById('edad-0-30').textContent = formatCOP.format(ec.dias_0_30 || 0);
-                document.getElementById('bar-0-30').style.width = `${Math.min(100, ((ec.dias_0_30 || 0) / total) * 100)}%`;
 
-                document.getElementById('edad-31-60').textContent = formatCOP.format(ec.dias_31_60 || 0);
-                document.getElementById('bar-31-60').style.width = `${Math.min(100, ((ec.dias_31_60 || 0) / total) * 100)}%`;
+                document.getElementById('esc-en-plazo').textContent = formatCOP.format(esc.en_plazo || 0);
+                document.getElementById('bar-en-plazo').style.width = `${Math.min(100, ((esc.en_plazo || 0) / total) * 100)}%`;
 
-                document.getElementById('edad-61-90').textContent = formatCOP.format(ec.dias_61_90 || 0);
-                document.getElementById('bar-61-90').style.width = `${Math.min(100, ((ec.dias_61_90 || 0) / total) * 100)}%`;
+                document.getElementById('esc-por-vencer').textContent = formatCOP.format(esc.por_vencer || 0);
+                document.getElementById('bar-por-vencer').style.width = `${Math.min(100, ((esc.por_vencer || 0) / total) * 100)}%`;
 
-                document.getElementById('edad-90-mas').textContent = formatCOP.format(ec.dias_90_mas || 0);
-                document.getElementById('bar-90-mas').style.width = `${Math.min(100, ((ec.dias_90_mas || 0) / total) * 100)}%`;
+                document.getElementById('esc-vencida-1-30').textContent = formatCOP.format(esc.vencida_1_30 || 0);
+                document.getElementById('bar-vencida-1-30').style.width = `${Math.min(100, ((esc.vencida_1_30 || 0) / total) * 100)}%`;
+
+                document.getElementById('esc-critica-30-90').textContent = formatCOP.format(esc.critica_30_90 || 0);
+                document.getElementById('bar-critica-30-90').style.width = `${Math.min(100, ((esc.critica_30_90 || 0) / total) * 100)}%`;
+
+                document.getElementById('esc-critica-90-mas').textContent = formatCOP.format(esc.critica_90_mas || 0);
+                document.getElementById('bar-critica-90-mas').style.width = `${Math.min(100, ((esc.critica_90_mas || 0) / total) * 100)}%`;
 
                 // Top Deudores
                 const listTop = document.getElementById('top-deudores-list');
@@ -339,6 +351,16 @@
                 else if (c.estado === 'PARCIAL') badgeClass = 'badge-parcial';
                 else if (c.es_vencido) badgeClass = 'badge-vencido';
 
+                let wsButton = '';
+                if (c.saldo > 0.01 && c.whatsapp) {
+                    const wsMsg = encodeURIComponent(`Hola ${c.cliente}, le saludamos de nuestro negocio. Le recordamos amablemente su saldo pendiente por ${formatCOP.format(c.saldo)} (${c.producto}). ¡Muchas gracias por su atención!`);
+                    wsButton = `
+                        <a href="https://wa.me/${c.whatsapp.replace(/\D/g,'')}?text=${wsMsg}" target="_blank" style="background: rgba(37, 211, 102, 0.15); color: #25D366; border: 1px solid rgba(37, 211, 102, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            📲 Recordar
+                        </a>
+                    `;
+                }
+
                 return `
                     <tr>
                         <td style="font-size: 0.8rem; color: var(--text-secondary);">${c.fecha ? c.fecha.substring(0, 10) : '-'}</td>
@@ -352,12 +374,13 @@
                         </td>
                         <td><span class="badge-status ${badgeClass}">${c.estado}</span></td>
                         <td>
-                            <div style="display: flex; gap: 0.4rem;">
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
                                 ${c.saldo > 0.01 ? `
                                     <button onclick="abrirModalAbono(${c.id}, '${c.cliente.replace(/'/g, "\\'")}', ${c.saldo})" style="background: #34d399; color: black; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: none; font-size: 0.75rem; cursor: pointer;">
                                         💵 Abonar
                                     </button>
                                 ` : ''}
+                                ${wsButton}
                                 <button onclick="verHistorial(${c.id})" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
                                     📜 Historial
                                 </button>
@@ -376,6 +399,26 @@
                 const matchCli = c.cliente.toLowerCase().includes(cli) || c.producto.toLowerCase().includes(cli);
                 const matchEst = !est || c.estado === est;
                 return matchCli && matchEst;
+            });
+            renderTablaCuentas(filtradas);
+        }
+
+        function filtrarPorEscalon(key) {
+            const hoy = new Date();
+            const filtradas = cuentasData.filter(c => {
+                if (c.saldo <= 0.01) return false;
+                if (!c.vencimiento || c.vencimiento === 'Sin fecha') return key === 'en_plazo';
+                const fVence = new Date(c.vencimiento);
+                const diffDays = Math.ceil((fVence - hoy) / (1000 * 60 * 60 * 24));
+
+                if (key === 'en_plazo') return diffDays > 7;
+                if (key === 'por_vencer') return diffDays >= 0 && diffDays <= 7;
+
+                const diasVencido = Math.abs(diffDays);
+                if (key === 'vencida_1_30') return diffDays < 0 && diasVencido <= 30;
+                if (key === 'critica_30_90') return diffDays < 0 && diasVencido > 30 && diasVencido <= 90;
+                if (key === 'critica_90_mas') return diffDays < 0 && diasVencido > 90;
+                return true;
             });
             renderTablaCuentas(filtradas);
         }

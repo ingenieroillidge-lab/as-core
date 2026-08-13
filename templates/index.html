@@ -78,6 +78,22 @@
             </div>
         </div>
 
+        <!-- BANNER DE DIAGNÓSTICO DE INTELIGENCIA DE NEGOCIO -->
+        <div id="diagnostico-as-card" class="card" style="display: none; margin-top: 1.5rem; background: rgba(56, 189, 248, 0.04); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 14px; padding: 1.25rem;">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <span style="font-size: 1.8rem;">💡</span>
+                <div style="flex: 1;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">Inteligencia de Negocio AS</div>
+                    <div id="diagnostico-mensaje" style="font-size: 0.95rem; font-weight: 700; color: white; margin-top: 4px; line-height: 1.4;">
+                        Cargando diagnóstico...
+                    </div>
+                </div>
+                <a href="/cartera" id="diagnostico-btn-action" style="display: none; background: #38bdf8; color: black; font-weight: 800; font-size: 0.75rem; padding: 6px 14px; border-radius: 8px; text-decoration: none;">
+                    Ver Cartera
+                </a>
+            </div>
+        </div>
+
         <!-- CHECKLIST WIDGET DE ONBOARDING -->
         <div id="onboarding-checklist-card" class="card" style="display: none; margin-top: 2rem; border-color: rgba(56, 189, 248, 0.2); background: rgba(15, 23, 42, 0.3);">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
@@ -461,6 +477,19 @@
                         }
                     } else {
                         document.getElementById('cartera-dashboard-card').style.display = 'none';
+                    }
+                } catch(e) {}
+
+                // Cargar Diagnóstico de Inteligencia de Negocio
+                try {
+                    const resDiag = await fetch('/api/diagnostico');
+                    const dDiag = await resDiag.json();
+                    if (dDiag && dDiag.mensaje) {
+                        document.getElementById('diagnostico-as-card').style.display = 'block';
+                        document.getElementById('diagnostico-mensaje').textContent = dDiag.mensaje;
+                        if (dDiag.cartera_vencida > 0) {
+                            document.getElementById('diagnostico-btn-action').style.display = 'inline-block';
+                        }
                     }
                 } catch(e) {}
             } catch (err) {
