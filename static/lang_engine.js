@@ -70,7 +70,7 @@ async function aplicarTraduccionOperativa() {
             }
         }
 
-        // 2. ACTUALIZAR ENCABEZADO / LOGO DE LA BARRA NAVEGADORA CON EL NOMBRE DE LA EMPRESA
+        // 2. ACTUALIZAR ENCABEZADO / LOGO DE LA BARRA NAVEGADORA CON EL NOMBRE DE LA EMPRESA & BRANDING SDILLIDGE
         const logoContainer = document.querySelector('.navbar .logo') || document.querySelector('header .logo') || document.querySelector('.logo');
         if (logoContainer) {
             logoContainer.innerHTML = `
@@ -79,10 +79,23 @@ async function aplicarTraduccionOperativa() {
                         ${nombreNegocio}
                     </span>
                     <span style="font-size: 0.65rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; opacity: 0.95;">
-                        ⚡ AS Platform
+                        ⚡ AS Platform <span style="color: #64748b; font-weight: 600;">by SDILLIDGE</span>
                     </span>
                 </div>
             `;
+        }
+
+        // 3. INYECTAR FOOTER GLOBAL DE COPYRIGHT DE SDILLIDGE
+        let appFooter = document.getElementById('as-sdillidge-footer');
+        if (!appFooter) {
+            appFooter = document.createElement('footer');
+            appFooter.id = 'as-sdillidge-footer';
+            appFooter.style.cssText = 'text-align: center; padding: 1.5rem 1rem; color: #64748b; font-size: 0.75rem; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 3rem; font-family: "Inter", sans-serif; clear: both; width: 100%;';
+            appFooter.innerHTML = `
+                © 2026 <strong>AS Platform</strong> • Desarrollado por <strong style="color: #38bdf8; font-family: 'Outfit', sans-serif; letter-spacing: 0.5px;">SDILLIDGE</strong> | Todos los derechos reservados
+            `;
+            const mainContainer = document.querySelector('main') || document.querySelector('.container') || document.body;
+            mainContainer.appendChild(appFooter);
         }
 
         // 2. Traducir navegación y encabezados comunes
