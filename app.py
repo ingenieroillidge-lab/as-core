@@ -49,6 +49,8 @@ def super_required(f):
 
 def get_negocio_status_ext(negocio_id):
     try:
+        if session.get('role') == 'SUPER':
+            return {"plan": "PRO", "dias": 9999, "es_trial": False, "banner_msg": "Panel Super Admin 🚀"}
         res = ejecutar_query("SELECT plan, fecha_vencimiento, trial_activo FROM negocios WHERE id=?", (negocio_id,), fetch=True)
         if not res: return {"plan": "FREE", "dias": 0, "es_trial": False, "banner_msg": "Trial PRO Disponible"}
         plan, vence, trial = res[0]

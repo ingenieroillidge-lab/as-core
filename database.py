@@ -90,25 +90,34 @@ def crear_tablas():
     for t in tablas_con_negocio:
         agregar_columna(t, 'negocio_id', 'INTEGER')
 
-    # 3. DATOS INICIALES
+    # 3. DATOS INICIALES Y ASEGURAR SUPER ADMIN
     placeholder = "%s" if IS_PG else "?"
     cursor.execute("SELECT COUNT(*) FROM negocios")
     if cursor.fetchone()[0] == 0:
         hoy = datetime.now()
-        vence = (hoy + timedelta(days=7)).strftime("%Y-%m-%d")
+        vence = (hoy + timedelta(days=3650)).strftime("%Y-%m-%d")
         cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 1)", 
                        ("Empresa Maestra", hoy.strftime("%Y-%m-%d"), vence))
         conn.commit()
-        
+
         cursor.execute("SELECT id FROM negocios ORDER BY id DESC LIMIT 1")
         nid = cursor.fetchone()[0]
-        
-        cursor.execute(f"INSERT INTO usuarios (negocio_id, username, password, role) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})", 
-                       (nid, "samuel_super", "super2024", "SUPER"))
-        conn.commit()
-        
-        # Crear configuración para la Empresa Maestra
+
         cursor.execute(f"INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES ({placeholder}, 'Empresa Maestra', 'HÍBRIDO', '#38bdf8')", (nid,))
+        conn.commit()
+
+    cursor.execute("SELECT id FROM negocios ORDER BY id ASC LIMIT 1")
+    row = cursor.fetchone()
+    nid = row[0] if row else 1
+
+    # Garantizar presencia del usuario Super Admin 'samuel_super'
+    cursor.execute("SELECT id FROM usuarios WHERE LOWER(username) = 'samuel_super'")
+    user_row = cursor.fetchone()
+    if not user_row:
+        cursor.execute(f"INSERT INTO usuarios (negocio_id, username, password, role) VALUES ({placeholder}, 'samuel_super', 'super2024', 'SUPER')", (nid,))
+        conn.commit()
+    else:
+        cursor.execute(f"UPDATE usuarios SET password = 'super2024', role = 'SUPER' WHERE id = {placeholder}", (user_row[0],))
         conn.commit()
 
     conn.close()
