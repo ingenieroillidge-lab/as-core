@@ -117,10 +117,10 @@ def login():
     if 'user_id' in session:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        u = request.form.get('username')
-        p = request.form.get('password')
+        u = (request.form.get('username') or '').strip()
+        p = (request.form.get('password') or '').strip()
         try:
-            res = ejecutar_query("SELECT id, username, role, negocio_id FROM usuarios WHERE username=? AND password=?", (u, p), fetch=True)
+            res = ejecutar_query("SELECT id, username, role, negocio_id FROM usuarios WHERE LOWER(username)=LOWER(?) AND password=?", (u, p), fetch=True)
             if res:
                 session['user_id'] = res[0][0]
                 session['username'] = res[0][1]
@@ -379,12 +379,18 @@ def handle_super_negocios():
             nid_res = ejecutar_query("SELECT id FROM negocios WHERE nombre=? ORDER BY id DESC LIMIT 1", (d['nombre'],), fetch=True)
             nid = nid_res[0][0] if nid_res else 1
             # Crear primer Admin
-            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?,?,?,?)", (nid, d['admin_user'], d['admin_pass'], 'ADMIN'))
+            admin_user = (d.get('admin_user') or '').strip()
+            admin_pass = (d.get('admin_pass') or '').strip()
+            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?,?,?,?)", (nid, admin_user, admin_pass, 'ADMIN'))
             # Crear config inicial
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
             return jsonify({"message": "Nuevo cliente registrado exitosamente"})
         else:
-            res = ejecutar_query("SELECT id, nombre, status, plan, fecha_vencimiento FROM negocios", fetch=True)
+            res = ejecutar_query("""
+                SELECT n.id, n.nombre, n.status, n.plan, n.fecha_vencimiento, u.username
+                FROM negocios n
+                LEFT JOIN usuarios u ON n.id = u.negocio_id AND u.role = 'ADMIN'
+            """, fetch=True)
             if not res:
                 return jsonify([])
             out = []
@@ -394,7 +400,8 @@ def handle_super_negocios():
                     "nombre": x[1] or "Sin nombre",
                     "status": x[2] or "ACTIVO",
                     "plan": x[3] or "FREE",
-                    "fecha_vencimiento": x[4] if len(x) > 4 and x[4] else "N/A"
+                    "fecha_vencimiento": x[4] if len(x) > 4 and x[4] else "N/A",
+                    "admin_user": x[5] if len(x) > 5 and x[5] else "N/A"
                 })
             return jsonify(out)
     except Exception as e:
@@ -421,6 +428,26 @@ def update_super_negocio(negocio_id):
         ejecutar_query("UPDATE negocios SET status=? WHERE id=?", (status, negocio_id))
 
     return jsonify({"message": "Negocio actualizado correctamente"})
+
+@app.route('/api/super/negocio/<int:negocio_id>/reset_password', methods=['POST'])
+@login_required
+@super_required
+def reset_admin_password(negocio_id):
+    try:
+        d = request.json
+        new_pass = (d.get('new_password') or '').strip()
+        new_user = (d.get('new_username') or '').strip()
+        if not new_pass:
+            return jsonify({"error": "Contraseña requerida"}), 400
+
+        if new_user:
+            ejecutar_query("UPDATE usuarios SET username=?, password=? WHERE negocio_id=? AND role='ADMIN'", (new_user, new_pass, negocio_id))
+        else:
+            ejecutar_query("UPDATE usuarios SET password=? WHERE negocio_id=? AND role='ADMIN'", (new_pass, negocio_id))
+
+        return jsonify({"message": "Credenciales actualizadas exitosamente"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.context_processor
 def inject_global_info():

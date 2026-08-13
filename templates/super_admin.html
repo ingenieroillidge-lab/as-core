@@ -61,6 +61,7 @@
                         <thead>
                             <tr>
                                 <th>Empresa</th>
+                                <th>Usuario Admin</th>
                                 <th>Plan</th>
                                 <th>Estado</th>
                                 <th>Vencimiento</th>
@@ -101,6 +102,7 @@
             tbody.innerHTML = data.map(n => `
                 <tr>
                     <td><strong>${n.nombre}</strong></td>
+                    <td><code style="background: #222; padding: 2px 6px; border-radius: 4px; color: #38bdf8;">${n.admin_user || 'N/A'}</code></td>
                     <td>
                         <select onchange="cambiarPlan(${n.id}, this.value)" style="background: #111; color: white; border: 1px solid #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
                             <option value="PRO" ${n.plan === 'PRO' ? 'selected' : ''}>PRO</option>
@@ -114,13 +116,33 @@
                         </select>
                     </td>
                     <td style="font-size: 0.8rem; color: #888;">${n.fecha_vencimiento || 'Sin fecha'}</td>
-                    <td>
+                    <td style="display: flex; gap: 5px;">
                         <button onclick="extenderPro(${n.id})" style="background: #38bdf8; color: black; border: none; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
-                            + Renovar Pago
+                            + Renovar
+                        </button>
+                        <button onclick="resetearClave(${n.id}, '${n.admin_user || ''}')" style="background: #333; color: white; border: 1px solid #555; font-size: 0.75rem; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                            🔑 Clave
                         </button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function resetearClave(id, current_user) {
+            const nuevaClave = prompt(`Ingrese la nueva contraseña para el usuario (${current_user}):`);
+            if (!nuevaClave) return;
+            const res = await fetch(`/api/super/negocio/${id}/reset_password`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ new_password: nuevaClave })
+            });
+            if (res.ok) {
+                alert('Contraseña actualizada exitosamente.');
+                loadNegocios();
+            } else {
+                const d = await res.json();
+                alert('Error: ' + (d.error || 'No se pudo cambiar la contraseña'));
+            }
         }
 
         async function cambiarPlan(id, plan) {
