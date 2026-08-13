@@ -126,17 +126,31 @@ def login():
         u = (request.form.get('username') or '').strip()
         p = (request.form.get('password') or '').strip()
         try:
-            res = ejecutar_query("SELECT id, username, role, negocio_id FROM usuarios WHERE LOWER(username)=LOWER(?) AND password=?", (u, p), fetch=True)
+            res = ejecutar_query("SELECT id, username, role, negocio_id, password_hash, password FROM usuarios WHERE LOWER(username)=LOWER(?)", (u,), fetch=True)
             if res:
-                session['user_id'] = res[0][0]
-                session['username'] = res[0][1]
-                session['role'] = res[0][2]
-                session['negocio_id'] = res[0][3]
-                status = get_negocio_status_ext(session['negocio_id'])
-                session['plan'] = status['plan']
-                if session['role'] == 'SUPER': 
-                    return redirect(url_for('super_admin_page'))
-                return redirect(url_for('index'))
+                uid, uname, role, nid, p_hash, plain_p = res[0]
+                valid = False
+                if p_hash and check_password_hash(p_hash, p):
+                    valid = True
+                elif plain_p == p:
+                    valid = True
+                    new_h = generate_password_hash(p)
+                    ejecutar_query("UPDATE usuarios SET password_hash=? WHERE id=?", (new_h, uid))
+
+                if valid:
+                    session['user_id'] = uid
+                    session['username'] = uname
+                    session['role'] = role
+                    session['negocio_id'] = nid
+                    status = get_negocio_status_ext(nid)
+                    session['plan'] = status['plan']
+
+                    # Actualizar fecha de último acceso
+                    ejecutar_query("UPDATE usuarios SET ultimo_acceso=? WHERE id=?", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), uid))
+
+                    if session['role'] == 'SUPER': 
+                        return redirect(url_for('super_admin_page'))
+                    return redirect(url_for('index'))
         except Exception as e:
             return render_template('login.html', error=f"Error de sistema: {str(e)}")
         return render_template('login.html', error="Credenciales inválidas")
@@ -163,8 +177,8 @@ def register():
             hoy = datetime.now()
             vence = (hoy + timedelta(days=7)).strftime("%Y-%m-%d")
             
-            # Crear negocio en plan FREE, con trial PRO activo de 7 días
-            ejecutar_query("INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES (?, 'FREE', ?, ?, 1)", 
+            # Crear negocio en plan FREE con trial PRO activo de 7 días
+            ejecutar_query("INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo, tipo_cuenta) VALUES (?, 'FREE', ?, ?, 1, 'CLIENTE')", 
                            (business_name, hoy.strftime("%Y-%m-%d"), vence))
             
             res = ejecutar_query("SELECT id FROM negocios WHERE nombre=? ORDER BY id DESC LIMIT 1", (business_name,), fetch=True)
@@ -172,16 +186,33 @@ def register():
                 return render_template('register.html', error="Error al crear el registro del negocio.")
             nid = res[0][0]
             
-            # Crear administrador de la cuenta
-            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?, ?, ?, 'ADMIN')", 
-                           (nid, username, password))
+            # Crear administrador de la cuenta con hashing seguro
+            p_hash = generate_password_hash(password)
+            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password_hash, role, fecha_registro, estado) VALUES (?, ?, ?, 'ADMIN', ?, 'ACTIVO')", 
+                           (nid, username, p_hash, hoy.strftime("%Y-%m-%d")))
             
+            uid_res = ejecutar_query("SELECT id FROM usuarios WHERE username=?", (username,), fetch=True)
+            uid = uid_res[0][0] if uid_res else 1
+
+            # Crear suscripción inicial en estado TRIAL
+            ejecutar_query("""
+                INSERT INTO suscripciones (negocio_id, plan_id, plan, estado, es_trial, fecha_inicio, fecha_vencimiento, fecha_fin_trial, precio_contratado, auto_renovar)
+                VALUES (?, (SELECT id FROM planes WHERE codigo='PRO'), 'PRO', 'TRIAL', 1, ?, ?, ?, 24900.0, 0)
+            """, (nid, hoy.strftime("%Y-%m-%d"), vence, vence))
+
+            s_id_res = ejecutar_query("SELECT id FROM suscripciones WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (nid,), fetch=True)
+            if s_id_res:
+                ejecutar_query("""
+                    INSERT INTO historial_suscripciones (negocio_id, suscripcion_id, evento, plan_nuevo_id, fecha, usuario_id, motivo)
+                    VALUES (?, ?, 'TRIAL_INICIADO', (SELECT id FROM planes WHERE codigo='PRO'), ?, ?, 'Registro de cuenta con Trial PRO de 7 días')
+                """, (nid, s_id_res[0][0], hoy.strftime("%Y-%m-%d"), uid))
+
             # Inicializar configuración del negocio
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES (?, ?, ?, '#38bdf8')",
                            (nid, business_name, operation_type))
             
             # Loguear automáticamente
-            session['user_id'] = ejecutar_query("SELECT id FROM usuarios WHERE username=?", (username,), fetch=True)[0][0]
+            session['user_id'] = uid
             session['username'] = username
             session['role'] = 'ADMIN'
             session['negocio_id'] = nid
@@ -227,6 +258,11 @@ def cartera_page():
 @login_required
 def informes_page():
     return render_template('informes.html', session=session)
+
+@app.route('/plan')
+@login_required
+def plan_page():
+    return render_template('mi_plan.html', session=session)
 
 @app.route('/configuracion')
 @login_required
@@ -1231,6 +1267,99 @@ def salir_impersonacion():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/plan/detalles')
+@login_required
+def get_plan_detalles():
+    nid = session['negocio_id']
+    status = get_negocio_status_ext(nid)
+    
+    res = ejecutar_query("""
+        SELECT p.codigo, p.nombre, p.precio_mensual, p.limite_productos, p.limite_ventas, p.funcionalidades_json, s.estado, s.es_trial, s.fecha_vencimiento, s.precio_contratado
+        FROM negocios n
+        LEFT JOIN suscripciones s ON s.negocio_id = n.id
+        LEFT JOIN planes p ON (p.id = s.plan_id OR LOWER(p.codigo) = LOWER(n.plan))
+        WHERE n.id = ? ORDER BY s.id DESC LIMIT 1
+    """, (nid,), fetch=True)
+    
+    plan_info = {
+        "codigo": status['plan'],
+        "nombre": "Plan Crecimiento PRO" if status['plan'] == 'PRO' else "Plan Gratuito",
+        "precio": 24900.0 if status['plan'] == 'PRO' else 0.0,
+        "dias_restantes": status['dias'],
+        "es_trial": status['es_trial'],
+        "funcionalidades": {"analisis": True, "informes": True, "exportar_excel": True, "cartera": True, "lotes": True}
+    }
+    
+    if res and res[0]:
+        row = res[0]
+        if row[0]: plan_info["codigo"] = row[0]
+        if row[1]: plan_info["nombre"] = row[1]
+        if row[2] is not None: plan_info["precio"] = row[2]
+        if row[5]:
+            try: plan_info["funcionalidades"] = json.loads(row[5])
+            except: pass
+
+    all_planes = ejecutar_query("SELECT id, codigo, nombre, precio_mensual, limite_productos, limite_ventas, funcionalidades_json FROM planes", fetch=True) or []
+    catalog_planes = []
+    for p in all_planes:
+        catalog_planes.append({
+            "id": p[0], "codigo": p[1], "nombre": p[2], "precio": p[3],
+            "limite_productos": p[4], "limite_ventas": p[5],
+            "funcionalidades": json.loads(p[6]) if p[6] else {}
+        })
+
+    return jsonify({"plan_actual": plan_info, "planes_disponibles": catalog_planes})
+
+@app.route('/api/super/negocio/<int:nid>/ficha')
+@login_required
+@super_required
+def get_super_negocio_ficha(nid):
+    try:
+        neg = ejecutar_query("SELECT id, nombre, status, plan, fecha_registro, fecha_vencimiento, tipo_cuenta, es_interna FROM negocios WHERE id=?", (nid,), fetch=True)
+        if not neg: return jsonify({"error": "Empresa no encontrada"}), 404
+        n_id, n_nom, n_status, n_plan, n_freg, n_fvenc, n_tipo, n_is_int = neg[0]
+
+        users = ejecutar_query("SELECT id, username, role, estado, fecha_registro, ultimo_acceso FROM usuarios WHERE negocio_id=?", (nid,), fetch=True) or []
+        users_out = [{"id": u[0], "username": u[1], "role": u[2], "estado": u[3], "fecha_registro": u[4], "ultimo_acceso": u[5]} for u in users]
+
+        sub = ejecutar_query("SELECT id, plan_id, estado, es_trial, fecha_inicio, fecha_vencimiento, precio_contratado, metodo_pago, auto_renovar FROM suscripciones WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (nid,), fetch=True)
+        sub_out = {}
+        if sub and sub[0]:
+            s = sub[0]
+            sub_out = {
+                "id": s[0], "plan_id": s[1], "estado": s[2], "es_trial": bool(s[3]),
+                "fecha_inicio": s[4], "fecha_vencimiento": s[5], "precio_contratado": s[6],
+                "metodo_pago": s[7], "auto_renovar": bool(s[8])
+            }
+
+        pagos = ejecutar_query("SELECT id, referencia_wompi, transaction_id, monto, tipo_pago, concepto, estado, fecha FROM pagos_wompi WHERE negocio_id=? ORDER BY id DESC LIMIT 20", (nid,), fetch=True) or []
+        pagos_out = [{"id": p[0], "referencia": p[1], "transaction_id": p[2], "monto": p[3], "tipo_pago": p[4], "concepto": p[5], "estado": p[6], "fecha": p[7]} for p in pagos]
+
+        eventos = ejecutar_query("SELECT id, evento, fecha, motivo, referencia_pago FROM historial_suscripciones WHERE negocio_id=? ORDER BY id DESC LIMIT 20", (nid,), fetch=True) or []
+        eventos_out = [{"id": e[0], "evento": e[1], "fecha": e[2], "motivo": e[3], "referencia": e[4]} for e in eventos]
+
+        c_prod = ejecutar_query("SELECT COUNT(*) FROM productos WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+        c_ventas = ejecutar_query("SELECT COUNT(*) FROM ventas WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+        c_informes = ejecutar_query("SELECT COUNT(*) FROM informes_guardados WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+        c_tickets = ejecutar_query("SELECT COUNT(*) FROM tickets_soporte WHERE negocio_id=?", (nid,), fetch=True)[0][0]
+
+        return jsonify({
+            "negocio": {
+                "id": n_id, "nombre": n_nom, "status": n_status, "plan": n_plan,
+                "fecha_registro": n_freg, "fecha_vencimiento": n_fvenc,
+                "tipo_cuenta": n_tipo, "es_interna": bool(n_is_int)
+            },
+            "usuarios": users_out,
+            "suscripcion": sub_out,
+            "pagos": pagos_out,
+            "historial_eventos": eventos_out,
+            "uso": {
+                "productos": c_prod, "ventas": c_ventas, "informes": c_informes, "tickets": c_tickets
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/super/negocio/<int:negocio_id>/update', methods=['POST'])
 @login_required
 @super_required
@@ -1239,14 +1368,24 @@ def update_super_negocio(negocio_id):
     plan = d.get('plan')
     status = d.get('status')
     dias_pro = d.get('dias_pro', 30)
+    motivo = (d.get('motivo') or 'Activación manual por soporte').strip()
 
     if plan:
         hoy = datetime.now().strftime("%Y-%m-%d")
         if plan == 'PRO':
             nueva_fecha = (datetime.now() + timedelta(days=int(dias_pro))).strftime("%Y-%m-%d")
             ejecutar_query("UPDATE negocios SET plan='PRO', fecha_vencimiento=?, trial_activo=0 WHERE id=?", (nueva_fecha, negocio_id))
+            
             # Actualizar suscripción
             ejecutar_query("UPDATE suscripciones SET plan='PRO', estado='ACTIVO', precio_mensual=24900.0, fecha_vencimiento=? WHERE negocio_id=?", (nueva_fecha, negocio_id))
+
+            # Registrar ACTIVACION_MANUAL explícita en historial
+            s_id_res = ejecutar_query("SELECT id FROM suscripciones WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (negocio_id,), fetch=True)
+            s_id = s_id_res[0][0] if s_id_res else 1
+            ejecutar_query("""
+                INSERT INTO historial_suscripciones (negocio_id, suscripcion_id, evento, plan_nuevo_id, fecha, usuario_id, motivo, referencia_pago)
+                VALUES (?, ?, 'ACTIVACION_MANUAL', (SELECT id FROM planes WHERE codigo='PRO'), ?, ?, ?, 'MANUAL_ADMIN')
+            """, (negocio_id, s_id, hoy, session['user_id'], motivo))
         else:
             ejecutar_query("UPDATE negocios SET plan='FREE' WHERE id=?", (negocio_id,))
             ejecutar_query("UPDATE suscripciones SET plan='FREE', estado='SUSPENDIDO', precio_mensual=0.0 WHERE negocio_id=?", (negocio_id,))

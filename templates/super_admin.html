@@ -100,6 +100,60 @@
         </div>
     </main>
 
+    <!-- MODAL FICHA CRM DEL CLIENTE -->
+    <div id="modal-ficha-crm" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+        <div class="card" style="width: 90%; max-width: 850px; max-height: 90vh; overflow-y: auto; border-color: rgba(56, 189, 248, 0.4); position: relative;">
+            <button onclick="document.getElementById('modal-ficha-crm').style.display='none'" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer;">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 id="crm-nombre-empresa" style="margin: 0; color: #38bdf8; font-family: 'Outfit', sans-serif;">Ficha del Cliente</h2>
+                    <span id="crm-tipo-cuenta" style="font-size: 0.75rem; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 10px; color: #cbd5e1; font-weight: 700; margin-top: 4px; display: inline-block;">CLIENTE</span>
+                </div>
+                <button id="crm-btn-impersonate" style="background: linear-gradient(90deg, #7c3aed, #db2777); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 800; cursor: pointer;">
+                    ⚙ Entrar como Empresa ↗
+                </button>
+            </div>
+
+            <!-- SECCIONES CRM EN GRID -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                    <h4 style="margin: 0 0 0.5rem 0; color: #34d399;">💎 Suscripción Activa</h4>
+                    <div id="crm-sub-detalles" style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.6;">Cargando...</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                    <h4 style="margin: 0 0 0.5rem 0; color: #38bdf8;">📈 Uso & Métricas Operativas</h4>
+                    <div id="crm-uso-detalles" style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.6;">Cargando...</div>
+                </div>
+            </div>
+
+            <!-- HISTORIAL DE PAGOS WOMPI REALES -->
+            <h4 style="color: #38bdf8; margin: 1.5rem 0 0.5rem 0;">💳 Historial de Pagos Wompi Reales</h4>
+            <div class="table-container" style="max-height: 150px; overflow-y: auto;">
+                <table style="font-size: 0.8rem;">
+                    <thead>
+                        <tr><th>Fecha</th><th>Referencia</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody id="crm-tabla-pagos">
+                        <tr><td colspan="6" style="text-align: center; color: #666;">Sin pagos registrados aún.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- HISTORIAL DE EVENTOS Y ACTIVACIONES MANUALES -->
+            <h4 style="color: #a855f7; margin: 1.5rem 0 0.5rem 0;">📜 Historial de Eventos de Suscripción & Activaciones</h4>
+            <div class="table-container" style="max-height: 150px; overflow-y: auto;">
+                <table style="font-size: 0.8rem;">
+                    <thead>
+                        <tr><th>Fecha</th><th>Evento</th><th>Motivo / Referencia</th></tr>
+                    </thead>
+                    <tbody id="crm-tabla-eventos">
+                        <tr><td colspan="3" style="text-align: center; color: #666;">Sin eventos registrados aún.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
@@ -153,6 +207,9 @@
                     </td>
                     <td style="font-size: 0.8rem; color: #888;">${n.fecha_vencimiento || 'Sin fecha'}</td>
                     <td style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button onclick="verFichaCRM(${n.id})" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-size: 0.75rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; cursor: pointer;" title="Ver Ficha CRM del cliente">
+                            📋 Ficha CRM
+                        </button>
                         <button onclick="iniciarSoporteEmpresa(${n.id})" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 0.75rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; cursor: pointer;" title="Ingresar en modo soporte a esta empresa">
                             ⚙ Gestionar ↗
                         </button>
@@ -165,6 +222,62 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function verFichaCRM(id) {
+            try {
+                const res = await fetch(`/api/super/negocio/${id}/ficha`);
+                const d = await res.json();
+                if (!res.ok) return alert('Error al cargar la Ficha CRM: ' + (d.error || 'Intente de nuevo'));
+
+                document.getElementById('crm-nombre-empresa').textContent = d.negocio.nombre;
+                document.getElementById('crm-tipo-cuenta').textContent = d.negocio.tipo_cuenta || 'CLIENTE';
+                document.getElementById('crm-btn-impersonate').onclick = () => iniciarSoporteEmpresa(d.negocio.id);
+
+                // Suscripción
+                const s = d.suscripcion || {};
+                document.getElementById('crm-sub-detalles').innerHTML = `
+                    Plan: <strong>${d.negocio.plan}</strong> (${s.es_trial ? 'PRO Trial 7 Días' : 'Plan Contratado'})<br>
+                    Estado: <span style="color:${s.estado === 'ACTIVO' ? '#34d399' : '#fb7185'}; font-weight:700;">${s.estado || 'ACTIVO'}</span><br>
+                    Vencimiento: <strong>${d.negocio.fecha_vencimiento || 'N/A'}</strong><br>
+                    Precio Contratado: <strong>${formatCOP.format(s.precio_contratado || 24900)}</strong>
+                `;
+
+                // Uso
+                document.getElementById('crm-uso-detalles').innerHTML = `
+                    Productos / Servicios: <strong>${d.uso.productos}</strong><br>
+                    Ventas Registradas: <strong>${d.uso.ventas}</strong><br>
+                    Informes Guardados: <strong>${d.uso.informes}</strong><br>
+                    Tickets de Soporte: <strong>${d.uso.tickets}</strong>
+                `;
+
+                // Pagos
+                const tbodyP = document.getElementById('crm-tabla-pagos');
+                tbodyP.innerHTML = (d.pagos && d.pagos.length > 0) ? d.pagos.map(p => `
+                    <tr>
+                        <td>${p.fecha}</td>
+                        <td><code>${p.referencia}</code></td>
+                        <td>${p.concepto}</td>
+                        <td>${p.tipo_pago}</td>
+                        <td style="color:#34d399; font-weight:700;">${formatCOP.format(p.monto)}</td>
+                        <td><span style="color:#34d399; font-weight:700;">${p.estado}</span></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="6" style="text-align: center; color: #666;">Sin pagos registrados aún.</td></tr>';
+
+                // Eventos
+                const tbodyE = document.getElementById('crm-tabla-eventos');
+                tbodyE.innerHTML = (d.historial_eventos && d.historial_eventos.length > 0) ? d.historial_eventos.map(e => `
+                    <tr>
+                        <td>${e.fecha}</td>
+                        <td><strong style="color:${e.evento === 'ACTIVACION_MANUAL' ? '#a855f7' : '#34d399'}">${e.evento}</strong></td>
+                        <td>${e.motivo || e.referencia || '—'}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="3" style="text-align: center; color: #666;">Sin eventos registrados aún.</td></tr>';
+
+                document.getElementById('modal-ficha-crm').style.display = 'flex';
+            } catch(e) {
+                alert('Error al abrir la Ficha CRM');
+            }
         }
 
         async function iniciarSoporteEmpresa(id) {

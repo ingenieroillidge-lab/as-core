@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Plan y Suscripción | AS Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .plan-header {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(168, 85, 247, 0.1));
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .plan-badge-lg {
+            background: linear-gradient(90deg, #38bdf8, #a855f7);
+            color: #000;
+            font-weight: 800;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: inline-block;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar-wrap {
+            width: 100%;
+            max-width: 320px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 10px;
+            height: 10px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34d399, #38bdf8);
+            border-radius: 10px;
+        }
+
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+
+        .matrix-table th {
+            background: rgba(255,255,255,0.03);
+            padding: 14px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.9rem;
+        }
+
+        .matrix-table td {
+            padding: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+            font-size: 0.875rem;
+            color: #cbd5e1;
+        }
+
+        .matrix-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .feature-check { color: #34d399; font-weight: 800; }
+        .feature-cross { color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="logo">
+            <h2>Antigravity <span>AS</span></h2>
+        </div>
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/ventas">Ventas</a>
+            <a href="/inventario">Stock</a>
+            <a href="/informes">📊 Informes</a>
+            <a href="/plan" class="active">💎 Mi Plan</a>
+            <a href="/configuracion">Configuración</a>
+        </div>
+    </div>
+
+    <main style="max-width: 1100px; margin: 2rem auto; padding: 0 1.5rem;">
+        <div class="plan-header">
+            <div>
+                <div class="plan-badge-lg" id="plan-badge-title">💎 PLAN CRECIMIENTO PRO</div>
+                <h1 style="margin: 0; font-size: 1.8rem; font-family: 'Outfit', sans-serif;" id="plan-nombre-display">Cargando detalles de tu suscripción...</h1>
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 0.4rem;" id="plan-desc-display">
+                    Tienes acceso completo a todas las herramientas de análisis financiero y control estratégico de AS Platform.
+                </p>
+            </div>
+            <div>
+                <div style="text-align: right; font-size: 0.85rem; color: #94a3b8;">
+                    Días restantes: <strong id="plan-dias-val" style="color: #38bdf8; font-size: 1.2rem; font-family: 'Outfit', sans-serif;">-- días</strong>
+                </div>
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="plan-progress-fill" style="width: 80%;"></div>
+                </div>
+                <button onclick="document.getElementById('modal-upgrade').style.display='flex'" style="margin-top: 1rem; width: 100%; background: #38bdf8; color: #000; font-weight: 800; border: none; padding: 0.7rem; border-radius: 8px; cursor: pointer; transition: 0.2s;">
+                    ⚡ Renovar / Actualizar Plan
+                </button>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem;">
+            <h3 style="color: #38bdf8; margin: 0 0 1rem 0;">📊 Matriz Comparativa de Capacidades por Nivel</h3>
+            <div style="overflow-x: auto;">
+                <table class="matrix-table">
+                    <thead>
+                        <tr>
+                            <th>Funcionalidad / Módulo</th>
+                            <th>🆓 FREE</th>
+                            <th style="color: #38bdf8; background: rgba(56,189,248,0.05);">💎 PRO</th>
+                            <th style="color: #a855f7;">🏢 ENTERPRISE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Capacidad de Productos / Servicios</td>
+                            <td>Máximo 10</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">Ilimitados ∞</td>
+                            <td class="feature-check">Ilimitados ∞</td>
+                        </tr>
+                        <tr>
+                            <td>Capacidad de Ventas Mensuales</td>
+                            <td>Máximo 50</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">Ilimitadas ∞</td>
+                            <td class="feature-check">Ilimitadas ∞</td>
+                        </tr>
+                        <tr>
+                            <td>Análisis Financiero Real & MCU</td>
+                            <td class="feature-cross">❌</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">✅ Incluido</td>
+                            <td class="feature-check">✅ Incluido</td>
+                        </tr>
+                        <tr>
+                            <td>Generador Transversal de Informes Guardables</td>
+                            <td>Básico</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">✅ Completo</td>
+                            <td class="feature-check">✅ Completo</td>
+                        </tr>
+                        <tr>
+                            <td>Exportación a Excel (.xlsx) Nativo</td>
+                            <td class="feature-cross">❌</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">✅ Incluido</td>
+                            <td class="feature-check">✅ Incluido</td>
+                        </tr>
+                        <tr>
+                            <td>Control de Cartera & Cuentas por Cobrar</td>
+                            <td>Básico</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">✅ Avanzado</td>
+                            <td class="feature-check">✅ Avanzado</td>
+                        </tr>
+                        <tr>
+                            <td>Lotes FEFO / FIFO & Costo Real por Mezcla</td>
+                            <td class="feature-cross">❌</td>
+                            <td class="feature-check" style="background: rgba(56,189,248,0.05);">✅ Incluido</td>
+                            <td class="feature-check">✅ Incluido</td>
+                        </tr>
+                        <tr>
+                            <td>Soporte Técnico y Acompañamiento</td>
+                            <td>Asistente AS</td>
+                            <td style="background: rgba(56,189,248,0.05);">Prioritario</td>
+                            <td style="color: #a855f7; font-weight: 800;">Dedicado 24/7</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+
+        async function loadPlanDetails() {
+            try {
+                const res = await fetch('/api/plan/detalles');
+                const data = await res.json();
+                if (data && data.plan_actual) {
+                    const p = data.plan_actual;
+                    document.getElementById('plan-badge-title').textContent = (p.codigo === 'PRO') ? '💎 PLAN CRECIMIENTO PRO' : '🆓 PLAN GRATUITO';
+                    document.getElementById('plan-nombre-display').textContent = p.nombre || 'Plan Activo';
+                    document.getElementById('plan-dias-val').textContent = `${p.dias_restantes} días`;
+
+                    const pct = Math.min(100, Math.max(10, (p.dias_restantes / 30) * 100));
+                    document.getElementById('plan-progress-fill').style.width = `${pct}%`;
+                }
+            } catch(e) {
+                console.error("Error al cargar detalles del plan:", e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadPlanDetails);
+    </script>
+</body>
+</html>

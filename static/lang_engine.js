@@ -21,12 +21,12 @@ const LENGUAJE_OPERATIVO = {
         stock: 'Inventario'
     },
     'SERVICIOS': {
-        insumos: 'Recursos / Servicios',
-        recetas: 'Estructura de Servicio',
-        inventario: 'Disponibilidad de Recursos',
-        reponer: 'Actualizar Capacidad',
-        unidad: 'Unidad de Tiempo / Sesión',
-        stock: 'Capacidad Disponible'
+        insumos: 'Recursos Operativos',
+        recetas: 'Estructura de Costos',
+        inventario: 'Recursos & Costos',
+        reponer: 'Actualizar Recurso',
+        unidad: 'Unidad (Mes, Licencia, Hora)',
+        stock: 'Recursos Activos'
     },
     'HÍBRIDO': {
         insumos: 'Insumos y Recursos',
@@ -166,6 +166,9 @@ async function aplicarTraduccionOperativa() {
 
         // Mostrar módulo de Informes Configurable siempre en el menú
         insertarLinkNavegacion('/informes', '📊 Informes', '#38bdf8');
+
+        // Mostrar módulo 💎 Mi Plan siempre en el menú
+        insertarLinkNavegacion('/plan', '💎 Mi Plan', '#38bdf8');
 
         // Si el usuario es SUPER ADMIN, insertar enlace directo al panel Super Admin
         if (config.user_role === 'SUPER') {
