@@ -104,9 +104,32 @@
                             <option value="Efectivo">💵 Efectivo</option>
                             <option value="Transferencia">🏦 Transferencia Bancaria</option>
                             <option value="Nequi">📱 Nequi / Daviplata</option>
+                            <option value="CRÉDITO" id="opt-credito" style="display: none;">💳 Crédito / Cuenta por Cobrar</option>
                         </select>
                     </div>
-                    <div class="form-group">
+
+                    <!-- Campos Condicionales de Crédito / Cartera -->
+                    <div id="campos-credito" style="display: none; background: rgba(52, 211, 153, 0.05); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                        <h4 style="color: #34d399; margin-bottom: 0.75rem; font-size: 0.9rem;">📑 Datos de Venta a Crédito</h4>
+                        <div class="form-group">
+                            <label>Cliente / Deudor *</label>
+                            <input type="text" id="v-cliente" placeholder="Ej: Juan Pérez / Empresa X" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;">
+                        </div>
+                        <div class="form-group" style="margin-top: 0.75rem;">
+                            <label>Fecha Límite de Pago</label>
+                            <input type="date" id="v-limite" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;">
+                        </div>
+                        <div class="form-group" style="margin-top: 0.75rem;">
+                            <label>Abono Inicial ($) (Opcional)</label>
+                            <input type="number" id="v-abono-inicial" placeholder="0" min="0" step="100" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;">
+                        </div>
+                        <div class="form-group" style="margin-top: 0.75rem;">
+                            <label>Observaciones / Compromiso de Pago</label>
+                            <input type="text" id="v-obs" placeholder="Ej: Pago en 2 cuotas quincenales" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px;">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1rem;">
                         <label>Fecha de Venta (Dejar vacío para HOY o seleccionar fecha retroactiva)</label>
                         <input type="date" id="v-fecha" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px; margin-top: 5px;">
                     </div>
@@ -162,6 +185,14 @@
         ];
 
         async function loadProds() {
+            try {
+                const resConf = await fetch('/api/config/negocio');
+                const conf = await resConf.json();
+                if (conf && conf.maneja_cartera == 1) {
+                    document.getElementById('opt-credito').style.display = 'block';
+                }
+            } catch(e) {}
+
             const res = await fetch('/api/productos');
             const data = await res.json();
             const select = document.getElementById('v-producto');
@@ -198,6 +229,11 @@
         document.getElementById('v-producto').addEventListener('change', updatePreview);
         document.getElementById('v-cantidad').addEventListener('input', updatePreview);
 
+        document.getElementById('v-metodo').addEventListener('change', (e) => {
+            const isCredito = e.target.value === 'CRÉDITO';
+            document.getElementById('campos-credito').style.display = isCredito ? 'block' : 'none';
+        });
+
         document.getElementById('venta-form').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btn-registrar');
@@ -212,6 +248,13 @@
 
             const payload = { producto_id: productoId, cantidad, metodo_pago: metodo };
             if (fechaVal) payload.fecha = fechaVal;
+
+            if (metodo === 'CRÉDITO') {
+                payload.cliente_nombre = document.getElementById('v-cliente').value;
+                payload.fecha_limite_pago = document.getElementById('v-limite').value;
+                payload.abono_inicial = parseFloat(document.getElementById('v-abono-inicial').value) || 0;
+                payload.observacion = document.getElementById('v-obs').value;
+            }
 
             const res = await fetch('/api/ventas', {
                 method: 'POST',

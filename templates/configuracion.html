@@ -61,6 +61,13 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label>¿Maneja Ventas / Servicios a Crédito (Cuentas por Cobrar)?</label>
+                            <select id="conf-cartera" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                <option value="0">❌ No (Solo cobros inmediatos al contado)</option>
+                                <option value="1">✅ Sí (Habilitar Cartera, Clientes y Abonos)</option>
+                            </select>
+                        </div>
                         <button type="submit" style="margin-top: 1.5rem; background: #38bdf8; color: black; font-weight: 800;">Guardar Perfil</button>
                     </form>
                 </div>
@@ -215,6 +222,7 @@
                 }
                 document.getElementById('conf-color-acento').value = data.color_acento || '#38bdf8';
                 document.getElementById('acento-hex').textContent = data.color_acento || '#38bdf8';
+                document.getElementById('conf-cartera').value = data.maneja_cartera == 1 ? '1' : '0';
             }
             loadUsuarios();
             aplicarTemaVisual();
@@ -267,7 +275,8 @@
                 nombre: document.getElementById('conf-nombre').value,
                 tipo: document.getElementById('conf-tipo').value,
                 sheet_url_ventas: document.getElementById('conf-sheet-url-ven').value,
-                color_acento: document.getElementById('conf-color-acento').value
+                color_acento: document.getElementById('conf-color-acento').value,
+                maneja_cartera: parseInt(document.getElementById('conf-cartera').value) || 0
             };
             const res = await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             if (res.ok) {

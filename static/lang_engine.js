@@ -77,5 +77,32 @@ async function aplicarTraduccionOperativa() {
     }
 
     console.log(`Sistema adaptado a modo: ${tipoNorm}`);
+
+    // Mostrar u ocultar módulo de Cartera / Cuentas por Cobrar según configuración
+    let navCartera = document.querySelector('a[href="/cartera"]');
+    if (config.maneja_cartera == 1) {
+        if (!navCartera) {
+            const navContainer = document.querySelector('.nav-links') || document.querySelector('nav') || document.querySelector('header');
+            if (navContainer) {
+                const link = document.createElement('a');
+                link.href = '/cartera';
+                link.textContent = '📑 Cartera';
+                link.style.fontWeight = '700';
+                link.style.color = '#34d399';
+
+                const linkConf = navContainer.querySelector('a[href="/configuracion"]');
+                if (linkConf) {
+                    navContainer.insertBefore(link, linkConf);
+                } else {
+                    navContainer.appendChild(link);
+                }
+            }
+        } else {
+            navCartera.style.display = '';
+        }
+    } else if (navCartera) {
+        navCartera.style.display = 'none';
+    }
+
     return config;
 }

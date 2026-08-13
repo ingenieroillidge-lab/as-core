@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request, render_template, session, redirect, u
 import services.ventas_service as ventas_service
 import services.inventario_service as inventario_service
 import services.financiero_service as financiero_service
+import services.cartera_service as cartera_service
 from database import conectar, crear_tablas, ejecutar_query
 from datetime import datetime, timedelta
 from functools import wraps
@@ -217,6 +218,11 @@ def inventario_page():
 def analisis_page():
     return render_template('analisis.html', session=session)
 
+@app.route('/cartera')
+@login_required
+def cartera_page():
+    return render_template('cartera.html', session=session)
+
 @app.route('/configuracion')
 @login_required
 @admin_required
@@ -303,15 +309,60 @@ def api_productos():
 @login_required
 def post_venta():
     d = request.json
+    metodo = d.get('metodo_pago', 'Efectivo')
+    producto_id = int(d['producto_id'])
+    cantidad = float(d['cantidad'])
+    fecha = d.get('fecha')
+
+    # Datos opcionales de crédito / cartera
+    cliente = (d.get('cliente_nombre') or '').strip()
+    fecha_limite = d.get('fecha_limite_pago')
+    abono_inicial = float(d.get('abono_inicial', 0.0))
+    observacion = (d.get('observacion') or '').strip()
+
     s, r = ventas_service.registrar_venta(
-        d['producto_id'], 
-        float(d['cantidad']), 
-        d.get('metodo_pago', 'Efectivo'), 
+        producto_id, 
+        cantidad, 
+        metodo, 
         session['user_id'], 
         session['negocio_id'],
-        fecha_custom=d.get('fecha')
+        fecha_custom=fecha
     )
-    return jsonify({"message": "ok", "total": r}) if s else (jsonify({"error": r}), 400)
+
+    if s:
+        # Si la venta es a Crédito o se proporcionaron datos de cliente/crédito
+        if metodo == 'CRÉDITO' or cliente or fecha_limite or abono_inicial > 0:
+            v_res = ejecutar_query(
+                "SELECT id, total FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
+                (session['negocio_id'],), fetch=True
+            )
+            if v_res:
+                v_id, total_v = v_res[0]
+                total_v = float(total_v)
+
+                if abono_inicial > 0:
+                    saldo_p = max(0.0, total_v - abono_inicial)
+                    estado_p = "PAGADO" if saldo_p <= 0.01 else "PARCIAL"
+                else:
+                    saldo_p = total_v
+                    estado_p = "PENDIENTE"
+
+                ejecutar_query(
+                    """UPDATE ventas SET 
+                       estado_pago=?, cliente_nombre=?, saldo_pendiente=?, fecha_limite_pago=?, observacion=?
+                       WHERE id=? AND negocio_id=?""",
+                    (estado_p, cliente if cliente else "Cliente Crédito", saldo_p, fecha_limite, observacion, v_id, session['negocio_id'])
+                )
+
+                if abono_inicial > 0:
+                    cartera_service.registrar_abono(
+                        v_id, abono_inicial, "Efectivo (Abono Inicial)", session['user_id'], session['negocio_id'],
+                        observacion="Abono Inicial en Venta a Crédito", fecha_custom=fecha
+                    )
+
+        return jsonify({"message": "ok", "total": r})
+    else:
+        return jsonify({"error": r}), 400
 
 @app.route('/api/inventario')
 @login_required
@@ -354,27 +405,75 @@ def h_conf():
         tipo = (d.get('tipo') or 'HÍBRIDO').strip()
         sheet_url = (d.get('sheet_url_ventas') or '').strip()
         color = (d.get('color_acento') or '#38bdf8').strip()
+        maneja_cartera = int(d.get('maneja_cartera', 0))
 
         c_res = ejecutar_query("SELECT id FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
         if c_res:
-            ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=?, color_acento=? WHERE negocio_id=?", 
-                           (nombre, tipo, sheet_url, color, nid))
+            ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=?, color_acento=?, maneja_cartera=? WHERE negocio_id=?", 
+                           (nombre, tipo, sheet_url, color, maneja_cartera, nid))
         else:
-            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento) VALUES (?, ?, ?, ?, ?)", 
-                           (nid, nombre, tipo, sheet_url, color))
+            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera) VALUES (?, ?, ?, ?, ?, ?)", 
+                           (nid, nombre, tipo, sheet_url, color, maneja_cartera))
 
         ejecutar_query("UPDATE negocios SET nombre=? WHERE id=?", (nombre, nid))
         return jsonify({"message": "ok"})
     else:
-        res = ejecutar_query("SELECT nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
+        res = ejecutar_query("SELECT nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
         if res and res[0]:
             return jsonify({
                 "nombre": res[0][0] or "Mi Negocio",
                 "tipo": res[0][1] or "HÍBRIDO",
                 "sheet_url_ventas": res[0][2] or "",
-                "color_acento": res[0][3] or "#38bdf8"
+                "color_acento": res[0][3] or "#38bdf8",
+                "maneja_cartera": res[0][4] if len(res[0]) > 4 and res[0][4] is not None else 0
             })
-        return jsonify({"nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "", "color_acento": "#38bdf8"})
+        return jsonify({"nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "", "color_acento": "#38bdf8", "maneja_cartera": 0})
+
+# ==========================
+# API: CARTERA Y CUENTAS POR COBRAR
+# ==========================
+
+@app.route('/api/cartera/resumen')
+@login_required
+def get_cartera_resumen():
+    nid = session['negocio_id']
+    mes = request.args.get('mes')
+    resumen = cartera_service.obtener_resumen_cartera(nid, mes_filtro=mes)
+    return jsonify(resumen)
+
+@app.route('/api/cartera/cuentas')
+@login_required
+def get_cartera_cuentas():
+    nid = session['negocio_id']
+    cliente = request.args.get('cliente')
+    estado = request.args.get('estado')
+    cuentas = cartera_service.obtener_cuentas_por_cobrar(nid, cliente_filtro=cliente, estado_filtro=estado)
+    return jsonify(cuentas)
+
+@app.route('/api/cartera/abonos/<int:venta_id>')
+@login_required
+def get_cartera_abonos(venta_id):
+    nid = session['negocio_id']
+    abonos = cartera_service.obtener_historial_abonos(venta_id, nid)
+    return jsonify(abonos)
+
+@app.route('/api/cartera/abono', methods=['POST'])
+@login_required
+def post_cartera_abono():
+    nid = session['negocio_id']
+    uid = session['user_id']
+    d = request.json
+    venta_id = int(d['venta_id'])
+    monto = float(d['monto'])
+    metodo = d.get('metodo_pago', 'Efectivo')
+    observacion = (d.get('observacion') or '').strip()
+    fecha = d.get('fecha')
+
+    ok, result = cartera_service.registrar_abono(venta_id, monto, metodo, uid, nid, observacion=observacion, fecha_custom=fecha)
+    if ok:
+        return jsonify({"message": "Abono registrado con éxito", "data": result})
+    else:
+        return jsonify({"error": result}), 400
 
 # ==========================
 # API: CARGUE MASIVO (PLANTILLAS, CSV Y GOOGLE SHEETS)

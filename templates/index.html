@@ -106,6 +106,36 @@
             </div>
         </div>
 
+        <!-- WIDGET DE RESUMEN DE CARTERA Y LIQUIDEZ (SI MANEJA CARTERA) -->
+        <div id="cartera-dashboard-card" class="card" style="display: none; margin-bottom: 1.5rem; border-color: rgba(52, 211, 153, 0.2); background: rgba(16, 185, 129, 0.03);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="color: #34d399; margin: 0; font-size: 1.05rem;">📑 Resumen de Cartera y Liquidez (Cuentas por Cobrar)</h3>
+                <a href="/cartera" style="color: #34d399; font-weight: 700; font-size: 0.85rem; text-decoration: none;">Ver Cuentas por Cobrar →</a>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem;">
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Cartera Pendiente</span>
+                    <div id="dash-cart-total" style="font-size: 1.25rem; font-weight: 800; color: #38bdf8;">$0</div>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #fb7185; text-transform: uppercase;">Cartera Vencida 🔴</span>
+                    <div id="dash-cart-vencida" style="font-size: 1.25rem; font-weight: 800; color: #fb7185;">$0</div>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #f59e0b; text-transform: uppercase;">Por Vencer 🟡</span>
+                    <div id="dash-cart-por-vencer" style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">$0</div>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #34d399; text-transform: uppercase;">Recaudo del Mes 🟢</span>
+                    <div id="dash-cart-recaudo" style="font-size: 1.25rem; font-weight: 800; color: #34d399;">$0</div>
+                </div>
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Días Promedio</span>
+                    <div id="dash-cart-dias" style="font-size: 1.25rem; font-weight: 800; color: white;">0 días</div>
+                </div>
+            </div>
+        </div>
+
         <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 2rem;">
             <div class="card kpi">
                 <h3>Ingresos Totales</h3>
@@ -413,6 +443,26 @@
                     const dataG = await resG.json();
                     drawCharts(dataG.tendencia, dataG.distribucion);
                 }
+
+                // Cargar resumen de Cartera si está activa
+                try {
+                    const resConf = await fetch('/api/config/negocio');
+                    const conf = await resConf.json();
+                    if (conf && conf.maneja_cartera == 1) {
+                        document.getElementById('cartera-dashboard-card').style.display = 'block';
+                        const resCart = await fetch('/api/cartera/resumen');
+                        const dCart = await resCart.json();
+                        if (dCart) {
+                            document.getElementById('dash-cart-total').textContent = formatCOP.format(dCart.cartera_total || 0);
+                            document.getElementById('dash-cart-vencida').textContent = formatCOP.format(dCart.cartera_vencida || 0);
+                            document.getElementById('dash-cart-por-vencer').textContent = formatCOP.format(dCart.cartera_por_vencer || 0);
+                            document.getElementById('dash-cart-recaudo').textContent = formatCOP.format(dCart.recaudo_mes || 0);
+                            document.getElementById('dash-cart-dias').textContent = `${dCart.dias_promedio || 0} días`;
+                        }
+                    } else {
+                        document.getElementById('cartera-dashboard-card').style.display = 'none';
+                    }
+                } catch(e) {}
             } catch (err) {
                 console.error("Error al cargar el dashboard:", err);
             }
