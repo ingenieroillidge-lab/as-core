@@ -42,6 +42,13 @@
                 <h3 style="margin-top: 2rem;">Registrar Nueva Empresa</h3>
                 <form id="form-nuevo-negocio" style="margin-top: 1rem;">
                     <div class="form-group"><label>Nombre Comercial</label><input type="text" id="n-nombre" required></div>
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label>Plan Inicial</label>
+                        <select id="n-plan" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                            <option value="PRO" selected>PRO</option>
+                            <option value="FREE">FREE</option>
+                        </select>
+                    </div>
                     <div class="form-group" style="margin-top: 1rem;"><label>Admin Inicial</label><input type="text" id="n-admin-user" placeholder="Usuario" required><input type="password" id="n-admin-pass" placeholder="Password" style="margin-top: 5px;" required></div>
                     <button type="submit" style="margin-top: 1.5rem; width: 100%; background: #38bdf8; color: black; font-weight: 800;">Activar Instancia</button>
                 </form>
@@ -102,9 +109,10 @@
 
         document.getElementById('form-nuevo-negocio').onsubmit = async (e) => {
             e.preventDefault();
+            const planElem = document.getElementById('n-plan');
             const data = {
                 nombre: document.getElementById('n-nombre').value,
-                plan: document.getElementById('n-plan').value,
+                plan: planElem ? planElem.value : 'PRO',
                 admin_user: document.getElementById('n-admin-user').value,
                 admin_pass: document.getElementById('n-admin-pass').value
             };
