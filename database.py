@@ -169,6 +169,24 @@ def init_db():
     row = cursor.fetchone()
     nid = row[0] if row else 1
 
+    # Asegurar que Hincha.store12 exista si hay camisetas
+    cursor.execute("SELECT id FROM negocios WHERE LOWER(nombre) LIKE '%hincha%' ORDER BY id ASC LIMIT 1")
+    h_row = cursor.fetchone()
+    if not h_row:
+        hoy_str = datetime.now().strftime("%Y-%m-%d")
+        vence_str = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
+        cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, tipo_cuenta) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 'CLIENTE')",
+                       ("Hincha.store12", hoy_str, vence_str))
+        conn.commit()
+        cursor.execute("SELECT id FROM negocios WHERE LOWER(nombre) LIKE '%hincha%' ORDER BY id ASC LIMIT 1")
+        h_row = cursor.fetchone()
+
+    if h_row:
+        hincha_nid = h_row[0]
+        # Reasignar cualquier producto de ropa fuera del negocio interno AS CORE
+        cursor.execute(f"UPDATE productos SET negocio_id={placeholder} WHERE negocio_id={placeholder} AND (LOWER(nombre) LIKE '%camiseta%' OR LOWER(nombre) LIKE '%hincha%' OR LOWER(nombre) LIKE '%player%')", (hincha_nid, nid))
+        conn.commit()
+
     hash_super = generate_password_hash('super2024')
     cursor.execute("SELECT id, password_hash FROM usuarios WHERE LOWER(username) = 'samuel_super'")
     user_row = cursor.fetchone()

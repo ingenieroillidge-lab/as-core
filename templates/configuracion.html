@@ -71,7 +71,30 @@
         <!-- SECCIÓN PERFIL Y MARCA -->
         <div id="sec-perfil" class="config-section active">
             <div class="grid-forms">
-                <!-- TARJETA 1: IDENTIDAD COMERCIAL -->
+                <!-- TARJETA 2: CATÁLOGO DE PRODUCTOS Y SERVICIOS -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin: 0; color: #38bdf8;">📦 Productos & Servicios</h3>
+                        <button onclick="nuevoProductoModal()" style="background: #38bdf8; color: #000; border: none; font-weight: 800; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
+                            + Nuevo
+                        </button>
+                    </div>
+                    <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;">Edita o elimina los productos y servicios de tu catálogo.</p>
+                    <div style="max-height: 280px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                    <th style="text-align: left; padding: 6px;">Producto/Servicio</th>
+                                    <th style="text-align: right; padding: 6px;">Precio ($)</th>
+                                    <th style="text-align: center; padding: 6px;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-productos-cat">
+                                <tr><td colspan="3" style="text-align: center; color: #666; padding: 10px;">Cargando catálogo...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
                 <div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h3 style="margin: 0;">Identidad Comercial</h3>
@@ -557,6 +580,81 @@
                 msgDiv.textContent = '❌ Error de comunicación con el servidor.';
             }
         };
+
+        async function cargarCatalogoProductos() {
+            try {
+                const res = await fetch('/api/productos');
+                const prods = await res.json();
+                const tbody = document.getElementById('tabla-productos-cat');
+                if (!tbody) return;
+                if (prods && prods.length > 0) {
+                    tbody.innerHTML = prods.map(p => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 8px; font-weight: 700; color: #fff;">${p.nombre}</td>
+                            <td style="padding: 8px; text-align: right; color: #34d399; font-weight: 700;">${formatCOP.format(p.precio)}</td>
+                            <td style="padding: 8px; text-align: center;">
+                                <button onclick="editarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.precio})" style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer; margin-right: 4px;">✏️</button>
+                                <button onclick="eliminarProducto(${p.id})" style="background: rgba(251,113,133,0.15); color: #fb7185; border: 1px solid rgba(251,113,133,0.3); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #888; padding: 12px;">No tienes productos o servicios registrados.</td></tr>';
+                }
+            } catch(e) {
+                console.error("Error al cargar catálogo:", e);
+            }
+        }
+
+        async function editarProducto(id, nombreActual, precioActual) {
+            const nuevoNombre = prompt("Editar nombre del producto/servicio:", nombreActual);
+            if (nuevoNombre === null) return;
+            const nuevoPrecioStr = prompt("Editar precio de venta ($):", precioActual);
+            if (nuevoPrecioStr === null) return;
+
+            const res = await fetch(`/api/productos/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre: nuevoNombre.trim(), precio: parseFloat(nuevoPrecioStr) })
+            });
+            if (res.ok) {
+                cargarCatalogoProductos();
+            } else {
+                alert("Error al actualizar producto");
+            }
+        }
+
+        async function eliminarProducto(id) {
+            if (!confirm("¿Seguro que deseas eliminar este producto/servicio del catálogo?")) return;
+            const res = await fetch(`/api/productos/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarCatalogoProductos();
+            } else {
+                alert("Error al eliminar producto");
+            }
+        }
+
+        async function nuevoProductoModal() {
+            const nom = prompt("Nombre del nuevo producto o servicio:");
+            if (!nom) return;
+            const preStr = prompt("Precio de venta ($):", "24900");
+            if (!preStr) return;
+
+            const res = await fetch('/api/productos', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre: nom.trim(), precio: parseFloat(preStr) })
+            });
+            if (res.ok) {
+                cargarCatalogoProductos();
+            } else {
+                alert("Error al agregar producto o límite alcanzado");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarCatalogoProductos();
+        });
 
         async function doBackup() { await fetch('/api/mantenimiento/backup', {method:'POST'}); alert('Backup creado en la carpeta /backups'); }
         async function doReset() { if(confirm('¡ATENCIÓN! Esto borrará todos tus datos. ¿Proceder?')) { await fetch('/api/mantenimiento/reset', {method:'POST'}); location.reload(); } }

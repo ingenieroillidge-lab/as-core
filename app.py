@@ -6,6 +6,8 @@ import services.cartera_service as cartera_service
 from database import conectar, crear_tablas, ejecutar_query
 from datetime import datetime, timedelta
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+import json
 import sys
 import io
 import csv
@@ -360,6 +362,23 @@ def api_productos():
         return jsonify({"message": "ok"})
     res = ejecutar_query("SELECT id, nombre, precio FROM productos WHERE negocio_id=?", (nid,), fetch=True)
     return jsonify([{"id": x[0], "nombre": x[1], "precio": x[2]} for x in res] if res else [])
+
+@app.route('/api/productos/<int:pid>', methods=['PUT', 'DELETE'])
+@login_required
+@admin_required
+def api_producto_detail(pid):
+    nid = session['negocio_id']
+    if request.method == 'DELETE':
+        ejecutar_query("DELETE FROM productos WHERE id=? AND negocio_id=?", (pid, nid))
+        ejecutar_query("DELETE FROM producto_insumo WHERE producto_id=? AND negocio_id=?", (pid, nid))
+        return jsonify({"message": "Producto eliminado exitosamente"})
+    elif request.method == 'PUT':
+        d = request.json or {}
+        nombre = (d.get('nombre') or '').strip()
+        precio = float(d.get('precio', 0))
+        if not nombre: return jsonify({"error": "El nombre del producto es obligatorio"}), 400
+        ejecutar_query("UPDATE productos SET nombre=?, precio=? WHERE id=? AND negocio_id=?", (nombre, precio, pid, nid))
+        return jsonify({"message": "Producto actualizado exitosamente"})
 
 @app.route('/api/ventas', methods=['POST'])
 @login_required
