@@ -1116,10 +1116,22 @@ def handle_super_negocios():
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
             return jsonify({"message": "Nuevo cliente registrado exitosamente"})
         else:
+            # Asegurar asignación de samuel_super a Empresa Maestra si no tiene usuario vinculado
+            n_maestra = ejecutar_query("SELECT id FROM negocios WHERE LOWER(nombre)='empresa maestra' ORDER BY id ASC LIMIT 1", fetch=True)
+            if n_maestra:
+                nid_m = n_maestra[0][0]
+                u_m = ejecutar_query("SELECT id FROM usuarios WHERE negocio_id=? LIMIT 1", (nid_m,), fetch=True)
+                if not u_m:
+                    ejecutar_query("UPDATE usuarios SET negocio_id=? WHERE LOWER(username)='samuel_super'", (nid_m,))
+
             res = ejecutar_query("""
-                SELECT n.id, n.nombre, n.status, n.plan, n.fecha_vencimiento, u.username
+                SELECT n.id, n.nombre, n.status, n.plan, n.fecha_vencimiento,
+                       COALESCE(
+                           (SELECT username FROM usuarios WHERE negocio_id = n.id AND role = 'ADMIN' LIMIT 1),
+                           (SELECT username FROM usuarios WHERE negocio_id = n.id LIMIT 1),
+                           'samuel_super'
+                       ) as admin_user
                 FROM negocios n
-                LEFT JOIN usuarios u ON n.id = u.negocio_id AND u.role = 'ADMIN'
             """, fetch=True)
             if not res:
                 return jsonify([])
@@ -1131,7 +1143,7 @@ def handle_super_negocios():
                     "status": x[2] or "ACTIVO",
                     "plan": x[3] or "FREE",
                     "fecha_vencimiento": x[4] if len(x) > 4 and x[4] else "N/A",
-                    "admin_user": x[5] if len(x) > 5 and x[5] else "N/A"
+                    "admin_user": x[5] if len(x) > 5 and x[5] else "samuel_super"
                 })
             return jsonify(out)
     except Exception as e:
