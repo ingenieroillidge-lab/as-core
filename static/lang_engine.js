@@ -93,53 +93,44 @@ async function aplicarTraduccionOperativa() {
             });
         }
 
+        // Helper seguro para insertar links de navegación respetando estructura <li> o <a>
+        function insertarLinkNavegacion(href, texto, color) {
+            if (document.querySelector(`a[href="${href}"]`)) return;
+
+            const linkConf = document.querySelector('a[href="/configuracion"]');
+            const navContainer = document.querySelector('.nav-links') || document.querySelector('nav') || document.querySelector('header');
+
+            const link = document.createElement('a');
+            link.href = href;
+            link.textContent = texto;
+            link.style.fontWeight = '700';
+            if (color) link.style.color = color;
+
+            if (linkConf && linkConf.parentNode) {
+                if (linkConf.parentNode.tagName === 'LI') {
+                    const li = document.createElement('li');
+                    li.appendChild(link);
+                    linkConf.parentNode.parentNode.insertBefore(li, linkConf.parentNode);
+                } else {
+                    linkConf.parentNode.insertBefore(link, linkConf);
+                }
+            } else if (navContainer) {
+                navContainer.appendChild(link);
+            }
+        }
+
         // Mostrar u ocultar módulo de Cartera / Cuentas por Cobrar según configuración
         let navCartera = document.querySelector('a[href="/cartera"]');
         if (config.maneja_cartera == 1) {
-            if (!navCartera) {
-                const navContainer = document.querySelector('.nav-links') || document.querySelector('nav') || document.querySelector('header');
-                if (navContainer) {
-                    const link = document.createElement('a');
-                    link.href = '/cartera';
-                    link.textContent = '📑 Cartera';
-                    link.style.fontWeight = '700';
-                    link.style.color = '#34d399';
-
-                    const linkConf = navContainer.querySelector('a[href="/configuracion"]');
-                    if (linkConf) {
-                        navContainer.insertBefore(link, linkConf);
-                    } else {
-                        navContainer.appendChild(link);
-                    }
-                }
-            } else {
-                navCartera.style.display = '';
-            }
+            insertarLinkNavegacion('/cartera', '📑 Cartera', '#34d399');
+            navCartera = document.querySelector('a[href="/cartera"]');
+            if (navCartera) navCartera.style.display = '';
         } else if (navCartera) {
             navCartera.style.display = 'none';
         }
 
         // Mostrar módulo de Informes Configurable siempre en el menú
-        let navInformes = document.querySelector('a[href="/informes"]');
-        if (!navInformes) {
-            const navContainer = document.querySelector('.nav-links') || document.querySelector('nav') || document.querySelector('header');
-            if (navContainer) {
-                const linkInf = document.createElement('a');
-                linkInf.href = '/informes';
-                linkInf.textContent = '📊 Informes';
-                linkInf.style.fontWeight = '700';
-                linkInf.style.color = '#38bdf8';
-
-                const linkConf = navContainer.querySelector('a[href="/configuracion"]');
-                if (linkConf) {
-                    navContainer.insertBefore(linkInf, linkConf);
-                } else {
-                    navContainer.appendChild(linkInf);
-                }
-            }
-        } else {
-            navInformes.style.display = '';
-        }
+        insertarLinkNavegacion('/informes', '📊 Informes', '#38bdf8');
 
         return config;
     } catch(e) {
