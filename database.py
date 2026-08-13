@@ -55,6 +55,11 @@ def crear_tablas():
 
     agregar_columna('negocios', 'intentos_pro_bloqueados', 'INTEGER DEFAULT 0')
     agregar_columna('negocios', 'wompi_secret', 'TEXT')
+    agregar_columna('negocios', 'fecha_registro', 'TEXT')
+    agregar_columna('negocios', 'fecha_vencimiento', 'TEXT')
+    agregar_columna('negocios', 'trial_activo', 'INTEGER DEFAULT 1')
+    agregar_columna('negocios', 'status', "TEXT DEFAULT 'ACTIVO'")
+    agregar_columna('negocios', 'plan', "TEXT DEFAULT 'FREE'")
     
     # Asegurar que todas las columnas clave estén en inventario y productos
     agregar_columna('inventario', 'codigo', 'TEXT')

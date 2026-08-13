@@ -367,23 +367,39 @@ def get_super_stats():
 @login_required
 @super_required
 def handle_super_negocios():
-    if request.method == 'POST':
-        d = request.json
-        plan = d.get('plan', 'FREE')
-        hoy = datetime.now()
-        vence = (hoy + timedelta(days=365 if plan == 'PRO' else 7)).strftime("%Y-%m-%d")
-        
-        ejecutar_query("INSERT INTO negocios (nombre, status, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES (?,?,?,?,?,?)",
-                       (d['nombre'], 'ACTIVO', plan, hoy.strftime("%Y-%m-%d"), vence, 1 if plan == 'FREE' else 0))
-        nid = ejecutar_query("SELECT id FROM negocios WHERE nombre=? ORDER BY id DESC LIMIT 1", (d['nombre'],), fetch=True)[0][0]
-        # Crear primer Admin
-        ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?,?,?,?)", (nid, d['admin_user'], d['admin_pass'], 'ADMIN'))
-        # Crear config inicial
-        ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
-        return jsonify({"message": "Nuevo cliente registrado exitosamente"})
-    else:
-        res = ejecutar_query("SELECT id, nombre, status, plan, fecha_vencimiento FROM negocios", fetch=True)
-        return jsonify([{"id": x[0], "nombre": x[1], "status": x[2], "plan": x[3], "fecha_vencimiento": x[4]} for x in res] if res else [])
+    try:
+        if request.method == 'POST':
+            d = request.json
+            plan = d.get('plan', 'FREE')
+            hoy = datetime.now()
+            vence = (hoy + timedelta(days=365 if plan == 'PRO' else 7)).strftime("%Y-%m-%d")
+
+            ejecutar_query("INSERT INTO negocios (nombre, status, plan, fecha_registro, fecha_vencimiento, trial_activo) VALUES (?,?,?,?,?,?)",
+                           (d['nombre'], 'ACTIVO', plan, hoy.strftime("%Y-%m-%d"), vence, 1 if plan == 'FREE' else 0))
+            nid_res = ejecutar_query("SELECT id FROM negocios WHERE nombre=? ORDER BY id DESC LIMIT 1", (d['nombre'],), fetch=True)
+            nid = nid_res[0][0] if nid_res else 1
+            # Crear primer Admin
+            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?,?,?,?)", (nid, d['admin_user'], d['admin_pass'], 'ADMIN'))
+            # Crear config inicial
+            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
+            return jsonify({"message": "Nuevo cliente registrado exitosamente"})
+        else:
+            res = ejecutar_query("SELECT id, nombre, status, plan, fecha_vencimiento FROM negocios", fetch=True)
+            if not res:
+                return jsonify([])
+            out = []
+            for x in res:
+                out.append({
+                    "id": x[0],
+                    "nombre": x[1] or "Sin nombre",
+                    "status": x[2] or "ACTIVO",
+                    "plan": x[3] or "FREE",
+                    "fecha_vencimiento": x[4] if len(x) > 4 and x[4] else "N/A"
+                })
+            return jsonify(out)
+    except Exception as e:
+        print(f"Error super negocios: {e}", file=sys.stderr)
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/super/negocio/<int:negocio_id>/update', methods=['POST'])
 @login_required
