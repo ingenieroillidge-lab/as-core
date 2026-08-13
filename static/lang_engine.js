@@ -119,6 +119,28 @@ async function aplicarTraduccionOperativa() {
             navCartera.style.display = 'none';
         }
 
+        // Mostrar módulo de Informes Configurable siempre en el menú
+        let navInformes = document.querySelector('a[href="/informes"]');
+        if (!navInformes) {
+            const navContainer = document.querySelector('.nav-links') || document.querySelector('nav') || document.querySelector('header');
+            if (navContainer) {
+                const linkInf = document.createElement('a');
+                linkInf.href = '/informes';
+                linkInf.textContent = '📊 Informes';
+                linkInf.style.fontWeight = '700';
+                linkInf.style.color = '#38bdf8';
+
+                const linkConf = navContainer.querySelector('a[href="/configuracion"]');
+                if (linkConf) {
+                    navContainer.insertBefore(linkInf, linkConf);
+                } else {
+                    navContainer.appendChild(linkInf);
+                }
+            }
+        } else {
+            navInformes.style.display = '';
+        }
+
         return config;
     } catch(e) {
         console.error("Error al aplicar la identidad comercial:", e);

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informes y Análisis | AS Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .report-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+        @media (max-width: 900px) { .report-grid { grid-template-columns: 1fr; } }
+
+        .control-panel { background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1.25rem; backdrop-filter: blur(12px); }
+        .data-panel { background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 1.25rem; backdrop-filter: blur(12px); }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+        .kpi-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; text-align: center; }
+        .kpi-val { font-size: 1.35rem; font-weight: 800; color: #fff; margin-top: 4px; font-family: 'Outfit', sans-serif; }
+        .kpi-lbl { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
+        .report-table th { background: rgba(255,255,255,0.04); color: #94a3b8; text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .report-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: #e2e8f0; }
+        .report-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .badge-status { font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 12px; }
+        .badge-act { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        .badge-venc { background: rgba(251, 113, 133, 0.15); color: #fb7185; border: 1px solid rgba(251, 113, 133, 0.3); }
+        .btn-exp { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        .btn-exp:hover { background: #38bdf8; color: #000; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="logo">
+            <h2>Antigravity <span>AS</span></h2>
+        </div>
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/ventas">Ventas</a>
+            <a href="/inventario">Inventario</a>
+            <a href="/informes" class="active">📊 Informes</a>
+            <a href="/configuracion">Configuración</a>
+        </div>
+    </div>
+
+    <div class="container" style="max-width: 1300px; margin-top: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1 style="font-size: 1.6rem; font-weight: 800; color: #fff; margin: 0; font-family: 'Outfit', sans-serif;">
+                    📊 Generador Transversal de Informes
+                </h1>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 4px;">
+                    Analiza ventas, rentabilidad real por lote, cartera e inventario con exportación directa a Excel.
+                </p>
+            </div>
+
+            <!-- Seleccionar Informe Guardado -->
+            <div style="display: flex; gap: 0.5rem; align-items: center; background: rgba(255,255,255,0.03); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                <span style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">⭐ Informes Guardados:</span>
+                <select id="sel-informes-guardados" style="padding: 6px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 6px; font-size: 0.8rem;">
+                    <option value="">-- Seleccionar Informe Guardado --</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="report-grid">
+            <!-- PANEL DE CONTROL / CONFIGURACIÓN -->
+            <div class="control-panel">
+                <h3 style="margin-top: 0; font-size: 1rem; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    ⚙️ Configurar Consulta
+                </h3>
+
+                <form id="form-generar-reporte">
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Dimensión de Análisis</label>
+                        <select id="rep-dimension" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 4px;">
+                            <option value="VENTAS">📊 Ventas y Rentabilidad Real</option>
+                            <option value="LOTES">📦 Lotes, Compras y Vencimientos</option>
+                            <option value="CARTERA">📑 Cartera y Cuentas por Cobrar</option>
+                            <option value="INVENTARIO">🏭 Inventario Consolidado</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Fecha Inicio</label>
+                        <input type="date" id="rep-f-inicio" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 4px;">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Fecha Fin</label>
+                        <input type="date" id="rep-f-fin" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 4px;">
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem;">
+                        <button type="submit" style="background: #38bdf8; color: #000; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
+                            📊 Generar Informe en Pantalla
+                        </button>
+                        <button type="button" onclick="guardarConfiguracionInforme()" style="background: rgba(255,255,255,0.06); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.6rem; border-radius: 8px; cursor: pointer;">
+                            💾 Guardar Esta Configuración
+                        </button>
+                        <button type="button" onclick="exportarExcel()" class="btn-exp">
+                            📥 Exportar a Excel (.xlsx)
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- PANEL DE RESULTADOS -->
+            <div class="data-panel">
+                <div id="kpi-container" class="kpi-row">
+                    <div class="kpi-card"><div class="kpi-lbl">Registros / Unidades</div><div class="kpi-val" id="kpi-val-1">0</div></div>
+                    <div class="kpi-card"><div class="kpi-lbl">Ingresos / Inversión</div><div class="kpi-val" id="kpi-val-2">$0</div></div>
+                    <div class="kpi-card"><div class="kpi-lbl">Costo Consumido</div><div class="kpi-val" id="kpi-val-3">$0</div></div>
+                    <div class="kpi-card"><div class="kpi-lbl">Utilidad / Saldo</div><div class="kpi-val" id="kpi-val-4" style="color: #34d399;">$0</div></div>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="report-table">
+                        <thead id="tbl-headers">
+                            <tr><th>Fecha</th><th>Detalle</th><th>Cantidad</th><th>Monto</th></tr>
+                        </thead>
+                        <tbody id="tbl-body">
+                            <tr><td colspan="4" style="text-align: center; color: #64748b; padding: 2rem;">Presiona "Generar Informe" para consultar los datos actuales.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+        let currentReportData = [];
+
+        async function loadInformesGuardados() {
+            const res = await fetch('/api/informes/guardados');
+            const data = await res.json();
+            const sel = document.getElementById('sel-informes-guardados');
+            sel.innerHTML = '<option value="">-- Seleccionar Informe Guardado --</option>';
+            data.forEach(inf => {
+                sel.innerHTML += `<option value="${inf.id}" data-dim="${inf.tipo_objeto}">${inf.nombre} (${inf.tipo_objeto})</option>`;
+            });
+        }
+
+        document.getElementById('sel-informes-guardados').onchange = (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            if (opt && opt.dataset.dim) {
+                document.getElementById('rep-dimension').value = opt.dataset.dim;
+                ejecutarConsulta();
+            }
+        };
+
+        document.getElementById('form-generar-reporte').onsubmit = async (e) => {
+            e.preventDefault();
+            await ejecutarConsulta();
+        };
+
+        async function ejecutarConsulta() {
+            const dim = document.getElementById('rep-dimension').value;
+            const f_ini = document.getElementById('rep-f-inicio').value;
+            const f_fin = document.getElementById('rep-f-fin').value;
+
+            const res = await fetch('/api/informes/generar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ dimension: dim, fecha_inicio: f_ini, fecha_fin: f_fin })
+            });
+
+            const data = await res.json();
+            currentReportData = data.filas || [];
+            renderizarReporte(data);
+        }
+
+        function renderizarReporte(data) {
+            const summary = data.resumen || {};
+            const filas = data.filas || [];
+
+            // Actualizar KPIs
+            if (data.dimension === 'VENTAS' || data.dimension === 'RENTABILIDAD') {
+                document.getElementById('kpi-val-1').textContent = summary.unidades_vendidas || 0;
+                document.getElementById('kpi-val-2').textContent = formatCOP.format(summary.ingresos_totales || 0);
+                document.getElementById('kpi-val-3').textContent = formatCOP.format(summary.costo_total || 0);
+                document.getElementById('kpi-val-4').textContent = formatCOP.format(summary.utilidad_neta || 0) + ` (${summary.margen_porcentaje || 0}%)`;
+            } else if (data.dimension === 'LOTES' || data.dimension === 'COMPRAS') {
+                document.getElementById('kpi-val-1').textContent = summary.unidades_compradas || 0;
+                document.getElementById('kpi-val-2').textContent = formatCOP.format(summary.inversion_total || 0);
+                document.getElementById('kpi-val-3').textContent = summary.registros_compras || 0 + " Entradas";
+                document.getElementById('kpi-val-4').textContent = "---";
+            } else if (data.dimension === 'CARTERA') {
+                document.getElementById('kpi-val-1').textContent = summary.cuentas_pendientes || 0;
+                document.getElementById('kpi-val-2').textContent = formatCOP.format(summary.cartera_total_pendiente || 0);
+                document.getElementById('kpi-val-3').textContent = "Cuentas por Cobrar";
+                document.getElementById('kpi-val-4').textContent = "---";
+            }
+
+            // Renderizar Tabla
+            const thead = document.getElementById('tbl-headers');
+            const tbody = document.getElementById('tbl-body');
+
+            if (filas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 2rem;">No se encontraron registros para los filtros seleccionados.</td></tr>';
+                return;
+            }
+
+            const keys = Object.keys(filas[0]);
+            thead.innerHTML = '<tr>' + keys.map(k => `<th>${k.replace('_', ' ')}</th>`).join('') + '</tr>';
+
+            tbody.innerHTML = filas.map(r => `
+                <tr>
+                    ${keys.map(k => {
+                        let val = r[k];
+                        if (typeof val === 'number' && (k.includes('ingreso') || k.includes('costo') || k.includes('utilidad') || k.includes('total') || k.includes('saldo') || k.includes('precio') || k.includes('inversion'))) {
+                            val = formatCOP.format(val);
+                        }
+                        if (k === 'estado') {
+                            val = val === 'ACTIVO' ? '<span class="badge-status badge-act">🟢 ACTIVO</span>' : '<span class="badge-status badge-venc">🔴 AGOTADO / VENCIDO</span>';
+                        }
+                        return `<td>${val}</td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+
+        async function guardarConfiguracionInforme() {
+            const nombre = prompt('Ingresa un nombre para guardar esta configuración de informe (ej: Rentabilidad Mensual de Producción):');
+            if (!nombre) return;
+
+            const dim = document.getElementById('rep-dimension').value;
+            const res = await fetch('/api/informes/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre_informe: nombre,
+                    tipo_objeto: dim,
+                    columnas: [],
+                    filtros: { fecha_inicio: document.getElementById('rep-f-inicio').value, fecha_fin: document.getElementById('rep-f-fin').value }
+                })
+            });
+            if (res.ok) {
+                alert('✅ Configuración de informe guardada con éxito.');
+                loadInformesGuardados();
+            }
+        }
+
+        async function exportarExcel() {
+            if (currentReportData.length === 0) {
+                alert('Primero genera un informe con registros antes de exportar.');
+                return;
+            }
+
+            const dim = document.getElementById('rep-dimension').value;
+            const res = await fetch('/api/informes/exportar/excel', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ titulo: `Informe_${dim}`, filas: currentReportData })
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `informe_${dim.toLowerCase()}_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            }
+        }
+
+        window.onload = () => {
+            loadInformesGuardados();
+            ejecutarConsulta();
+        };
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css') }}">
+    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='assistant_engine.js') }}"></script>
+</body>
+</html>

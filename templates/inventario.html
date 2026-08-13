@@ -52,7 +52,11 @@
                 </p>
             </div>
             {% if session.role in ['ADMIN', 'SUPER'] %}
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button onclick="document.getElementById('panel-compra-lote').style.display='block'; this.style.display='none';"
+                        id="btn-show-compra-lote" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px; background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); font-weight: 700;">
+                    📦 Registrar Compra / Entrada de Lote
+                </button>
                 <a href="/configuracion" style="padding: 0.65rem 1.25rem; font-size: 0.85rem; border-radius: 8px; background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
                     📥 Cargue Masivo (Drive / CSV)
                 </a>
@@ -63,6 +67,56 @@
             </div>
             {% endif %}
         </div>
+
+        <!-- Panel Registrar Compra de Lote -->
+        {% if session.role in ['ADMIN', 'SUPER'] %}
+        <div id="panel-compra-lote" style="display: none; margin-top: 1.5rem;">
+            <div class="card" style="max-width: 720px; border-color: rgba(52, 211, 153, 0.3);">
+                <h3 style="margin-bottom: 1rem; color: #34d399;">📦 Registrar Entrada de Compra / Lote de Inventario</h3>
+                <form id="form-compra-lote">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Insumo o Producto</label>
+                            <select id="lote-insumo-id" required style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px;"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Código del Lote (Ej: LOT-2026-001)</label>
+                            <input type="text" id="lote-codigo" placeholder="Dejar vacío para autogenerar">
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad Comprada</label>
+                            <input type="number" step="any" id="lote-cantidad" placeholder="Ej: 50" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Costo Unitario de Compra ($)</label>
+                            <input type="number" step="any" id="lote-costo" placeholder="Ej: 2300" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de Vencimiento (Opcional)</label>
+                            <input type="date" id="lote-fvencimiento">
+                        </div>
+                        <div class="form-group">
+                            <label>Proveedor (Opcional)</label>
+                            <input type="text" id="lote-proveedor" placeholder="Ej: Distribuidora Central">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Número de Factura / Ref (Opcional)</label>
+                            <input type="text" id="lote-factura" placeholder="Ej: FAC-9842">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                        <button type="submit" id="btn-save-lote" style="background: #34d399; color: black; font-weight: 800; padding: 0.75rem 1.5rem; border-radius: 8px; border: none; cursor: pointer;">
+                            💾 Registrar Entrada & Generar Lote
+                        </button>
+                        <button type="button" onclick="document.getElementById('panel-compra-lote').style.display='none'; document.getElementById('btn-show-compra-lote').style.display='inline-block';"
+                                style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer;">
+                            ✕ Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Panel Agregar Insumo (oculto por defecto) -->
         {% if session.role in ['ADMIN', 'SUPER'] %}
@@ -191,6 +245,7 @@
             const data = await res.json();
             const tbody = document.getElementById('inventory-body');
             const selectRep = document.getElementById('insumo-id-rep');
+            const selectLote = document.getElementById('lote-insumo-id');
 
             if (!data || data.length === 0) {
                 tbody.innerHTML = `
@@ -205,6 +260,7 @@
 
             tbody.innerHTML = '';
             if (selectRep) selectRep.innerHTML = '';
+            if (selectLote) selectLote.innerHTML = '';
 
             data.forEach(item => {
                 const tr = document.createElement('tr');
@@ -221,6 +277,9 @@
 
                 if (selectRep) {
                     selectRep.add(new Option(`${item.nombre} (${item.unidad})`, item.id));
+                }
+                if (selectLote) {
+                    selectLote.add(new Option(`${item.nombre} (${item.unidad})`, item.id));
                 }
             });
         }

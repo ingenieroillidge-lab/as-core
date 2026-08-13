@@ -102,6 +102,28 @@
                                     <option value="1">✅ Sí (Habilitar Cartera, Clientes y Abonos)</option>
                                 </select>
                             </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>¿Maneja Inventario Avanzado por Lotes de Compra & Vencimientos?</label>
+                                <select id="conf-lotes" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                    <option value="0">❌ No (Inventario general consolidado)</option>
+                                    <option value="1">📦 Sí (Activar Lotes, FEFO/FIFO y Vencimientos)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>Método de Salida de Lotes</label>
+                                <select id="conf-metodo-lotes" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                    <option value="FEFO">FEFO — Primeras en Vencer, Primeras en Salir (Alimentos/Medicamentos)</option>
+                                    <option value="FIFO">FIFO — Primeras en Entrar, Primeras en Salir (Fecha de Compra)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>Política de Lotes Vencidos</label>
+                                <select id="conf-bloquear-vencidos" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                    <option value="SI">🚫 Bloquear Venta de Lotes Vencidos</option>
+                                    <option value="ADVERTIR">⚠️ Advertir pero Permitir Venta</option>
+                                    <option value="NO">🔓 No Bloquear</option>
+                                </select>
+                            </div>
                             <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
                                 <button type="submit" id="btn-save-perfil" style="flex: 1; background: #38bdf8; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
                                     💾 Guardar Cambios
@@ -343,6 +365,9 @@
                 document.getElementById('conf-color-acento').value = data.color_acento || '#38bdf8';
                 document.getElementById('acento-hex').textContent = data.color_acento || '#38bdf8';
                 document.getElementById('conf-cartera').value = data.maneja_cartera == 1 ? '1' : '0';
+                document.getElementById('conf-lotes').value = data.maneja_lotes == 1 ? '1' : '0';
+                document.getElementById('conf-metodo-lotes').value = data.metodo_salida_lotes || 'FEFO';
+                document.getElementById('conf-bloquear-vencidos').value = data.bloquear_lotes_vencidos || 'SI';
 
                 // Actualizar vista resumen
                 document.getElementById('lbl-resumen-nombre').textContent = data.nombre || 'Mi Negocio';
@@ -408,13 +433,16 @@
                 tipo: document.getElementById('conf-tipo').value,
                 sheet_url_ventas: document.getElementById('conf-sheet-url-ven').value,
                 color_acento: document.getElementById('conf-color-acento').value,
-                maneja_cartera: parseInt(document.getElementById('conf-cartera').value) || 0
+                maneja_cartera: parseInt(document.getElementById('conf-cartera').value) || 0,
+                maneja_lotes: parseInt(document.getElementById('conf-lotes').value) || 0,
+                metodo_salida_lotes: document.getElementById('conf-metodo-lotes').value,
+                bloquear_lotes_vencidos: document.getElementById('conf-bloquear-vencidos').value
             };
             const res = await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             if (res.ok) {
                 await loadAll();
                 habilitarEdicionPerfil(false);
-                alert('✅ ¡Identidad Comercial guardada exitosamente!');
+                alert('✅ ¡Identidad Comercial y Configuración de Lotes guardada exitosamente!');
             } else {
                 alert('Ocurrió un error al guardar el perfil.');
             }

@@ -223,6 +223,11 @@ def analisis_page():
 def cartera_page():
     return render_template('cartera.html', session=session)
 
+@app.route('/informes')
+@login_required
+def informes_page():
+    return render_template('informes.html', session=session)
+
 @app.route('/configuracion')
 @login_required
 @admin_required
@@ -409,28 +414,302 @@ def h_conf():
         sheet_url = (d.get('sheet_url_ventas') or '').strip()
         color = (d.get('color_acento') or '#38bdf8').strip()
         maneja_cartera = int(d.get('maneja_cartera', 0))
+        maneja_lotes = int(d.get('maneja_lotes', 0))
+        metodo_salida_lotes = (d.get('metodo_salida_lotes') or 'FEFO').strip().upper()
+        bloquear_vencidos = (d.get('bloquear_lotes_vencidos') or 'SI').strip().upper()
 
         c_res = ejecutar_query("SELECT id FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
         if c_res:
-            ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=?, color_acento=?, maneja_cartera=? WHERE negocio_id=?", 
-                           (nombre, tipo, sheet_url, color, maneja_cartera, nid))
+            ejecutar_query("UPDATE configuracion_negocio SET nombre_comercial=?, tipo_operacion=?, sheet_url_ventas=?, color_acento=?, maneja_cartera=?, maneja_lotes=?, metodo_salida_lotes=?, bloquear_lotes_vencidos=? WHERE negocio_id=?", 
+                           (nombre, tipo, sheet_url, color, maneja_cartera, maneja_lotes, metodo_salida_lotes, bloquear_vencidos, nid))
         else:
-            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera) VALUES (?, ?, ?, ?, ?, ?)", 
-                           (nid, nombre, tipo, sheet_url, color, maneja_cartera))
+            ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera, maneja_lotes, metodo_salida_lotes, bloquear_lotes_vencidos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                           (nid, nombre, tipo, sheet_url, color, maneja_cartera, maneja_lotes, metodo_salida_lotes, bloquear_vencidos))
 
         ejecutar_query("UPDATE negocios SET nombre=? WHERE id=?", (nombre, nid))
         return jsonify({"message": "ok"})
     else:
-        res = ejecutar_query("SELECT nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
+        res = ejecutar_query("SELECT nombre_comercial, tipo_operacion, sheet_url_ventas, color_acento, maneja_cartera, maneja_lotes, metodo_salida_lotes, bloquear_lotes_vencidos FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
         if res and res[0]:
+            row = res[0]
             return jsonify({
-                "nombre": res[0][0] or "Mi Negocio",
-                "tipo": res[0][1] or "HÍBRIDO",
-                "sheet_url_ventas": res[0][2] or "",
-                "color_acento": res[0][3] or "#38bdf8",
-                "maneja_cartera": res[0][4] if len(res[0]) > 4 and res[0][4] is not None else 0
+                "nombre": row[0] or "Mi Negocio",
+                "tipo": row[1] or "HÍBRIDO",
+                "sheet_url_ventas": row[2] or "",
+                "color_acento": row[3] or "#38bdf8",
+                "maneja_cartera": row[4] if len(row) > 4 and row[4] is not None else 0,
+                "maneja_lotes": row[5] if len(row) > 5 and row[5] is not None else 0,
+                "metodo_salida_lotes": row[6] if len(row) > 6 and row[6] else "FEFO",
+                "bloquear_lotes_vencidos": row[7] if len(row) > 7 and row[7] else "SI"
             })
-        return jsonify({"nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "", "color_acento": "#38bdf8", "maneja_cartera": 0})
+        return jsonify({
+            "nombre": "Mi Negocio", "tipo": "HÍBRIDO", "sheet_url_ventas": "",
+            "color_acento": "#38bdf8", "maneja_cartera": 0, "maneja_lotes": 0,
+            "metodo_salida_lotes": "FEFO", "bloquear_lotes_vencidos": "SI"
+        })
+
+# ==========================
+# API: LOTES Y COMPRAS DE INVENTARIO
+# ==========================
+
+@app.route('/api/lotes', methods=['GET'])
+@login_required
+def get_lotes():
+    nid = session['negocio_id']
+    insumo_id = request.args.get('insumo_id')
+    estado = request.args.get('estado')
+    return jsonify(lotes_service.obtener_lotes(nid, insumo_id=insumo_id, estado_filtro=estado))
+
+@app.route('/api/lotes/compra', methods=['POST'])
+@login_required
+def post_compra_lote():
+    nid = session['negocio_id']
+    uid = session['user_id']
+    d = request.json or {}
+    ok, res = lotes_service.registrar_compra_lote(
+        insumo_id=d.get('insumo_id'),
+        codigo_lote=d.get('codigo_lote'),
+        cantidad=d.get('cantidad', 0),
+        costo_unitario=d.get('costo_unitario', 0),
+        negocio_id=nid,
+        usuario_id=uid,
+        fecha_vencimiento=d.get('fecha_vencimiento'),
+        proveedor=d.get('proveedor', ''),
+        numero_factura=d.get('numero_factura', ''),
+        observaciones=d.get('observaciones', ''),
+        fecha_compra=d.get('fecha_compra')
+    )
+    return jsonify({"message": "ok", "data": res}) if ok else (jsonify({"error": res}), 400)
+
+# ==========================
+# API: GENERADOR TRANSVERSAL DE INFORMES
+# ==========================
+
+@app.route('/api/informes/guardados', methods=['GET'])
+@login_required
+def get_informes_guardados():
+    nid = session['negocio_id']
+    return jsonify(lotes_service.obtener_informes_guardados(nid))
+
+@app.route('/api/informes/guardar', methods=['POST'])
+@login_required
+def post_guardar_informe():
+    nid = session['negocio_id']
+    d = request.json or {}
+    ok, res = lotes_service.guardar_configuracion_informe(
+        negocio_id=nid,
+        nombre_informe=d.get('nombre_informe'),
+        tipo_objeto=d.get('tipo_objeto', 'VENTAS'),
+        columnas=d.get('columnas', []),
+        filtros=d.get('filtros', {}),
+        agrupacion=d.get('agrupacion')
+    )
+    return jsonify({"message": res}) if ok else (jsonify({"error": res}), 400)
+
+@app.route('/api/informes/generar', methods=['POST'])
+@login_required
+def post_generar_informe():
+    nid = session['negocio_id']
+    d = request.json or {}
+    dim = (d.get('dimension') or 'VENTAS').upper()
+    f_inicio = d.get('fecha_inicio')
+    f_fin = d.get('fecha_fin')
+
+    rows = []
+    summary = {}
+
+    if dim == 'VENTAS' or dim == 'RENTABILIDAD' or dim == 'PRODUCTOS':
+        query = """
+            SELECT v.fecha, p.nombre as producto, v.cantidad, v.precio_historico_unitario,
+                   v.total as ingreso, v.costo_historico_total as costo,
+                   (v.total - v.costo_historico_total) as utilidad,
+                   v.metodo_pago, v.cliente_nombre
+            FROM ventas v
+            JOIN productos p ON v.producto_id = p.id
+            WHERE v.negocio_id=?
+        """
+        params = [nid]
+        if f_inicio:
+            query += " AND v.fecha >= ?"
+            params.append(f"{f_inicio} 00:00:00")
+        if f_fin:
+            query += " AND v.fecha <= ?"
+            params.append(f"{f_fin} 23:59:59")
+        query += " ORDER BY v.fecha DESC"
+        raw = ejecutar_query(query, params, fetch=True) or []
+
+        tot_ing = sum(r[4] or 0 for r in raw)
+        tot_cos = sum(r[5] or 0 for r in raw)
+        tot_uti = tot_ing - tot_cos
+        tot_unid = sum(r[2] or 0 for r in raw)
+        margen = (tot_uti / tot_ing * 100) if tot_ing > 0 else 0.0
+
+        summary = {
+            "unidades_vendidas": tot_unid,
+            "ingresos_totales": tot_ing,
+            "costo_total": tot_cos,
+            "utilidad_neta": tot_uti,
+            "margen_porcentaje": round(margen, 2)
+        }
+        for r in raw:
+            f, p, cant, pr, ing, cos, uti, met, cli = r
+            mg = (uti / ing * 100) if ing > 0 else 0.0
+            rows.append({
+                "fecha": f[:10] if f else '',
+                "producto": p,
+                "cantidad": cant,
+                "precio_unitario": pr,
+                "ingreso": ing,
+                "costo": cos,
+                "utilidad": uti,
+                "margen": round(mg, 2),
+                "metodo_pago": met or 'Efectivo',
+                "cliente": cli or 'Cliente Ocasional'
+            })
+
+    elif dim == 'LOTES' or dim == 'COMPRAS':
+        query = """
+            SELECT c.fecha_compra, i.nombre as insumo, c.codigo_lote, c.proveedor,
+                   c.numero_factura, c.cantidad_comprada, c.costo_unitario_compra,
+                   c.costo_total_compra, c.fecha_vencimiento, l.cantidad_disponible, l.estado
+            FROM compras_entradas c
+            JOIN inventario i ON c.insumo_id = i.id
+            LEFT JOIN lotes_inventario l ON c.codigo_lote = l.codigo_lote AND c.negocio_id = l.negocio_id
+            WHERE c.negocio_id=?
+        """
+        params = [nid]
+        if f_inicio:
+            query += " AND c.fecha_compra >= ?"
+            params.append(f"{f_inicio} 00:00:00")
+        if f_fin:
+            query += " AND c.fecha_compra <= ?"
+            params.append(f"{f_fin} 23:59:59")
+        query += " ORDER BY c.id DESC"
+        raw = ejecutar_query(query, params, fetch=True) or []
+
+        tot_comp = sum(r[7] or 0 for r in raw)
+        tot_unid = sum(r[5] or 0 for r in raw)
+
+        summary = {
+            "registros_compras": len(raw),
+            "unidades_compradas": tot_unid,
+            "inversion_total": tot_comp
+        }
+        for r in raw:
+            fc, ins, cod, prov, fact, cant_c, cost_u, cost_t, fv, cant_d, est = r
+            rows.append({
+                "fecha": fc[:10] if fc else '',
+                "insumo": ins,
+                "codigo_lote": cod,
+                "proveedor": prov or 'N/A',
+                "factura": fact or 'N/A',
+                "cantidad_comprada": cant_c,
+                "costo_unitario": cost_u,
+                "costo_total": cost_t,
+                "fecha_vencimiento": fv or 'Sin Vencimiento',
+                "cantidad_disponible": cant_d if cant_d is not None else 0,
+                "estado": est or 'ACTIVO'
+            })
+
+    elif dim == 'CARTERA' or dim == 'CLIENTES':
+        query = """
+            SELECT v.fecha, v.id as venta_id, v.cliente_nombre, v.total,
+                   v.saldo_pendiente, v.estado_pago, v.fecha_limite_pago
+            FROM ventas v
+            WHERE v.negocio_id=? AND (v.estado_pago IN ('PENDIENTE', 'PARCIAL') OR v.saldo_pendiente > 0)
+        """
+        params = [nid]
+        if f_inicio:
+            query += " AND v.fecha >= ?"
+            params.append(f"{f_inicio} 00:00:00")
+        if f_fin:
+            query += " AND v.fecha <= ?"
+            params.append(f"{f_fin} 23:59:59")
+        query += " ORDER BY v.fecha DESC"
+        raw = ejecutar_query(query, params, fetch=True) or []
+
+        tot_cart = sum(r[4] or 0 for r in raw)
+        summary = {
+            "cuentas_pendientes": len(raw),
+            "cartera_total_pendiente": tot_cart
+        }
+        for r in raw:
+            f, vid, cli, tot, sal, est, flim = r
+            rows.append({
+                "fecha": f[:10] if f else '',
+                "venta_id": f"VENTA-{vid}",
+                "cliente": cli or 'Sin Cliente',
+                "total_venta": tot,
+                "saldo_pendiente": sal,
+                "estado_pago": est,
+                "fecha_limite": flim or 'N/A'
+            })
+    else:
+        # INVENTARIO GENERAl
+        raw = ejecutar_query("SELECT id, nombre, unidad_base, costo_unitario_base, stock_actual, stock_minimo FROM inventario WHERE negocio_id=?", (nid,), fetch=True) or []
+        summary = {"total_insumos": len(raw)}
+        for r in raw:
+            rows.append({
+                "insumo": r[1],
+                "unidad": r[2],
+                "costo_unitario": r[3],
+                "stock_actual": r[4],
+                "valor_inventario": r[3] * r[4],
+                "stock_minimo": r[5]
+            })
+
+    return jsonify({"dimension": dim, "resumen": summary, "filas": rows})
+
+@app.route('/api/informes/exportar/excel', methods=['POST'])
+@login_required
+def post_exportar_informe_excel():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    nid = session['negocio_id']
+    d = request.json or {}
+    titulo = d.get('titulo', 'Informe Configurado AS Platform')
+    filas = d.get('filas', [])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Informe"
+
+    if not filas:
+        ws.append(["Sin registros para exportar"])
+    else:
+        headers = list(filas[0].keys())
+        ws.append([h.replace('_', ' ').title() for h in headers])
+
+        header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='0EA5E9', end_color='0EA5E9', fill_type='solid')
+        align_center = Alignment(horizontal='center', vertical='center')
+
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = align_center
+
+        for r in filas:
+            ws.append(list(r.values()))
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    out_stream = io.BytesIO()
+    wb.save(out_stream)
+    out_stream.seek(0)
+
+    filename = f"{titulo.lower().replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return Response(
+        out_stream.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
 
 # ==========================
 # API: CARTERA Y CUENTAS POR COBRAR

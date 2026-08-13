@@ -37,7 +37,11 @@ def crear_tablas():
         f"CREATE TABLE IF NOT EXISTS configuracion_negocio (id {id_t}, negocio_id INTEGER, nombre_comercial TEXT, tipo_operacion TEXT DEFAULT 'HÍBRIDO', sheet_url_ventas TEXT, color_acento TEXT DEFAULT '#38bdf8', maneja_cartera INTEGER DEFAULT 0)",
         f"CREATE TABLE IF NOT EXISTS abonos_cartera (id {id_t}, negocio_id INTEGER, venta_id INTEGER, fecha TEXT, monto REAL, metodo_pago TEXT, usuario_id INTEGER, observacion TEXT)",
         f"CREATE TABLE IF NOT EXISTS tickets_soporte (id {id_t}, negocio_id INTEGER, usuario_id INTEGER, fecha TEXT, modulo TEXT, pregunta TEXT, respuesta_bot TEXT, estado TEXT DEFAULT 'PENDIENTE', respuesta_admin TEXT)",
-        f"CREATE TABLE IF NOT EXISTS clientes (id {id_t}, negocio_id INTEGER, nombre TEXT NOT NULL, tipo TEXT DEFAULT 'PERSONA', documento TEXT, telefono TEXT, whatsapp TEXT, email TEXT, direccion TEXT, limite_credito REAL DEFAULT 0, dias_credito_predeterminado INTEGER DEFAULT 15, estado TEXT DEFAULT 'ACTIVO')"
+        f"CREATE TABLE IF NOT EXISTS clientes (id {id_t}, negocio_id INTEGER, nombre TEXT NOT NULL, tipo TEXT DEFAULT 'PERSONA', documento TEXT, telefono TEXT, whatsapp TEXT, email TEXT, direccion TEXT, limite_credito REAL DEFAULT 0, dias_credito_predeterminado INTEGER DEFAULT 15, estado TEXT DEFAULT 'ACTIVO')",
+        f"CREATE TABLE IF NOT EXISTS compras_entradas (id {id_t}, negocio_id INTEGER, fecha_compra TEXT NOT NULL, proveedor TEXT, numero_factura TEXT, insumo_id INTEGER NOT NULL, codigo_lote TEXT NOT NULL, cantidad_comprada REAL NOT NULL, costo_unitario_compra REAL NOT NULL, costo_total_compra REAL NOT NULL, fecha_vencimiento TEXT, observaciones TEXT, usuario_id INTEGER)",
+        f"CREATE TABLE IF NOT EXISTS lotes_inventario (id {id_t}, negocio_id INTEGER, compra_id INTEGER, insumo_id INTEGER NOT NULL, codigo_lote TEXT NOT NULL, fecha_compra TEXT, fecha_vencimiento TEXT, cantidad_inicial REAL NOT NULL, cantidad_disponible REAL NOT NULL, costo_unitario REAL NOT NULL, proveedor TEXT, numero_factura TEXT, estado TEXT DEFAULT 'ACTIVO')",
+        f"CREATE TABLE IF NOT EXISTS movimientos_lote (id {id_t}, negocio_id INTEGER, lote_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo TEXT NOT NULL, cantidad REAL NOT NULL, costo_unitario_lote REAL NOT NULL, costo_subtotal REAL NOT NULL, referencia TEXT, venta_id INTEGER, usuario_id INTEGER)",
+        f"CREATE TABLE IF NOT EXISTS informes_guardados (id {id_t}, negocio_id INTEGER, nombre_informe TEXT NOT NULL, tipo_objeto TEXT NOT NULL, columnas_json TEXT NOT NULL, filtros_json TEXT NOT NULL, agrupacion_json TEXT, fecha_creacion TEXT)"
     ]
 
     for sql in tablas_sql:
@@ -95,8 +99,11 @@ def crear_tablas():
     agregar_columna('configuracion_negocio', 'nombre_comercial', 'TEXT')
     agregar_columna('configuracion_negocio', 'color_acento', 'TEXT DEFAULT \'#38bdf8\'')
     agregar_columna('configuracion_negocio', 'maneja_cartera', 'INTEGER DEFAULT 0')
+    agregar_columna('configuracion_negocio', 'maneja_lotes', 'INTEGER DEFAULT 0')
+    agregar_columna('configuracion_negocio', 'metodo_salida_lotes', "TEXT DEFAULT 'FEFO'")
+    agregar_columna('configuracion_negocio', 'bloquear_lotes_vencidos', "TEXT DEFAULT 'SI'")
 
-    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes']
+    tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes', 'compras_entradas', 'lotes_inventario', 'movimientos_lote', 'informes_guardados']
     for t in tablas_con_negocio:
         agregar_columna(t, 'negocio_id', 'INTEGER')
 
