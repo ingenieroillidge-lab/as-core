@@ -262,19 +262,23 @@ def demo_page():
 def g_res():
     nid = session['negocio_id']
     status = get_negocio_status_ext(nid)
-    data = financiero_service.obtener_resumen_financiero(nid, request.args.get('mes'))
-    
+    tipo_op_res = ejecutar_query("SELECT tipo_operacion FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
+    tipo_op = tipo_op_res[0][0] if (tipo_op_res and tipo_op_res[0]) else 'HÍBRIDO'
+
     count_prod = ejecutar_query("SELECT COUNT(*) FROM productos WHERE negocio_id=?", (nid,), fetch=True)[0][0]
     count_insumo = ejecutar_query("SELECT COUNT(*) FROM inventario WHERE negocio_id=?", (nid,), fetch=True)[0][0]
     count_receta = ejecutar_query("SELECT COUNT(*) FROM producto_insumo WHERE negocio_id=?", (nid,), fetch=True)[0][0]
     count_venta = ejecutar_query("SELECT COUNT(*) FROM ventas WHERE negocio_id=?", (nid,), fetch=True)[0][0]
-    
+
+    is_servicios = (tipo_op.upper() == 'SERVICIOS')
+
     return jsonify({
         "ingresos": data['ingresos'],
         "utilidad": data['utilidad'],
         "margen": data['margen_contribucion'],
         "punto_equilibrio": data['punto_equilibrio'],
         "is_locked": (status['plan'] == 'FREE'),
+        "tipo_operacion": tipo_op,
         "cuotas": {
             "productos": count_prod,
             "productos_max": 10
@@ -282,8 +286,8 @@ def g_res():
         "onboarding": {
             "negocio_configurado": True,
             "producto_creado": count_prod > 0,
-            "insumo_creado": count_insumo > 0,
-            "receta_creada": count_receta > 0,
+            "insumo_creado": True if is_servicios else (count_insumo > 0),
+            "receta_creada": True if is_servicios else (count_receta > 0),
             "venta_registrada": count_venta > 0
         }
     })

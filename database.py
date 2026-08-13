@@ -141,13 +141,35 @@ def crear_tablas():
                            (nid, cod, nom, pre, tp, cat))
         conn.commit()
 
-    cursor.execute("SELECT id FROM negocios WHERE es_interna=1 OR LOWER(nombre) LIKE '%as solutions%' OR LOWER(nombre) LIKE '%empresa maestra%' ORDER BY id ASC LIMIT 1")
+    cursor.execute("SELECT id FROM negocios WHERE es_interna=1 OR LOWER(nombre) LIKE '%as solutions%' OR LOWER(nombre) LIKE '%empresa maestra%' OR LOWER(nombre) LIKE '%as core%' ORDER BY id ASC LIMIT 1")
     row = cursor.fetchone()
     nid = row[0] if row else 1
 
-    # Actualizar empresa interna
+    # Actualizar empresa interna a SERVICIOS y tipo_cuenta INTERNA
     cursor.execute(f"UPDATE negocios SET tipo_cuenta='INTERNA', es_interna=1 WHERE id={placeholder}", (nid,))
+    cursor.execute(f"UPDATE configuracion_negocio SET tipo_operacion='SERVICIOS' WHERE negocio_id={placeholder}", (nid,))
     conn.commit()
+
+    # Reasignar productos de Hincha.store12 si quedaron en el negocio_id interno
+    cursor.execute("SELECT id FROM negocios WHERE LOWER(nombre) LIKE '%hincha%' LIMIT 1")
+    h_row = cursor.fetchone()
+    if h_row:
+        hincha_nid = h_row[0]
+        cursor.execute(f"UPDATE productos SET negocio_id={placeholder} WHERE negocio_id={placeholder} AND (LOWER(nombre) LIKE '%camiseta%' OR LOWER(nombre) LIKE '%hincha%')", (hincha_nid, nid))
+        conn.commit()
+
+    # Asegurar productos SaaS para la Empresa Interna
+    cursor.execute(f"SELECT COUNT(*) FROM productos WHERE negocio_id={placeholder} AND (codigo='AS-PRO' OR LOWER(nombre) LIKE '%suscripción%')", (nid,))
+    if cursor.fetchone()[0] == 0:
+        servicios_saas = [
+            ("AS-PRO", "Suscripción Mensual AS Platform PRO", 24900.0, "DIRECTO", "Suscripciones"),
+            ("AS-ENT", "Suscripción Enterprise Personalizada", 150000.0, "DIRECTO", "Suscripciones"),
+            ("AS-SETUP", "Servicio de Implementación & Setup Inicial", 80000.0, "DIRECTO", "Servicios")
+        ]
+        for cod, nom, pre, tp, cat in servicios_saas:
+            cursor.execute(f"INSERT INTO productos (negocio_id, codigo, nombre, precio, tipo_producto, categoria) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                           (nid, cod, nom, pre, tp, cat))
+        conn.commit()
 
     cursor.execute("SELECT id FROM negocios ORDER BY id ASC LIMIT 1")
     row = cursor.fetchone()

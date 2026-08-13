@@ -378,9 +378,10 @@
                 const elIngresos = document.getElementById('ingresos');
                 if (elIngresos) elIngresos.textContent = formatCOP.format(data.ingresos || 0);
 
-                // Lógica de Onboarding
+                // Lógica de Onboarding adaptativa según tipo de negocio
                 if (data.onboarding) {
                     const ob = data.onboarding;
+                    const isServ = (data.tipo_operacion === 'SERVICIOS');
                     const isFullyOnboarded = ob.negocio_configurado && ob.producto_creado && ob.insumo_creado && ob.receta_creada && ob.venta_registrada;
                     
                     if (!isFullyOnboarded) {
@@ -388,11 +389,22 @@
                         
                         updateCheckItem('check-negocio', ob.negocio_configurado);
                         updateCheckItem('check-producto', ob.producto_creado);
-                        updateCheckItem('check-insumo', ob.insumo_creado);
-                        updateCheckItem('check-receta', ob.receta_creada);
+                        
+                        if (isServ) {
+                            const checkProdText = document.querySelector('#check-producto span:last-child');
+                            if (checkProdText) checkProdText.textContent = '2. Crear Servicio / Plan';
+                            document.getElementById('check-insumo').style.display = 'none';
+                            document.getElementById('check-receta').style.display = 'none';
+                        } else {
+                            document.getElementById('check-insumo').style.display = '';
+                            document.getElementById('check-receta').style.display = '';
+                            updateCheckItem('check-insumo', ob.insumo_creado);
+                            updateCheckItem('check-receta', ob.receta_creada);
+                        }
+
                         updateCheckItem('check-venta', ob.venta_registrada);
 
-                        // Si es la primera vez que entra y no tiene ningún producto, abrimos automáticamente el wizard
+                        // Si es la primera vez que entra y no tiene ningún producto/servicio, abrimos el wizard
                         if (!ob.producto_creado) {
                             setTimeout(openWizard, 600);
                         }
