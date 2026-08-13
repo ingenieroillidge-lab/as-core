@@ -48,41 +48,117 @@
         <!-- SECCIÓN PERFIL Y MARCA -->
         <div id="sec-perfil" class="config-section active">
             <div class="grid-forms">
+                <!-- TARJETA 1: IDENTIDAD COMERCIAL -->
                 <div class="card">
-                    <h3>Identidad Comercial</h3>
-                    <form id="form-perfil" style="margin-top: 1rem;">
-                        <div class="form-group"><label>Nombre del Negocio</label><input type="text" id="conf-nombre" required></div>
-                        <div class="form-group"><label>Tipo de Operación</label>
-                            <select id="conf-tipo" required>
-                                <option value="PRODUCCIÓN">Producción / Alimentos / Fritos (Con Insumos)</option>
-                                <option value="REVENTA">Reventa / Comercialización Directa (Sin Recetario)</option>
-                                <option value="SERVICIOS">Servicios / Barbería / Consultoría</option>
-                                <option value="HÍBRIDO">Híbrido (Mezcla de Fabricación y Reventa)</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
-                        <div class="form-group" style="margin-top: 1rem;">
-                            <label>¿Maneja Ventas / Servicios a Crédito (Cuentas por Cobrar)?</label>
-                            <select id="conf-cartera" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
-                                <option value="0">❌ No (Solo cobros inmediatos al contado)</option>
-                                <option value="1">✅ Sí (Habilitar Cartera, Clientes y Abonos)</option>
-                            </select>
-                        </div>
-                        <button type="submit" style="margin-top: 1.5rem; background: #38bdf8; color: black; font-weight: 800;">Guardar Perfil</button>
-                    </form>
-                </div>
-                <div class="card">
-                    <h3>Identidad Visual</h3>
-                    <form id="form-branding">
-                        <div class="form-group">
-                            <label>Color de Acento</label>
-                            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.5rem;">
-                                <input type="color" id="conf-color-acento" style="width: 50px; height: 50px; border: none; cursor: pointer; background: none;">
-                                <code id="acento-hex">#38bdf8</code>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin: 0;">Identidad Comercial</h3>
+                        <span id="badge-perfil-estado" style="font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);">
+                            🟢 Guardado
+                        </span>
+                    </div>
+
+                    <!-- VISTA RESUMEN (MODO GUARDADO / LECTURA) -->
+                    <div id="perfil-resumen-view" style="display: block;">
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Nombre del Negocio</div>
+                                <div id="lbl-resumen-nombre" style="font-weight: 800; font-size: 1.1rem; color: white;">Mi Negocio</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Tipo de Operación</div>
+                                <div id="lbl-resumen-tipo" style="font-weight: 700; color: #38bdf8;">Híbrido</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Google Sheets (Ventas)</div>
+                                <div id="lbl-resumen-sheet" style="font-size: 0.85rem; color: #cbd5e1; word-break: break-all;">Sin vincular</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Ventas a Crédito y Cartera</div>
+                                <div id="lbl-resumen-cartera" style="font-weight: 700; color: #34d399;">Inactiva</div>
                             </div>
                         </div>
-                        <button type="submit" style="margin-top: 2rem;">Aplicar Colores</button>
-                    </form>
+                        <button type="button" onclick="habilitarEdicionPerfil(true)" style="margin-top: 1.25rem; width: 100%; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); font-weight: 800; padding: 0.75rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            ✏️ Editar Identidad Comercial
+                        </button>
+                    </div>
+
+                    <!-- FORMULARIO DE EDICIÓN (MODO EDICIÓN) -->
+                    <div id="perfil-edit-view" style="display: none;">
+                        <form id="form-perfil" style="margin-top: 0.5rem;">
+                            <div class="form-group"><label>Nombre del Negocio *</label><input type="text" id="conf-nombre" required></div>
+                            <div class="form-group" style="margin-top: 1rem;"><label>Tipo de Operación *</label>
+                                <select id="conf-tipo" required>
+                                    <option value="PRODUCCIÓN">Producción / Alimentos / Fritos (Con Insumos)</option>
+                                    <option value="REVENTA">Reventa / Comercialización Directa (Sin Recetario)</option>
+                                    <option value="SERVICIOS">Servicios / Barbería / Consultoría</option>
+                                    <option value="HÍBRIDO">Híbrido (Mezcla de Fabricación y Reventa)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin-top: 1rem;"><label>Google Sheets (Ventas)</label><input type="url" id="conf-sheet-url-ven" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label>¿Maneja Ventas / Servicios a Crédito (Cuentas por Cobrar)?</label>
+                                <select id="conf-cartera" style="width: 100%; padding: 8px; background: #111; color: white; border: 1px solid #333; border-radius: 6px; margin-top: 5px;">
+                                    <option value="0">❌ No (Solo cobros inmediatos al contado)</option>
+                                    <option value="1">✅ Sí (Habilitar Cartera, Clientes y Abonos)</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                                <button type="submit" id="btn-save-perfil" style="flex: 1; background: #38bdf8; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
+                                    💾 Guardar Cambios
+                                </button>
+                                <button type="button" onclick="habilitarEdicionPerfil(false)" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                                    ✕ Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- TARJETA 2: IDENTIDAD VISUAL -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="margin: 0;">Identidad Visual</h3>
+                        <span id="badge-visual-estado" style="font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);">
+                            🟢 Color Activo
+                        </span>
+                    </div>
+
+                    <!-- VISTA RESUMEN VISUAL -->
+                    <div id="visual-resumen-view" style="display: block;">
+                        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-top: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Color de Acento de la Marca</div>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                    <div id="swatch-resumen-color" style="width: 24px; height: 24px; border-radius: 6px; background: #38bdf8; border: 1px solid rgba(255,255,255,0.2);"></div>
+                                    <code id="acento-hex-lbl" style="font-weight: 800; color: white;">#38bdf8</code>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" onclick="habilitarEdicionVisual(true)" style="margin-top: 1.25rem; width: 100%; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); font-weight: 800; padding: 0.75rem; border-radius: 8px; cursor: pointer;">
+                            ✏️ Cambiar Color de Acento
+                        </button>
+                    </div>
+
+                    <!-- FORMULARIO DE EDICIÓN VISUAL -->
+                    <div id="visual-edit-view" style="display: none;">
+                        <form id="form-branding" style="margin-top: 0.5rem;">
+                            <div class="form-group">
+                                <label>Seleccionar Color de Acento</label>
+                                <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.5rem;">
+                                    <input type="color" id="conf-color-acento" style="width: 50px; height: 50px; border: none; cursor: pointer; background: none;" onchange="document.getElementById('acento-hex').textContent = this.value">
+                                    <code id="acento-hex" style="font-weight: 800; font-size: 1.1rem; color: white;">#38bdf8</code>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                                <button type="submit" style="flex: 1; background: #38bdf8; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
+                                    🎨 Aplicar Colores
+                                </button>
+                                <button type="button" onclick="habilitarEdicionVisual(false)" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                                    ✕ Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -210,6 +286,50 @@
             event.target.classList.add('active');
         }
 
+        function habilitarEdicionPerfil(edit) {
+            const resumen = document.getElementById('perfil-resumen-view');
+            const form = document.getElementById('perfil-edit-view');
+            const badge = document.getElementById('badge-perfil-estado');
+
+            if (edit) {
+                resumen.style.display = 'none';
+                form.style.display = 'block';
+                badge.textContent = '✏️ Modo Edición';
+                badge.style.background = 'rgba(56, 189, 248, 0.15)';
+                badge.style.color = '#38bdf8';
+                badge.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+            } else {
+                resumen.style.display = 'block';
+                form.style.display = 'none';
+                badge.textContent = '🟢 Guardado';
+                badge.style.background = 'rgba(52, 211, 153, 0.15)';
+                badge.style.color = '#34d399';
+                badge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+            }
+        }
+
+        function habilitarEdicionVisual(edit) {
+            const resumen = document.getElementById('visual-resumen-view');
+            const form = document.getElementById('visual-edit-view');
+            const badge = document.getElementById('badge-visual-estado');
+
+            if (edit) {
+                resumen.style.display = 'none';
+                form.style.display = 'block';
+                badge.textContent = '✏️ Modo Edición';
+                badge.style.background = 'rgba(56, 189, 248, 0.15)';
+                badge.style.color = '#38bdf8';
+                badge.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+            } else {
+                resumen.style.display = 'block';
+                form.style.display = 'none';
+                badge.textContent = '🟢 Color Activo';
+                badge.style.background = 'rgba(52, 211, 153, 0.15)';
+                badge.style.color = '#34d399';
+                badge.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+            }
+        }
+
         async function loadAll() {
             const res = await fetch('/api/config/negocio');
             const data = await res.json();
@@ -223,6 +343,15 @@
                 document.getElementById('conf-color-acento').value = data.color_acento || '#38bdf8';
                 document.getElementById('acento-hex').textContent = data.color_acento || '#38bdf8';
                 document.getElementById('conf-cartera').value = data.maneja_cartera == 1 ? '1' : '0';
+
+                // Actualizar vista resumen
+                document.getElementById('lbl-resumen-nombre').textContent = data.nombre || 'Mi Negocio';
+                document.getElementById('lbl-resumen-tipo').textContent = data.tipo || 'Híbrido';
+                document.getElementById('lbl-resumen-sheet').textContent = data.sheet_url_ventas || 'Sin vincular';
+                document.getElementById('lbl-resumen-cartera').textContent = data.maneja_cartera == 1 ? '✅ Activa (Cartera, Clientes y Abonos)' : '❌ Inactiva (Solo cobros al contado)';
+                
+                document.getElementById('swatch-resumen-color').style.background = data.color_acento || '#38bdf8';
+                document.getElementById('acento-hex-lbl').textContent = data.color_acento || '#38bdf8';
             }
             loadUsuarios();
             aplicarTemaVisual();
@@ -271,6 +400,9 @@
 
         document.getElementById('form-perfil').onsubmit = async (e) => {
             e.preventDefault();
+            const btn = document.getElementById('btn-save-perfil');
+            if (btn) btn.textContent = '⏳ Guardando...';
+
             const data = {
                 nombre: document.getElementById('conf-nombre').value,
                 tipo: document.getElementById('conf-tipo').value,
@@ -280,9 +412,13 @@
             };
             const res = await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             if (res.ok) {
-                alert('¡Configuración guardada exitosamente!');
-                location.reload();
+                await loadAll();
+                habilitarEdicionPerfil(false);
+                alert('✅ ¡Identidad Comercial guardada exitosamente!');
+            } else {
+                alert('Ocurrió un error al guardar el perfil.');
             }
+            if (btn) btn.textContent = '💾 Guardar Cambios';
         };
 
         document.getElementById('form-branding').onsubmit = async (e) => {
@@ -290,11 +426,16 @@
             const data = {
                 nombre: document.getElementById('conf-nombre').value,
                 tipo: document.getElementById('conf-tipo').value,
-                color_acento: document.getElementById('conf-color-acento').value
+                sheet_url_ventas: document.getElementById('conf-sheet-url-ven').value,
+                color_acento: document.getElementById('conf-color-acento').value,
+                maneja_cartera: parseInt(document.getElementById('conf-cartera').value) || 0
             };
-            await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
-            aplicarTemaVisual();
-            document.getElementById('acento-hex').textContent = data.color_acento;
+            const res = await fetch('/api/config/negocio', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            if (res.ok) {
+                await loadAll();
+                habilitarEdicionVisual(false);
+                alert('🎨 ¡Color de acento guardado y aplicado!');
+            }
         };
 
         document.getElementById('form-import-csv').onsubmit = async (e) => {
