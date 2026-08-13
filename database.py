@@ -49,6 +49,7 @@ def init_db():
         f"CREATE TABLE IF NOT EXISTS historial_suscripciones (id {id_t}, negocio_id INTEGER NOT NULL, suscripcion_id INTEGER NOT NULL, evento TEXT NOT NULL, plan_anterior_id INTEGER, plan_nuevo_id INTEGER, fecha TEXT NOT NULL, usuario_id INTEGER, motivo TEXT, referencia_pago TEXT)",
         f"CREATE TABLE IF NOT EXISTS pagos_wompi (id {id_t}, negocio_id INTEGER NOT NULL, suscripcion_id INTEGER, referencia_wompi TEXT UNIQUE NOT NULL, transaction_id TEXT UNIQUE, monto REAL NOT NULL, tipo_pago TEXT DEFAULT 'RECURRENTE_MRR', concepto TEXT NOT NULL, periodo_facturado TEXT, estado TEXT NOT NULL, metodo_pago TEXT, fecha TEXT NOT NULL, respuesta_raw TEXT)",
         f"CREATE TABLE IF NOT EXISTS auditoria_impersonacion (id {id_t}, super_admin_id INTEGER NOT NULL, target_negocio_id INTEGER NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, ip_origen TEXT, motivo TEXT DEFAULT 'SOPORTE')",
+        f"CREATE TABLE IF NOT EXISTS log_impersonacion (id {id_t}, super_user_id INTEGER NOT NULL, target_negocio_id INTEGER NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, motivo TEXT DEFAULT 'SOPORTE')",
         f"CREATE TABLE IF NOT EXISTS notificaciones (id {id_t}, negocio_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensaje TEXT NOT NULL, leida INTEGER DEFAULT 0)"
     ]
 

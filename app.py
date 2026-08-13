@@ -30,6 +30,17 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session: return redirect(url_for('login'))
+
+        if not session.get('is_impersonating') and session.get('role') != 'SUPER':
+            chk = ejecutar_query("SELECT n.status, u.estado FROM negocios n JOIN usuarios u ON u.negocio_id = n.id WHERE n.id=? AND u.id=?",
+                                 (session.get('negocio_id'), session.get('user_id')), fetch=True)
+            if chk and chk[0]:
+                n_stat, u_est = chk[0]
+                if n_stat == 'SUSPENDIDO' or u_est == 'INACTIVO':
+                    session.clear()
+                    if request.is_json:
+                        return jsonify({"error": "ACCOUNT_SUSPENDED", "message": "Tu cuenta o usuario esta suspendido."}), 403
+                    return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -113,9 +124,7 @@ def health():
 @app.route('/')
 def index():
     if 'user_id' in session:
-        # Si está logueado, se comporta como Dashboard
         return render_template('index.html', session=session)
-    # Si no, se comporta como Landing Page
     return render_template('landing.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -129,6 +138,12 @@ def login():
             res = ejecutar_query("SELECT id, username, role, negocio_id, password_hash, password FROM usuarios WHERE LOWER(username)=LOWER(?)", (u,), fetch=True)
             if res:
                 uid, uname, role, nid, p_hash, plain_p = res[0]
+                
+                # Verificar si la cuenta de negocio o usuario están suspendidos
+                n_chk = ejecutar_query("SELECT status FROM negocios WHERE id=?", (nid,), fetch=True)
+                if n_chk and n_chk[0][0] == 'SUSPENDIDO':
+                    return render_template('login.html', error="La cuenta de tu negocio ha sido suspendida. Contacta a soporte.")
+
                 valid = False
                 if p_hash and check_password_hash(p_hash, p):
                     valid = True
@@ -145,7 +160,6 @@ def login():
                     status = get_negocio_status_ext(nid)
                     session['plan'] = status['plan']
 
-                    # Actualizar fecha de último acceso
                     ejecutar_query("UPDATE usuarios SET ultimo_acceso=? WHERE id=?", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), uid))
 
                     if session['role'] == 'SUPER': 
@@ -177,7 +191,6 @@ def register():
             hoy = datetime.now()
             vence = (hoy + timedelta(days=7)).strftime("%Y-%m-%d")
             
-            # Crear negocio en plan FREE con trial PRO activo de 7 días
             ejecutar_query("INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo, tipo_cuenta) VALUES (?, 'FREE', ?, ?, 1, 'CLIENTE')", 
                            (business_name, hoy.strftime("%Y-%m-%d"), vence))
             
@@ -186,7 +199,6 @@ def register():
                 return render_template('register.html', error="Error al crear el registro del negocio.")
             nid = res[0][0]
             
-            # Crear administrador de la cuenta con hashing seguro
             p_hash = generate_password_hash(password)
             ejecutar_query("INSERT INTO usuarios (negocio_id, username, password_hash, role, fecha_registro, estado) VALUES (?, ?, ?, 'ADMIN', ?, 'ACTIVO')", 
                            (nid, username, p_hash, hoy.strftime("%Y-%m-%d")))
@@ -194,7 +206,6 @@ def register():
             uid_res = ejecutar_query("SELECT id FROM usuarios WHERE username=?", (username,), fetch=True)
             uid = uid_res[0][0] if uid_res else 1
 
-            # Crear suscripción inicial en estado TRIAL
             ejecutar_query("""
                 INSERT INTO suscripciones (negocio_id, plan_id, plan, estado, es_trial, fecha_inicio, fecha_vencimiento, fecha_fin_trial, precio_contratado, auto_renovar)
                 VALUES (?, (SELECT id FROM planes WHERE codigo='PRO'), 'PRO', 'TRIAL', 1, ?, ?, ?, 24900.0, 0)
@@ -207,11 +218,9 @@ def register():
                     VALUES (?, ?, 'TRIAL_INICIADO', (SELECT id FROM planes WHERE codigo='PRO'), ?, ?, 'Registro de cuenta con Trial PRO de 7 días')
                 """, (nid, s_id_res[0][0], hoy.strftime("%Y-%m-%d"), uid))
 
-            # Inicializar configuración del negocio
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES (?, ?, ?, '#38bdf8')",
                            (nid, business_name, operation_type))
             
-            # Loguear automáticamente
             session['user_id'] = uid
             session['username'] = username
             session['role'] = 'ADMIN'
@@ -245,6 +254,7 @@ def inventario_page():
 
 @app.route('/analisis')
 @login_required
+@admin_required
 @require_plan("analytics")
 def analisis_page():
     return render_template('analisis.html', session=session)
@@ -298,6 +308,7 @@ def demo_page():
 def g_res():
     nid = session['negocio_id']
     status = get_negocio_status_ext(nid)
+    data = financiero_service.obtener_resumen_financiero(nid)
     tipo_op_res = ejecutar_query("SELECT tipo_operacion FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
     tipo_op = tipo_op_res[0][0] if (tipo_op_res and tipo_op_res[0]) else 'HÍBRIDO'
 
@@ -317,7 +328,7 @@ def g_res():
         "tipo_operacion": tipo_op,
         "cuotas": {
             "productos": count_prod,
-            "productos_max": 10
+            "productos_max": 10 if status['plan'] == 'FREE' and not session.get('is_interna') else None
         },
         "onboarding": {
             "negocio_configurado": True,
