@@ -39,10 +39,33 @@
         </div>
 
         <div class="config-tabs">
-            <button class="tab-btn active" onclick="showSection('sec-perfil')">Perfil y Marca</button>
+            <button class="tab-btn active" onclick="showSection('sec-micuenta')">👤 Mi Cuenta</button>
+            <button class="tab-btn" onclick="showSection('sec-perfil')">🏢 Perfil y Marca</button>
             <button class="tab-btn" onclick="showSection('sec-cargue')">📥 Cargue Masivo (Drive / Excel)</button>
             <button class="tab-btn" onclick="showSection('sec-usuarios')">Gestión de Usuarios</button>
             <button class="tab-btn" onclick="showSection('sec-mantenimiento')" style="color: #fb7185;">Mantenimiento</button>
+        </div>
+
+        <!-- SECCIÓN MI CUENTA -->
+        <div id="sec-micuenta" class="config-section active">
+            <div class="card" style="max-width: 550px;">
+                <h3 style="color: #38bdf8; margin-bottom: 0.5rem;">👤 Ajustes de Seguridad y Mi Cuenta</h3>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1.5rem;">Actualiza tu contraseña de acceso y seguridad personal.</p>
+                <form id="form-cambiar-password">
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Contraseña Actual</label>
+                        <input type="password" id="pass-actual" placeholder="Tu clave actual" required style="width: 100%; padding: 10px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label>Nueva Contraseña</label>
+                        <input type="password" id="pass-nueva" placeholder="Nueva clave segura" required style="width: 100%; padding: 10px; background: #111; color: #fff; border: 1px solid #333; border-radius: 8px;">
+                    </div>
+                    <button type="submit" style="width: 100%; background: #38bdf8; color: #000; font-weight: 800; border: none; padding: 10px; border-radius: 8px; cursor: pointer;">
+                        🔑 Actualizar Mi Contraseña
+                    </button>
+                </form>
+                <div id="msg-pass-res" style="margin-top: 1rem; font-size: 0.85rem; display: none;"></div>
+            </div>
         </div>
 
         <!-- SECCIÓN PERFIL Y MARCA -->
@@ -501,6 +524,37 @@
                 alert(resData.message);
             } else {
                 alert('Error: ' + resData.error);
+            }
+        };
+
+        document.getElementById('form-cambiar-password').onsubmit = async (e) => {
+            e.preventDefault();
+            const msgDiv = document.getElementById('msg-pass-res');
+            msgDiv.style.display = 'block';
+            msgDiv.style.color = '#38bdf8';
+            msgDiv.textContent = 'Procesando cambio de clave...';
+
+            try {
+                const res = await fetch('/api/usuario/cambiar_password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        current_password: document.getElementById('pass-actual').value,
+                        new_password: document.getElementById('pass-nueva').value
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    msgDiv.style.color = '#34d399';
+                    msgDiv.textContent = '✅ ' + (data.message || 'Contraseña actualizada correctamente.');
+                    e.target.reset();
+                } else {
+                    msgDiv.style.color = '#fb7185';
+                    msgDiv.textContent = '❌ Error: ' + (data.error || 'No se pudo actualizar la contraseña.');
+                }
+            } catch(err) {
+                msgDiv.style.color = '#fb7185';
+                msgDiv.textContent = '❌ Error de comunicación con el servidor.';
             }
         };
 

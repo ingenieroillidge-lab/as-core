@@ -1405,19 +1405,55 @@ def update_super_negocio(negocio_id):
 @super_required
 def reset_admin_password(negocio_id):
     try:
-        d = request.json
+        d = request.json or {}
         new_pass = (d.get('new_password') or '').strip()
         new_user = (d.get('new_username') or '').strip()
         if not new_pass:
-            return jsonify({"error": "Contraseña requerida"}), 400
+            return jsonify({"error": "La contraseña es requerida"}), 400
+
+        new_h = generate_password_hash(new_pass)
 
         if new_user:
-            ejecutar_query("UPDATE usuarios SET username=?, password=? WHERE negocio_id=? AND role='ADMIN'", (new_user, new_pass, negocio_id))
+            ejecutar_query("UPDATE usuarios SET username=?, password_hash=?, password=? WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_user, new_h, new_pass, negocio_id))
         else:
-            ejecutar_query("UPDATE usuarios SET password=? WHERE negocio_id=? AND role='ADMIN'", (new_pass, negocio_id))
+            ejecutar_query("UPDATE usuarios SET password_hash=?, password=? WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_h, new_pass, negocio_id))
 
-        return jsonify({"message": "Credenciales actualizadas exitosamente"})
+        return jsonify({"message": "Credenciales actualizadas exitosamente con hashing seguro"})
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/usuario/cambiar_password', methods=['POST'])
+@login_required
+def cambiar_mi_password():
+    try:
+        d = request.json or {}
+        actual_p = (d.get('current_password') or '').strip()
+        nueva_p = (d.get('new_password') or '').strip()
+
+        if not nueva_p:
+            return jsonify({"error": "La nueva contraseña no puede estar vacía"}), 400
+
+        uid = session['user_id']
+        res = ejecutar_query("SELECT password_hash, password FROM usuarios WHERE id=?", (uid,), fetch=True)
+        if not res:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+        p_hash, plain_p = res[0]
+        valid = False
+        if p_hash and check_password_hash(p_hash, actual_p):
+            valid = True
+        elif plain_p == actual_p:
+            valid = True
+
+        if not valid and session.get('role') != 'SUPER':
+            return jsonify({"error": "La contraseña actual ingresada es incorrecta"}), 400
+
+        new_h = generate_password_hash(nueva_p)
+        ejecutar_query("UPDATE usuarios SET password_hash=?, password=? WHERE id=?", (new_h, nueva_p, uid))
+
+        return jsonify({"message": "Contraseña actualizada exitosamente"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
         return jsonify({"error": str(e)}), 500
 
 # ==========================

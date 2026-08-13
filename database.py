@@ -175,7 +175,8 @@ def init_db():
         cursor.execute(f"INSERT INTO usuarios (negocio_id, username, password_hash, role) VALUES ({placeholder}, 'samuel_super', {placeholder}, 'SUPER')", (nid, hash_super))
         conn.commit()
     else:
-        cursor.execute(f"UPDATE usuarios SET password_hash = {placeholder}, role = 'SUPER' WHERE id = {placeholder}", (hash_super, user_row[0]))
+        # Preservar la contraseña personalizada que haya cambiado el usuario y solo garantizar rol SUPER
+        cursor.execute(f"UPDATE usuarios SET role = 'SUPER' WHERE id = {placeholder}", (user_row[0],))
         conn.commit()
 
     cursor.execute("SELECT id, password, password_hash FROM usuarios")
