@@ -513,34 +513,84 @@ def get_diagnostico():
 @app.route('/api/plantilla/<tipo>')
 @login_required
 def descargar_plantilla(tipo):
-    output = io.StringIO()
-    writer = csv.writer(output)
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    fmt = request.args.get('fmt', 'xlsx').lower()
 
     if tipo == 'productos':
-        writer.writerow(['Nombre del Producto', 'Precio de Venta', 'Codigo', 'Categoria', 'Tipo'])
-        writer.writerow(['Hamburguesa Clasica', '18900', 'PROD-001', 'Comidas', 'TRANSFORMADO'])
-        writer.writerow(['Gaseosa 350ml', '4500', 'PROD-002', 'Bebidas', 'DIRECTO'])
-        filename = 'plantilla_cargue_productos.csv'
+        headers = ['Nombre del Producto', 'Precio de Venta', 'Codigo', 'Categoria', 'Tipo']
+        data_rows = [
+            ['Hamburguesa Clasica', 18900, 'PROD-001', 'Comidas', 'TRANSFORMADO'],
+            ['Gaseosa 350ml', 4500, 'PROD-002', 'Bebidas', 'DIRECTO']
+        ]
+        base_name = 'plantilla_cargue_productos'
     elif tipo == 'inventario':
-        writer.writerow(['Nombre del Insumo', 'Unidad de Medida', 'Costo Unitario Base', 'Stock Inicial', 'Stock Minimo'])
-        writer.writerow(['Carne de Res Molida', 'gramos', '25', '5000', '500'])
-        writer.writerow(['Pan de Hamburguesa', 'unidades', '800', '100', '10'])
-        filename = 'plantilla_cargue_inventario.csv'
+        headers = ['Nombre del Insumo', 'Unidad de Medida', 'Costo Unitario Base', 'Stock Inicial', 'Stock Minimo']
+        data_rows = [
+            ['Carne de Res Molida', 'gramos', 25, 5000, 500],
+            ['Pan de Hamburguesa', 'unidades', 800, 100, 10]
+        ]
+        base_name = 'plantilla_cargue_inventario'
     else:
-        writer.writerow(['Fecha (YYYY-MM-DD)', 'Producto Nombre', 'Cantidad', 'Metodo Pago', 'Total'])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d"), 'Hamburguesa Clasica', '1', 'EFECTIVO', '18900'])
-        filename = 'plantilla_cargue_ventas.csv'
+        headers = ['Fecha (YYYY-MM-DD)', 'Producto Nombre', 'Cantidad', 'Metodo Pago', 'Total']
+        data_rows = [
+            [datetime.now().strftime("%Y-%m-%d"), 'Hamburguesa Clasica', 1, 'EFECTIVO', 18900]
+        ]
+        base_name = 'plantilla_cargue_ventas'
 
-    output.seek(0)
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-disposition": f"attachment; filename={filename}"}
-    )
+    if fmt == 'csv':
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        writer.writerow(headers)
+        for row in data_rows:
+            writer.writerow(row)
+        output.seek(0)
+        csv_bytes = ('\ufeff' + output.getvalue()).encode('utf-8')
+        return Response(
+            csv_bytes,
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-disposition": f"attachment; filename={base_name}.csv"}
+        )
+    else:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Cargue Masivo"
+
+        header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='0EA5E9', end_color='0EA5E9', fill_type='solid')
+        align_center = Alignment(horizontal='center', vertical='center')
+
+        ws.append(headers)
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = align_center
+
+        for row in data_rows:
+            ws.append(row)
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+        out_stream = io.BytesIO()
+        wb.save(out_stream)
+        out_stream.seek(0)
+
+        return Response(
+            out_stream.getvalue(),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-disposition": f"attachment; filename={base_name}.xlsx"}
+        )
 
 @app.route('/api/importar/csv', methods=['POST'])
 @login_required
 def importar_csv():
+    import openpyxl
     nid = session['negocio_id']
     tipo_importacion = request.form.get('tipo', 'productos')
 
@@ -548,29 +598,40 @@ def importar_csv():
         return jsonify({"error": "No se adjuntó ningún archivo"}), 400
 
     file = request.files['file']
-    if not file.filename.endswith('.csv'):
-        return jsonify({"error": "Formato no válido. Debe ser un archivo .csv"}), 400
+    filename = (file.filename or '').lower()
 
+    rows = []
     try:
-        content = file.stream.read().decode('utf-8-sig', errors='ignore')
-        reader = csv.reader(io.StringIO(content))
-        rows = list(reader)
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            wb = openpyxl.load_workbook(file.stream, data_only=True)
+            ws = wb.active
+            for r in ws.iter_rows(values_only=True):
+                if r and any(cell is not None for cell in r):
+                    rows.append([str(cell).strip() if cell is not None else '' for cell in r])
+        else:
+            content = file.stream.read().decode('utf-8-sig', errors='ignore')
+            first_line = content.splitlines()[0] if content.splitlines() else ''
+            delimiter = ';' if ';' in first_line else (',' if ',' in first_line else '\t')
+
+            reader = csv.reader(io.StringIO(content), delimiter=delimiter)
+            rows = list(reader)
+
         if len(rows) <= 1:
-            return jsonify({"error": "El archivo CSV está vacío o solo contiene la fila de encabezados"}), 400
+            return jsonify({"error": "El archivo está vacío o solo contiene la fila de encabezados"}), 400
 
         imported_count = 0
         for row in rows[1:]:
             if not row or not any(row): continue
 
             if tipo_importacion == 'productos':
-                nombre = row[0].strip() if len(row) > 0 else ''
+                nombre = str(row[0]).strip() if len(row) > 0 else ''
                 try:
-                    precio = float(row[1].replace('$', '').replace(',', '').strip()) if len(row) > 1 and row[1].strip() else 0.0
+                    precio = float(str(row[1]).replace('$', '').replace('.', '').replace(',', '.').strip()) if len(row) > 1 and str(row[1]).strip() else 0.0
                 except:
                     precio = 0.0
-                codigo = row[2].strip() if len(row) > 2 else None
-                cat = row[3].strip() if len(row) > 3 else 'General'
-                tipo_p = row[4].strip() if len(row) > 4 else 'TRANSFORMADO'
+                codigo = str(row[2]).strip() if len(row) > 2 else None
+                cat = str(row[3]).strip() if len(row) > 3 else 'General'
+                tipo_p = str(row[4]).strip() if len(row) > 4 else 'TRANSFORMADO'
 
                 if nombre:
                     ejecutar_query(
@@ -580,18 +641,18 @@ def importar_csv():
                     imported_count += 1
 
             elif tipo_importacion == 'inventario':
-                nombre = row[0].strip() if len(row) > 0 else ''
-                unidad = row[1].strip() if len(row) > 1 else 'unidades'
+                nombre = str(row[0]).strip() if len(row) > 0 else ''
+                unidad = str(row[1]).strip() if len(row) > 1 else 'unidades'
                 try:
-                    costo = float(row[2].replace('$', '').replace(',', '').strip()) if len(row) > 2 and row[2].strip() else 0.0
+                    costo = float(str(row[2]).replace('$', '').replace('.', '').replace(',', '.').strip()) if len(row) > 2 and str(row[2]).strip() else 0.0
                 except:
                     costo = 0.0
                 try:
-                    stock = float(row[3].strip()) if len(row) > 3 and row[3].strip() else 0.0
+                    stock = float(str(row[3]).strip()) if len(row) > 3 and str(row[3]).strip() else 0.0
                 except:
                     stock = 0.0
                 try:
-                    st_min = float(row[4].strip()) if len(row) > 4 and row[4].strip() else 5.0
+                    st_min = float(str(row[4]).strip()) if len(row) > 4 and str(row[4]).strip() else 5.0
                 except:
                     st_min = 5.0
 
@@ -603,13 +664,13 @@ def importar_csv():
                     imported_count += 1
 
             elif tipo_importacion == 'ventas':
-                fecha_val = row[0].strip() if len(row) > 0 and row[0].strip() else datetime.now().strftime("%Y-%m-%d")
-                prod_name = row[1].strip() if len(row) > 1 else ''
+                fecha_val = str(row[0]).strip() if len(row) > 0 and str(row[0]).strip() else datetime.now().strftime("%Y-%m-%d")
+                prod_name = str(row[1]).strip() if len(row) > 1 else ''
                 try:
-                    cant_val = float(row[2].strip()) if len(row) > 2 and row[2].strip() else 1.0
+                    cant_val = float(str(row[2]).strip()) if len(row) > 2 and str(row[2]).strip() else 1.0
                 except:
                     cant_val = 1.0
-                metodo_val = row[3].strip() if len(row) > 3 and row[3].strip() else 'Efectivo'
+                metodo_val = str(row[3]).strip() if len(row) > 3 and str(row[3]).strip() else 'Efectivo'
 
                 if prod_name:
                     p_res = ejecutar_query("SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (prod_name, nid), fetch=True)
@@ -617,7 +678,7 @@ def importar_csv():
                         pid = p_res[0][0]
                     else:
                         try:
-                            total_val = float(row[4].replace('$', '').replace(',', '').strip()) if len(row) > 4 and row[4].strip() else 0.0
+                            total_val = float(str(row[4]).replace('$', '').replace('.', '').replace(',', '.').strip()) if len(row) > 4 and str(row[4]).strip() else 0.0
                         except:
                             total_val = 0.0
                         unit_price = total_val / cant_val if cant_val > 0 else total_val
@@ -629,9 +690,9 @@ def importar_csv():
                     if s:
                         imported_count += 1
 
-        return jsonify({"message": f"¡Éxito! Se importaron {imported_count} registros."})
+        return jsonify({"message": f"¡Éxito! Se importaron {imported_count} registros correctamente."})
     except Exception as e:
-        return jsonify({"error": f"Error procesando archivo CSV: {str(e)}"}), 500
+        return jsonify({"error": f"Error procesando el archivo: {str(e)}"}), 500
 
 @app.route('/api/importar/google-sheets', methods=['POST'])
 @login_required

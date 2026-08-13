@@ -170,24 +170,24 @@
                 <div class="card">
                     <h3>📄 1. Plantillas Oficiales de Cargue</h3>
                     <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem; margin-bottom: 1.5rem;">
-                        Descarga estas plantillas en formato CSV/Excel, diligéncialas con tus productos o insumos y súbelas para importar masivamente tu catálogo.
+                        Descarga estas plantillas nativas en Excel (.xlsx), diligéncialas en columnas individuales con tus productos o insumos y súbelas para importar masivamente tu catálogo.
                     </p>
                     <div style="display: flex; flex-direction: column; gap: 1rem;">
-                        <a href="/api/plantilla/productos" class="btn" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; text-align: center; border: 1px solid rgba(56, 189, 248, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
-                            📥 Descargar Plantilla de Productos (.csv)
+                        <a href="/api/plantilla/productos?fmt=xlsx" class="btn" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; text-align: center; border: 1px solid rgba(56, 189, 248, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
+                            📥 Descargar Plantilla de Productos (.xlsx Excel)
                         </a>
-                        <a href="/api/plantilla/inventario" class="btn" style="background: rgba(52, 211, 153, 0.1); color: #34d399; text-align: center; border: 1px solid rgba(52, 211, 153, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
-                            📥 Descargar Plantilla de Insumos (.csv)
+                        <a href="/api/plantilla/inventario?fmt=xlsx" class="btn" style="background: rgba(52, 211, 153, 0.1); color: #34d399; text-align: center; border: 1px solid rgba(52, 211, 153, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
+                            📥 Descargar Plantilla de Insumos (.xlsx Excel)
                         </a>
-                        <a href="/api/plantilla/ventas" class="btn" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
-                            📥 Descargar Plantilla de Ventas Históricas / Retroactivas (.csv)
+                        <a href="/api/plantilla/ventas?fmt=xlsx" class="btn" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3); text-decoration: none; padding: 0.8rem; border-radius: 8px; font-weight: 700;">
+                            📥 Descargar Plantilla de Ventas Históricas (.xlsx Excel)
                         </a>
                     </div>
                 </div>
 
                 <!-- Tarjeta 2: Subir Archivo CSV / Excel -->
                 <div class="card">
-                    <h3>📤 2. Subir Archivo (.csv)</h3>
+                    <h3>📤 2. Subir Archivo (Excel .xlsx / .csv)</h3>
                     <form id="form-import-csv" style="margin-top: 1rem;">
                         <div class="form-group">
                             <label>Tipo de Datos a Importar</label>
@@ -198,8 +198,8 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin-top: 1rem;">
-                            <label>Seleccionar Archivo CSV</label>
-                            <input type="file" id="imp-csv-file" accept=".csv" required style="width: 100%; padding: 8px; margin-top: 5px;">
+                            <label>Seleccionar Archivo (Excel .xlsx, .xls o .csv)</label>
+                            <input type="file" id="imp-csv-file" accept=".xlsx, .xls, .csv" required style="width: 100%; padding: 8px; margin-top: 5px;">
                         </div>
                         <button type="submit" style="margin-top: 1.5rem; background: #38bdf8; color: black; font-weight: 800; width: 100%;">Subir e Importar Registros</button>
                     </form>
