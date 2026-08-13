@@ -808,6 +808,81 @@ def reset_admin_password(negocio_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ==========================
+# API: TICKETS DE SOPORTE Y ESCALAMIENTO
+# ==========================
+
+@app.route('/api/soporte/ticket', methods=['POST'])
+@login_required
+def crear_ticket_soporte():
+    try:
+        nid = session['negocio_id']
+        uid = session['user_id']
+        d = request.json
+        pregunta = (d.get('pregunta') or '').strip()
+        modulo = (d.get('modulo') or '/').strip()
+        respuesta_bot = (d.get('respuesta_bot') or '').strip()
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if not pregunta:
+            return jsonify({"error": "Debe ingresar una pregunta"}), 400
+
+        ejecutar_query(
+            """INSERT INTO tickets_soporte (negocio_id, usuario_id, fecha, modulo, pregunta, respuesta_bot, estado)
+               VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE')""",
+            (nid, uid, fecha, modulo, pregunta, respuesta_bot)
+        )
+
+        return jsonify({"message": "Ticket registrado con éxito"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/super/tickets')
+@login_required
+@super_required
+def get_super_tickets():
+    try:
+        tickets = ejecutar_query(
+            """SELECT t.id, n.nombre, u.username, t.fecha, t.modulo, t.pregunta, t.respuesta_bot, t.estado, t.respuesta_admin
+               FROM tickets_soporte t
+               LEFT JOIN negocios n ON t.negocio_id = n.id
+               LEFT JOIN usuarios u ON t.usuario_id = u.id
+               ORDER BY t.id DESC LIMIT 100""",
+            fetch=True
+        ) or []
+
+        return jsonify([{
+            "id": x[0],
+            "negocio": x[1] or "Negocio",
+            "usuario": x[2] or "Usuario",
+            "fecha": x[3],
+            "modulo": x[4],
+            "pregunta": x[5],
+            "respuesta_bot": x[6],
+            "estado": x[7],
+            "respuesta_admin": x[8] or ""
+        } for x in tickets])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/super/ticket/<int:ticket_id>/responder', methods=['POST'])
+@login_required
+@super_required
+def responder_ticket_soporte(ticket_id):
+    try:
+        d = request.json
+        respuesta = (d.get('respuesta') or '').strip()
+        if not respuesta:
+            return jsonify({"error": "Debe ingresar una respuesta"}), 400
+
+        ejecutar_query(
+            "UPDATE tickets_soporte SET respuesta_admin=?, estado='RESUELTO' WHERE id=?",
+            (respuesta, ticket_id)
+        )
+        return jsonify({"message": "Respuesta enviada y ticket resuelto"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.context_processor
 def inject_global_info():
     if 'negocio_id' in session:

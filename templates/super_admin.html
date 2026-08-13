@@ -71,6 +71,31 @@
                         <tbody id="lista-negocios"></tbody>
                     </table>
                 </div>
+            <div class="card" style="grid-column: span 2; margin-top: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="color: #38bdf8; margin: 0;">📩 Tickets de Soporte y Escalamiento de Usuarios</h3>
+                    <button onclick="loadTickets()" style="background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">
+                        🔄 Cargar Tickets
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Empresa</th>
+                                <th>Usuario</th>
+                                <th>Módulo</th>
+                                <th>Consulta Realizada</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lista-tickets">
+                            <tr><td colspan="7" style="text-align: center; color: #666;">Cargando tickets...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
@@ -211,7 +236,63 @@
             }
         };
 
-        window.onload = loadNegocios;
+        async function loadTickets() {
+            const tbody = document.getElementById('lista-tickets');
+            try {
+                const res = await fetch('/api/super/tickets');
+                const tickets = await res.json();
+                if (!tickets || tickets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No hay tickets de soporte pendientes.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = tickets.map(t => `
+                    <tr>
+                        <td style="font-size: 0.75rem; color: #999;">${t.fecha ? t.fecha.substring(0, 16) : '-'}</td>
+                        <td><strong style="color: white;">${t.negocio}</strong></td>
+                        <td style="color: #38bdf8;">${t.usuario}</td>
+                        <td><code style="font-size: 0.75rem;">${t.modulo}</code></td>
+                        <td style="font-size: 0.85rem; max-width: 250px;">
+                            <strong>${t.pregunta}</strong>
+                            ${t.respuesta_admin ? `<div style="color: #34d399; font-size: 0.78rem; margin-top: 4px;">Resp: ${t.respuesta_admin}</div>` : ''}
+                        </td>
+                        <td>
+                            <span style="font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: ${t.estado === 'RESUELTO' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)'}; color: ${t.estado === 'RESUELTO' ? '#34d399' : '#f59e0b'};">
+                                ${t.estado}
+                            </span>
+                        </td>
+                        <td>
+                            ${t.estado === 'PENDIENTE' ? `
+                                <button onclick="responderTicket(${t.id})" style="background: #38bdf8; color: black; font-weight: 800; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                                    💬 Responder
+                                </button>
+                            ` : '<span style="color: #666; font-size: 0.75rem;">Atendido</span>'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #fb7185;">Error cargando tickets.</td></tr>';
+            }
+        }
+
+        async function responderTicket(id) {
+            const respuesta = prompt("Ingresa la respuesta para el usuario:");
+            if (!respuesta) return;
+
+            const res = await fetch(`/api/super/ticket/${id}/responder`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ respuesta: respuesta })
+            });
+            if (res.ok) {
+                alert('Respuesta enviada y ticket resuelto');
+                loadTickets();
+            }
+        }
+
+        loadStats();
+        loadNegocios();
+        loadTickets();
     </script>
 </body>
 </html>
