@@ -303,7 +303,14 @@ def api_productos():
 @login_required
 def post_venta():
     d = request.json
-    s, r = ventas_service.registrar_venta(d['producto_id'], float(d['cantidad']), d.get('metodo_pago', 'Efectivo'), session['user_id'], session['negocio_id'])
+    s, r = ventas_service.registrar_venta(
+        d['producto_id'], 
+        float(d['cantidad']), 
+        d.get('metodo_pago', 'Efectivo'), 
+        session['user_id'], 
+        session['negocio_id'],
+        fecha_custom=d.get('fecha')
+    )
     return jsonify({"message": "ok", "total": r}) if s else (jsonify({"error": r}), 400)
 
 @app.route('/api/inventario')
@@ -465,6 +472,33 @@ def importar_csv():
                     )
                     imported_count += 1
 
+            elif tipo_importacion == 'ventas':
+                fecha_val = row[0].strip() if len(row) > 0 and row[0].strip() else datetime.now().strftime("%Y-%m-%d")
+                prod_name = row[1].strip() if len(row) > 1 else ''
+                try:
+                    cant_val = float(row[2].strip()) if len(row) > 2 and row[2].strip() else 1.0
+                except:
+                    cant_val = 1.0
+                metodo_val = row[3].strip() if len(row) > 3 and row[3].strip() else 'Efectivo'
+
+                if prod_name:
+                    p_res = ejecutar_query("SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (prod_name, nid), fetch=True)
+                    if p_res:
+                        pid = p_res[0][0]
+                    else:
+                        try:
+                            total_val = float(row[4].replace('$', '').replace(',', '').strip()) if len(row) > 4 and row[4].strip() else 0.0
+                        except:
+                            total_val = 0.0
+                        unit_price = total_val / cant_val if cant_val > 0 else total_val
+                        ejecutar_query("INSERT INTO productos (negocio_id, nombre, precio, tipo_producto) VALUES (?, ?, ?, 'TRANSFORMADO')", (nid, prod_name, unit_price))
+                        pid_res = ejecutar_query("SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (prod_name, nid), fetch=True)
+                        pid = pid_res[0][0] if pid_res else 1
+
+                    s, r = ventas_service.registrar_venta(pid, cant_val, metodo_val, session['user_id'], nid, fecha_custom=fecha_val)
+                    if s:
+                        imported_count += 1
+
         return jsonify({"message": f"¡Éxito! Se importaron {imported_count} registros."})
     except Exception as e:
         return jsonify({"error": f"Error procesando archivo CSV: {str(e)}"}), 500
@@ -533,6 +567,32 @@ def importar_google_sheets():
                         (nid, nombre, unidad, costo, stock, stock)
                     )
                     imported_count += 1
+            elif tipo_importacion == 'ventas':
+                fecha_val = row[0].strip() if len(row) > 0 and row[0].strip() else datetime.now().strftime("%Y-%m-%d")
+                prod_name = row[1].strip() if len(row) > 1 else ''
+                try:
+                    cant_val = float(row[2].strip()) if len(row) > 2 and row[2].strip() else 1.0
+                except:
+                    cant_val = 1.0
+                metodo_val = row[3].strip() if len(row) > 3 and row[3].strip() else 'Efectivo'
+
+                if prod_name:
+                    p_res = ejecutar_query("SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (prod_name, nid), fetch=True)
+                    if p_res:
+                        pid = p_res[0][0]
+                    else:
+                        try:
+                            total_val = float(row[4].replace('$', '').replace(',', '').strip()) if len(row) > 4 and row[4].strip() else 0.0
+                        except:
+                            total_val = 0.0
+                        unit_price = total_val / cant_val if cant_val > 0 else total_val
+                        ejecutar_query("INSERT INTO productos (negocio_id, nombre, precio, tipo_producto) VALUES (?, ?, ?, 'TRANSFORMADO')", (nid, prod_name, unit_price))
+                        pid_res = ejecutar_query("SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (prod_name, nid), fetch=True)
+                        pid = pid_res[0][0] if pid_res else 1
+
+                    s, r = ventas_service.registrar_venta(pid, cant_val, metodo_val, session['user_id'], nid, fecha_custom=fecha_val)
+                    if s:
+                        imported_count += 1
 
         c_res = ejecutar_query("SELECT id FROM configuracion_negocio WHERE negocio_id=?", (nid,), fetch=True)
         if c_res:

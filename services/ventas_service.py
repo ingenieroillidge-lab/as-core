@@ -2,8 +2,13 @@ from datetime import datetime
 from database import ejecutar_query
 import services.inventario_service as inventario_service
 
-def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, negocio_id):
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, negocio_id, fecha_custom=None):
+    if fecha_custom and str(fecha_custom).strip():
+        fecha = str(fecha_custom).strip()
+        if len(fecha) == 10:
+            fecha = f"{fecha} 12:00:00"
+    else:
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 1. Obtener datos del producto (Filtrado por negocio)
     res = ejecutar_query("SELECT nombre, precio FROM productos WHERE id=? AND negocio_id=?", (producto_id, negocio_id), fetch=True)

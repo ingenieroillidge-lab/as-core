@@ -106,6 +106,10 @@
                             <option value="Nequi">📱 Nequi / Daviplata</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label>Fecha de Venta (Dejar vacío para HOY o seleccionar fecha retroactiva)</label>
+                        <input type="date" id="v-fecha" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 8px; border-radius: 6px; margin-top: 5px;">
+                    </div>
                     <div id="venta-preview" style="display:none; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
                         Total estimado: <strong id="preview-total" style="color: var(--text-primary);">$0</strong>
                     </div>
@@ -118,7 +122,7 @@
             <!-- HISTORIAL DE HOY -->
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-                    <h3 style="margin-bottom: 0;">Ventas de Hoy</h3>
+                    <h3 style="margin-bottom: 0;">Ventas Registradas</h3>
                     <span id="sale-count-badge" style="display:none; background: rgba(56,189,248,0.1); color: #38bdf8; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;">0 ventas</span>
                 </div>
 
@@ -126,14 +130,14 @@
 
                 <div id="sale-history-list">
                     <div class="empty-state">
-                        <span class="emoji">🛒</span>
-                        Registra tu primera venta del día.<br>Los indicadores se actualizarán en tiempo real.
+                        <span class="emoji">🧾</span>
+                        Las ventas registradas en esta sesión aparecerán aquí.
                     </div>
                 </div>
 
                 <div id="daily-total-card">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Total del Día</span>
+                        <span style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.5px;">Total de esta sesión</span>
                         <span id="daily-total" style="font-size: 1.4rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: #10b981;">$0</span>
                     </div>
                 </div>
@@ -146,9 +150,16 @@
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
         
         let productMap = {}; // id -> {nombre, precio}
-        let todaySales = [];
         let saleCount = 0;
         let dailyTotal = 0;
+        let msgIndex = 0;
+
+        const EMOTIONAL_MESSAGES = [
+            "¡Excelente! Cada venta te acerca a tus metas de este mes.",
+            "¡Genial! Tu flujo de caja sigue creciendo.",
+            "¡Venta registrada con éxito! El inventario fue actualizado.",
+            "¡Sigue así! Tu negocio está en movimiento.",
+        ];
 
         async function loadProds() {
             const res = await fetch('/api/productos');
@@ -187,16 +198,6 @@
         document.getElementById('v-producto').addEventListener('change', updatePreview);
         document.getElementById('v-cantidad').addEventListener('input', updatePreview);
 
-        const EMOTIONAL_MESSAGES = [
-            "¡Perfecto! Tu negocio ya está generando datos reales.",
-            "¡Excelente! Cada venta construye tu historial financiero.",
-            "¡Muy bien! Sigue así — tus costos y utilidades se calculan en tiempo real.",
-            "¡Genial! Esa venta ya redujo tu punto de equilibrio del día.",
-            "¡Impecable! Así se construye un negocio con control total.",
-        ];
-
-        let msgIndex = 0;
-
         document.getElementById('venta-form').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btn-registrar');
@@ -206,12 +207,16 @@
             const productoId = document.getElementById('v-producto').value;
             const cantidad   = document.getElementById('v-cantidad').value;
             const metodo     = document.getElementById('v-metodo').value;
+            const fechaVal   = document.getElementById('v-fecha').value;
             const product    = productMap[productoId];
+
+            const payload = { producto_id: productoId, cantidad, metodo_pago: metodo };
+            if (fechaVal) payload.fecha = fechaVal;
 
             const res = await fetch('/api/ventas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ producto_id: productoId, cantidad, metodo_pago: metodo })
+                body: JSON.stringify(payload)
             });
             const resD = await res.json();
 
