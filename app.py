@@ -1432,18 +1432,39 @@ def api_importador_cargar():
 @app.route('/api/importador/prevalidar', methods=['POST'])
 @login_required
 def api_importador_prevalidar():
-    nid = session['negocio_id']
-    d = request.json or {}
-    batch_id = d.get('batch_id')
-    mapeo_usuario = d.get('mapeo_usuario', {})
+    print("[PREVALIDAR] Inicio de prevalidación")
+    try:
+        nid = session.get('negocio_id')
+        if not nid:
+            return jsonify({"ok": False, "error": "Sesión inválida", "stage": "auth"}), 401
 
-    if not batch_id or not mapeo_usuario:
-        return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
+        d = request.json or {}
+        batch_id = d.get('batch_id')
+        mapeo_usuario = d.get('mapeo_usuario', {})
 
-    ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
-    if ok:
-        return jsonify({"message": msg, "resumen": resumen})
-    return jsonify({"error": msg}), 400
+        if not batch_id or not mapeo_usuario:
+            return jsonify({"ok": False, "error": "batch_id y mapeo_usuario son obligatorios", "stage": "input_validation"}), 400
+
+        print(f"[PREVALIDAR] batch_id={batch_id}, campos_mapeados={len(mapeo_usuario)}")
+        ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
+
+        if ok:
+            print(f"[PREVALIDAR] Completado: registros={resumen.get('total_registros', 0)}, tiempo={resumen.get('tiempo_ms', '?')}ms")
+            return jsonify({"ok": True, "message": msg, "resumen": resumen})
+
+        print(f"[PREVALIDAR] Fallo controlado: {msg}")
+        return jsonify({"ok": False, "error": msg, "stage": "prevalidation"}), 400
+
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[PREVALIDAR ERROR UNCAUGHT]\n{tb}")
+        return jsonify({
+            "ok": False,
+            "error": "Error interno durante la prevalidación",
+            "detail": f"({type(e).__name__}): {str(e)}",
+            "stage": "unhandled_exception"
+        }), 500
 
 @app.route('/api/importador/procesar', methods=['POST'])
 @login_required

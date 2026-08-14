@@ -1,38 +1,155 @@
 import json
 import uuid
+import time
 from datetime import datetime
-from database import ejecutar_query
+from database import ejecutar_query, ejecutar_query_many
 import services.ventas_service as ventas_service
 import services.cartera_service as cartera_service
 import services.inventario_service as inventario_service
 
-# Diccionario de reconocimiento semántico heurístico
-DICTIONARY_HEURISTICS = {
-    "costo_unitario_usd": ["US", "USD", "COSTO USD", "COSTO UNITARIO USD", "PRECIO COMPRA USD", "UNIT USD"],
-    "tasa_cambio": ["PRECIO US", "PRECIO USD", "TASA", "TASA CAMBIO", "TRM", "CAMBIO USD", "EXCHANGE RATE"],
-    "costo_unitario_cop": ["COSTO UNITARIO", "COSTO COP", "COSTO UNITARIO (COP)", "COSTO BASE COP", "UNIT COP"],
-    "costo_envio_cop": ["COSTO DE ENVIO", "COSTO ENVIO", "FLETE", "ENVIO", "FLETES", "SHIPPING", "LOGISTICA"],
-    "costo_total_cop": ["COSTO TOTAL", "COSTO TOTAL ADQUISICION", "TOTAL COP", "TOTAL COST"],
-    "precio_venta_cop": ["PRECIO VENTA", "PRECIO DE VENTA", "PRECIO VENTA (COP)", "PVP", "PRICE"],
-    "nombre_producto": ["EQUIPO", "DESCRIPCION", "PRODUCTO", "ITEM", "NOMBRE", "PRENDA"],
-    "tipo_producto": ["TIPO", "TIPO PRODUCTO", "CATEGORIA", "ESTILO"],
-    "jugador_edicion": ["JUGADOR", "EDICION", "PLAYER", "TEMPORADA"],
-    "variante_talla": ["TALLA", "SIZE", "VARIANCE", "VARIANTE", "COLOR"],
-    "fecha_operacion": ["FECHA", "FECHA COMPRA", "FECHA PEDIDO", "DATE"],
-    "fecha_llegada": ["FECHA DE LLEGADA", "FECHA LLEGADA", "FECHA RECEPCION", "ARRIVAL DATE"],
-    "cliente_nombre": ["CLIENTE", "CLIENTES", "CUSTOMER", "COMPRADOR"],
-    "saldo_pendiente": ["DEUDAS POR COBRAR", "DEUDAS", "CARTERA", "SALDO PENDIENTE", "POR COBRAR", "DEUDA"],
-    "abono_monto": ["PAGOS/ABONOS", "PAGOS", "ABONOS", "ABONO", "PAGO"],
-    "cantidad": ["CANTIDAD", "UNIDADES", "CANTIDAD DE UNIDADES", "UNIDADES COMPRADAS", "QTY"],
-    # Campos derivados (Calculados)
-    "utilidad_calculada": ["UTILIDAD", "PROFIT", "MARGEN", "PORCENTAJE DE GANANCIA", "GANANCIA"],
-    "dias_transito": ["DIAS EN TRANSITO", "DIAS TRANSITO", "TRANSIT DAYS"]
+# ══════════════════════════════════════════════════════════════════
+# NÚCLEO SEMÁNTICO UNIVERSAL
+# ══════════════════════════════════════════════════════════════════
+# Cada clave es un CONCEPTO del sistema, no un campo de un Excel particular.
+# Los sinónimos son tokens que podrían encontrarse en encabezados reales
+# de distintos sectores empresariales.
+
+SEMANTIC_CORE = {
+    # ── Identidad del producto o servicio ──
+    "nombre_producto": [
+        "PRODUCTO", "DESCRIPCION", "ITEM", "NOMBRE", "ARTICULO",
+        "SERVICIO", "REFERENCIA PRODUCTO", "NOMBRE PRODUCTO"
+    ],
+    "codigo_sku": [
+        "CODIGO", "SKU", "REF", "REFERENCIA", "BARCODE", "EAN",
+        "PLU", "CODIGO INTERNO", "ID PRODUCTO"
+    ],
+    "categoria": [
+        "CATEGORIA", "TIPO", "TIPO PRODUCTO", "FAMILY", "GRUPO",
+        "LINEA", "DIVISION", "DEPARTAMENTO", "CLASIFICACION"
+    ],
+    "subcategoria": [
+        "SUBCATEGORIA", "SUBTIPO", "SUBGRUPO", "SEGMENTO", "SUBLINEA"
+    ],
+
+    # ── Costos y precios (moneda universal) ──
+    "costo_unitario_origen": [
+        "US", "USD", "COSTO USD", "COSTO UNITARIO USD", "PRECIO COMPRA USD",
+        "UNIT USD", "COSTO EUR", "COSTO ORIGEN", "COSTO UNITARIO ORIGEN"
+    ],
+    "tasa_cambio": [
+        "PRECIO US", "PRECIO USD", "TASA", "TASA CAMBIO", "TRM",
+        "CAMBIO USD", "EXCHANGE RATE", "TRM EUR", "TASA CONVERSION"
+    ],
+    "costo_unitario_local": [
+        "COSTO UNITARIO", "COSTO COP", "COSTO UNITARIO (COP)", "COSTO BASE COP",
+        "UNIT COP", "COSTO UNITARIO LOCAL", "COSTO BASE"
+    ],
+    "costo_envio": [
+        "COSTO DE ENVIO", "COSTO ENVIO", "FLETE", "ENVIO", "FLETES",
+        "SHIPPING", "LOGISTICA", "COSTO LOGISTICO", "TRANSPORTE"
+    ],
+    "costo_total": [
+        "COSTO TOTAL", "COSTO TOTAL ADQUISICION", "TOTAL COP", "TOTAL COST",
+        "COSTO ADQUISICION", "COSTO NETO"
+    ],
+    "precio_venta": [
+        "PRECIO VENTA", "PRECIO DE VENTA", "PRECIO VENTA (COP)", "PVP",
+        "PRICE", "PRECIO UNITARIO", "PRECIO AL PUBLICO"
+    ],
+
+    # ── Cantidades ──
+    "cantidad": [
+        "CANTIDAD", "UNIDADES", "CANTIDAD DE UNIDADES", "UNIDADES COMPRADAS",
+        "QTY", "STOCK", "EXISTENCIAS", "INVENTARIO"
+    ],
+
+    # ── Cliente y cartera ──
+    "cliente_nombre": [
+        "CLIENTE", "CLIENTES", "CUSTOMER", "COMPRADOR", "NOMBRE CLIENTE",
+        "DESTINATARIO", "RAZON SOCIAL"
+    ],
+    "saldo_pendiente": [
+        "DEUDAS POR COBRAR", "DEUDAS", "CARTERA", "SALDO PENDIENTE",
+        "POR COBRAR", "DEUDA", "CUENTA POR COBRAR", "SALDO"
+    ],
+    "abono_monto": [
+        "PAGOS/ABONOS", "PAGOS", "ABONOS", "ABONO", "PAGO",
+        "PAGO RECIBIDO", "RECAUDO"
+    ],
+
+    # ── Fechas ──
+    "fecha_operacion": [
+        "FECHA", "FECHA COMPRA", "FECHA PEDIDO", "DATE",
+        "FECHA OPERACION", "FECHA VENTA", "FECHA REGISTRO"
+    ],
+    "fecha_recepcion": [
+        "FECHA DE LLEGADA", "FECHA LLEGADA", "FECHA RECEPCION",
+        "ARRIVAL DATE", "FECHA ENTREGA", "FECHA INGRESO"
+    ],
+
+    # ── Campos calculados (no se importan, solo se detectan) ──
+    "campo_calculado": [
+        "UTILIDAD", "PROFIT", "MARGEN", "PORCENTAJE DE GANANCIA",
+        "GANANCIA", "DIAS EN TRANSITO", "DIAS TRANSITO", "TRANSIT DAYS",
+        "RENTABILIDAD", "ROI", "PORCENTAJE", "INVERSION POR PEDIDO",
+        "VENDIDO HASTA LA FECHA", "GANANCIA POR PEDIDO", "DINERO EN CAJA"
+    ],
 }
+
+# Tokens comunes que sugieren que una columna es un atributo del producto
+# Se usa como fallback cuando no hay coincidencia exacta con SEMANTIC_CORE
+ATTRIBUTE_HINTS = [
+    "JUGADOR", "EDICION", "PLAYER", "TEMPORADA",
+    "MARCA", "BRAND", "FABRICANTE",
+    "MODELO", "MODEL", "VERSION",
+    "MATERIAL", "COMPOSICION", "ACABADO",
+    "ORIGEN", "PAIS", "PROCEDENCIA",
+    "PESO", "DIMENSIONES", "CAPACIDAD",
+    "CILINDRAJE", "POTENCIA", "VOLTAJE",
+]
+
+# Tokens comunes que sugieren que una columna es una variante
+VARIANT_HINTS = [
+    "TALLA", "SIZE", "VARIANTE",
+    "COLOR", "COLOUR",
+    "MEDIDA", "PRESENTACION", "EMPAQUE",
+    "SABOR", "FRAGANCIA", "DENSIDAD",
+]
+
+# Etiquetas humanizadas para el frontend
+CAMPO_LABELS = {
+    "IGNORAR": "🚫 No importar",
+    "nombre_producto": "📦 Nombre del producto o servicio",
+    "codigo_sku": "🔖 Código / SKU / Referencia",
+    "categoria": "📂 Categoría",
+    "subcategoria": "📁 Subcategoría",
+    "atributo": "🏷️ Atributo del producto",
+    "variante": "🔀 Variante (talla, color, medida...)",
+    "costo_unitario_origen": "💵 Costo unitario (moneda origen)",
+    "tasa_cambio": "💱 Tasa de cambio",
+    "costo_unitario_local": "💰 Costo unitario (moneda local)",
+    "costo_envio": "🚚 Costo logístico / envío",
+    "costo_total": "📦 Costo total de adquisición",
+    "precio_venta": "🏷️ Precio de venta",
+    "cantidad": "🔢 Cantidad / Unidades",
+    "cliente_nombre": "👤 Cliente",
+    "saldo_pendiente": "💳 Cuenta por cobrar / Deuda",
+    "abono_monto": "💵 Pago / Abono recibido",
+    "fecha_operacion": "📅 Fecha de operación",
+    "fecha_recepcion": "📦 Fecha de recepción",
+    "campo_calculado": "📊 Campo calculado (no importar)",
+}
+
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 1: CARGA Y STAGING
+# ══════════════════════════════════════════════════════════════════
 
 def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
     """
-    Etapa 1: Carga y análisis inicial sin escribir datos finales.
-    Filtra columnas vacías y guarda masivamente las filas raw en importaciones_staging.
+    Carga el archivo en staging. Filtra columnas vacías.
+    Inserción masiva con ejecutar_query_many (1 transacción).
     """
     if not filas_matriz or len(filas_matriz) < 1:
         return False, "El archivo no contiene filas de datos", None
@@ -40,6 +157,7 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
     batch_id = f"BATCH-{uuid.uuid4().hex[:12].upper()}"
     fecha_creacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # Filtrar columnas vacías del encabezado
     raw_headers = [str(c).strip() for c in filas_matriz[0]]
     headers_info = []
     headers = []
@@ -60,7 +178,7 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
             dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
         muestras.append(dict_row)
 
-    # Inserción masiva ultra-eficiente en staging (1 transacción en lote)
+    # Inserción masiva en staging (1 sola transacción)
     params_staging = []
     for idx, row in enumerate(filas_datos):
         dict_row = {}
@@ -68,14 +186,11 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
             dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
 
         params_staging.append((
-            negocio_id,
-            batch_id,
-            idx + 1,
+            negocio_id, batch_id, idx + 1,
             json.dumps(dict_row, ensure_ascii=False),
             fecha_creacion
         ))
 
-    from database import ejecutar_query_many
     sql_insert = """INSERT INTO importaciones_staging 
                     (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion)
                     VALUES (?, ?, ?, ?, 'PENDIENTE', ?)"""
@@ -91,12 +206,19 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
     return True, "Archivo cargado en staging con éxito", res_info
 
 
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 2: MOTOR HEURÍSTICO UNIVERSAL
+# ══════════════════════════════════════════════════════════════════
+
 def proponer_mapeo_heuristico(headers, negocio_id):
     """
-    Etapa 2: Motor heurístico contextual.
-    Evalúa nombres de encabezados y recupera memoria del tenant si existe.
+    Motor heurístico contextual universal.
+    Para cada encabezado, detecta:
+      - tipo semántico (concepto del sistema, atributo, variante, calculado)
+      - nombre del atributo/variante si aplica
+      - confianza y origen de la propuesta
     """
-    # Verificar si existe memoria guardada para este tenant en mapeos_importacion
+    # Recuperar memoria de mapeo previa del tenant
     mem_res = ejecutar_query(
         "SELECT estructura_columnas_json FROM mapeos_importacion WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
         (negocio_id,), fetch=True
@@ -108,63 +230,92 @@ def proponer_mapeo_heuristico(headers, negocio_id):
         except Exception:
             mapeo_guardado = {}
 
-
     propuesta = []
     for h in headers:
         h_norm = h.upper().strip()
-        
-        # 1. Chequeo de memoria guardada
+
+        # 1. Memoria guardada del tenant
         if h in mapeo_guardado:
+            campo_mem = mapeo_guardado[h]
             propuesta.append({
                 "columna_excel": h,
-                "campo_propuesto": mapeo_guardado[h],
+                "campo_propuesto": campo_mem,
                 "confianza": "ALTA",
                 "origen": "MEMORIA_TENANT",
-                "es_calculado": mapeo_guardado[h] in ["utilidad_calculada", "dias_transito"]
+                "nombre_atributo": h if campo_mem in ("atributo", "variante") else None,
+                "label": CAMPO_LABELS.get(campo_mem, campo_mem),
+                "es_calculado": campo_mem == "campo_calculado"
             })
             continue
 
-        # 2. Heurística contextual (Coincidencia Exacta Primero)
-        match_campo = "IGNORAR"
+        # 2. Coincidencia exacta con SEMANTIC_CORE
+        match_campo = None
         confianza = "NINGUNA"
-        es_calc = False
 
-        # Paso 2A: Coincidencia Exacta
-        for campo, sinonimos in DICTIONARY_HEURISTICS.items():
+        for campo, sinonimos in SEMANTIC_CORE.items():
             if h_norm in sinonimos:
                 match_campo = campo
                 confianza = "ALTA"
-                es_calc = campo in ["utilidad_calculada", "dias_transito"]
                 break
 
-        # Paso 2B: Coincidencia Parcial (solo para sinónimos de más de 2 caracteres)
-        if match_campo == "IGNORAR":
-            for campo, sinonimos in DICTIONARY_HEURISTICS.items():
+        # 3. Coincidencia parcial con SEMANTIC_CORE
+        if not match_campo:
+            for campo, sinonimos in SEMANTIC_CORE.items():
                 if any(len(s) > 2 and s in h_norm for s in sinonimos):
                     match_campo = campo
                     confianza = "MEDIA"
-                    es_calc = campo in ["utilidad_calculada", "dias_transito"]
                     break
+
+        # 4. Detectar si es una variante conocida
+        if not match_campo:
+            if h_norm in VARIANT_HINTS or any(v in h_norm for v in VARIANT_HINTS if len(v) > 2):
+                match_campo = "variante"
+                confianza = "ALTA"
+
+        # 5. Detectar si es un atributo conocido
+        if not match_campo:
+            if h_norm in ATTRIBUTE_HINTS or any(a in h_norm for a in ATTRIBUTE_HINTS if len(a) > 2):
+                match_campo = "atributo"
+                confianza = "MEDIA"
+
+        # 6. Si no se reconoce nada, proponer IGNORAR
+        if not match_campo:
+            match_campo = "IGNORAR"
+
+        nombre_attr = None
+        if match_campo in ("atributo", "variante"):
+            nombre_attr = h  # El nombre original de la columna se convierte en el nombre del atributo/variante
 
         propuesta.append({
             "columna_excel": h,
             "campo_propuesto": match_campo,
             "confianza": confianza,
             "origen": "HEURISTICA_SISTEMA",
-            "es_calculado": es_calc
+            "nombre_atributo": nombre_attr,
+            "label": CAMPO_LABELS.get(match_campo, match_campo),
+            "es_calculado": match_campo == "campo_calculado"
         })
-
 
     return propuesta
 
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 3: PREVALIDACIÓN BATCH (SIN N+1)
+# ══════════════════════════════════════════════════════════════════
+
 def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
     """
-    Etapa 3, 4 y 5:
-    - Validación matemática (US * Tasa = Costo COP).
-    - Conciliación a 2 niveles (Producto + Variante).
-    - Detector de diferencias (Diff sin sobrescritura silenciosa).
-    - Resumen de pre-validación semáforo.
+    Prevalidación batch optimizada:
+    - 1 consulta: staging completo
+    - 1 consulta: productos existentes
+    - 1 consulta: clientes existentes
+    - Conciliación en memoria
+    - 1 consulta batch: actualización del staging
     """
+    t_start = time.time()
+    print(f"[PREVALIDAR] Leyendo staging batch_id={batch_id}")
+
+    # ── Consulta 1: Staging completo ──
     registros_staging = ejecutar_query(
         "SELECT id, fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
         (batch_id, negocio_id), fetch=True
@@ -173,24 +324,37 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
     if not registros_staging:
         return False, "No se encontraron registros en la capa de staging", None
 
-    productos_existentes = ejecutar_query("SELECT id, nombre, precio, categoria, subcategoria, variante FROM productos WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+    print(f"[PREVALIDAR] Registros staging: {len(registros_staging)}")
+
+    # ── Consulta 2: Productos existentes (masivo) ──
+    productos_existentes = ejecutar_query(
+        "SELECT id, nombre, precio, categoria, subcategoria, variante FROM productos WHERE negocio_id=?",
+        (negocio_id,), fetch=True
+    ) or []
     prod_map = {}
     for p in productos_existentes:
         key = (p[1] or '').strip().lower()
         prod_map[key] = {"id": p[0], "nombre": p[1], "precio": p[2], "categoria": p[3], "subcategoria": p[4], "variante": p[5]}
 
-    clientes_existentes = ejecutar_query("SELECT id, nombre FROM clientes WHERE negocio_id=?", (negocio_id,), fetch=True) or []
-    cli_set = { (c[1] or '').strip().lower() for c in clientes_existentes }
+    print(f"[PREVALIDAR] Productos existentes cargados: {len(prod_map)}")
 
+    # ── Consulta 3: Clientes existentes (masivo) ──
+    clientes_existentes = ejecutar_query(
+        "SELECT id, nombre FROM clientes WHERE negocio_id=?",
+        (negocio_id,), fetch=True
+    ) or []
+    cli_set = {(c[1] or '').strip().lower() for c in clientes_existentes}
+
+    print(f"[PREVALIDAR] Clientes existentes cargados: {len(cli_set)}")
+
+    # ── Conciliación en memoria ──
     total_validos = 0
     total_advertencias = 0
     total_errores = 0
-
     productos_nuevos = []
-    variantes_nuevas = []
     diferencias_detectadas = []
-
     resumen_filas = []
+    update_params = []
 
     for s_id, fila_num, raw_json in registros_staging:
         raw_row = json.loads(raw_json)
@@ -202,56 +366,47 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         errs = []
         advs = []
 
-        # 1. EXIGENCIA DE CANTIDAD EXPLÍCITA
+        # ── Validación de cantidad ──
         cant_str = mapped_data.get('cantidad', '')
         try:
             cant_val = float(cant_str) if cant_str else 1.0
-        except:
+        except Exception:
             cant_val = 1.0
-            advs.append("No se identificó una columna explícita de cantidad; se asumió 1.0 unidad.")
+            advs.append("No se identificó cantidad explícita; se asumió 1.0 unidad.")
 
-        # 2. VALIDACIÓN MULTIMONEDA MATEMÁTICA (US * Tasa = Costo COP)
-        usd_str = mapped_data.get('costo_unitario_usd', '')
+        # ── Validación multimoneda universal (valor_origen × tasa = valor_destino) ──
+        origen_str = mapped_data.get('costo_unitario_origen', '')
         tasa_str = mapped_data.get('tasa_cambio', '')
-        cop_str = mapped_data.get('costo_unitario_cop', '')
+        local_str = mapped_data.get('costo_unitario_local', '')
 
-        if usd_str and tasa_str and cop_str:
+        if origen_str and tasa_str and local_str:
             try:
-                v_usd = float(usd_str.replace('$', '').replace(',', '').strip())
+                v_origen = float(origen_str.replace('$', '').replace(',', '').strip())
                 v_tasa = float(tasa_str.replace('$', '').replace(',', '').strip())
-                v_cop = float(cop_str.replace('$', '').replace(',', '').strip())
+                v_local = float(local_str.replace('$', '').replace(',', '').strip())
 
-                calc_cop = v_usd * v_tasa
-                if abs(calc_cop - v_cop) > 1.0:
-                    advs.append(f"Discrepancia en fórmula multimoneda: {v_usd} USD × {v_tasa} = {calc_cop:,.0f} COP, pero el Excel reporta {v_cop:,.0f} COP.")
+                calc_local = v_origen * v_tasa
+                if abs(calc_local - v_local) > 1.0:
+                    advs.append(
+                        f"Discrepancia multimoneda: {v_origen} × {v_tasa} = {calc_local:,.0f}, "
+                        f"pero el archivo reporta {v_local:,.0f}."
+                    )
             except Exception:
                 pass
 
-        # 3. CONCILIACIÓN A 2 NIVELES (Producto vs Variante)
+        # ── Conciliación de producto (solo nombre, sin concatenar atributos) ──
         nombre_prod = (mapped_data.get('nombre_producto') or '').strip()
-        equipo = (mapped_data.get('jugador_edicion') or mapped_data.get('tipo_producto') or '').strip()
-        if equipo:
-            nombre_full = f"{nombre_prod} {equipo}".strip()
-        else:
-            nombre_full = nombre_prod
+        key_p = nombre_prod.lower()
 
-        talla = (mapped_data.get('variante_talla') or '').strip()
-        key_p = nombre_full.lower()
-
-        if nombre_full:
+        if nombre_prod:
             if key_p in prod_map:
                 p_exist = prod_map[key_p]
-                # Level 2 check: Variante
-                if talla and (p_exist['variante'] or '').lower() != talla.lower():
-                    variantes_nuevas.append({"producto_padre": p_exist['nombre'], "variante": talla})
-                    advs.append(f"Producto '{p_exist['nombre']}' existe. Se registrará la nueva variante '{talla}'.")
-
-                # Detector de Diferencias (No sobrescritura silenciosa)
-                precio_imp_str = mapped_data.get('precio_venta_cop', '')
+                # Detector de diferencias de precio
+                precio_imp_str = mapped_data.get('precio_venta', '')
                 if precio_imp_str:
                     try:
                         precio_imp = float(precio_imp_str.replace('$', '').replace(',', '').strip())
-                        if abs(p_exist['precio'] - precio_imp) > 0.01:
+                        if p_exist['precio'] and abs(p_exist['precio'] - precio_imp) > 0.01:
                             diferencias_detectadas.append({
                                 "fila": fila_num,
                                 "producto": p_exist['nombre'],
@@ -259,12 +414,16 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                                 "existente": p_exist['precio'],
                                 "importado": precio_imp
                             })
-                            advs.append(f"Diferencia de precio detectada para '{p_exist['nombre']}': Actual ${p_exist['precio']:,.0f} vs Importado ${precio_imp:,.0f}.")
-                    except:
+                            advs.append(
+                                f"Diferencia de precio: '{p_exist['nombre']}' "
+                                f"actual ${p_exist['precio']:,.0f} vs importado ${precio_imp:,.0f}."
+                            )
+                    except Exception:
                         pass
             else:
-                productos_nuevos.append({"nombre": nombre_full, "variante": talla})
+                productos_nuevos.append({"nombre": nombre_prod})
 
+        # ── Clasificación del registro ──
         estado_row = "VALIDO"
         if errs:
             estado_row = "ERROR"
@@ -275,11 +434,13 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         else:
             total_validos += 1
 
-        # Actualizar staging
-        ejecutar_query(
-            "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
-            (estado_row, json.dumps(errs, ensure_ascii=False), json.dumps(advs, ensure_ascii=False), s_id)
-        )
+        # Acumular para batch update
+        update_params.append((
+            estado_row,
+            json.dumps(errs, ensure_ascii=False),
+            json.dumps(advs, ensure_ascii=False),
+            s_id
+        ))
 
         resumen_filas.append({
             "fila": fila_num,
@@ -289,6 +450,19 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             "advertencias": advs
         })
 
+    # ── Consulta 4: Batch update del staging ──
+    t_conciliacion = time.time() - t_start
+    print(f"[PREVALIDAR] Conciliación en memoria completada en {t_conciliacion:.3f}s")
+
+    ejecutar_query_many(
+        "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
+        update_params
+    )
+
+    t_total = time.time() - t_start
+    print(f"[PREVALIDAR] Batch update completado. Tiempo total: {t_total:.3f}s")
+    print(f"[PREVALIDAR] Resultado: validos={total_validos}, advertencias={total_advertencias}, errores={total_errores}")
+
     resumen = {
         "batch_id": batch_id,
         "total_registros": len(registros_staging),
@@ -296,16 +470,26 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         "advertencias": total_advertencias,
         "errores": total_errores,
         "productos_nuevos": productos_nuevos,
-        "variantes_nuevas": variantes_nuevas,
         "diferencias_detectadas": diferencias_detectadas,
-        "detalles_filas": resumen_filas[:50]
+        "detalles_filas": resumen_filas[:50],
+        "tiempo_ms": int(t_total * 1000)
     }
 
     return True, "Prevalidación completada", resumen
 
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 4: PROCESAMIENTO APROBADO (DEUDA TÉCNICA: Adaptar a modelo universal)
+# ══════════════════════════════════════════════════════════════════
+# NOTA: Esta función todavía consume los campos antiguos del modelo
+# (jugador_edicion, variante_talla). Debe ser adaptada al modelo
+# semántico universal (atributo, variante, categoria) en una
+# iteración posterior, una vez que Carga → Mapeo → Prevalidación
+# estén estables.
+
 def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None):
     """
-    Etapa 6: Confirmación explícita e inserción transaccional multi-módulo.
+    Confirmación explícita e inserción transaccional multi-módulo.
     Alimenta productos, inventario, compras/lotes, ventas y cartera.
     Guarda memoria de mapeo y genera auditoría con undo_token.
     """
@@ -330,39 +514,69 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             if campo_target and campo_target != "IGNORAR":
                 mapped[campo_target] = raw_row.get(col_excel, "").strip()
 
+        # Compatibilidad temporal: mapear campos universales a los que
+        # espera la lógica existente (deuda técnica explícita)
         nombre_prod = (mapped.get('nombre_producto') or '').strip()
-        jugador = (mapped.get('jugador_edicion') or mapped.get('tipo_producto') or '').strip()
-        talla = (mapped.get('variante_talla') or '').strip()
-        full_prod = f"{nombre_prod} {jugador}".strip() if jugador else nombre_prod
+        atributo = (mapped.get('atributo') or '').strip()
+        variante = (mapped.get('variante') or '').strip()
 
-        if not full_prod:
+        if not nombre_prod:
             continue
 
         try:
-            precio_v = float(str(mapped.get('precio_venta_cop', 0)).replace('$', '').replace(',', '').strip())
-        except:
+            precio_v = float(str(mapped.get('precio_venta', 0)).replace('$', '').replace(',', '').strip())
+        except Exception:
             precio_v = 0.0
 
         try:
-            costo_cop = float(str(mapped.get('costo_unitario_cop', 0)).replace('$', '').replace(',', '').strip())
-        except:
-            costo_cop = 0.0
+            costo_local = float(str(mapped.get('costo_unitario_local', 0)).replace('$', '').replace(',', '').strip())
+        except Exception:
+            costo_local = 0.0
 
-        # 1. REGLA DE PRODUCTO / VARIANTE
-        p_res = ejecutar_query("SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (full_prod, negocio_id), fetch=True)
+        # 1. PRODUCTO (nombre limpio, sin concatenar atributos)
+        p_res = ejecutar_query(
+            "SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?",
+            (nombre_prod, negocio_id), fetch=True
+        )
         if p_res and len(p_res) > 0 and len(p_res[0]) > 0:
             pid = p_res[0][0]
-            # Si el usuario autorizó actualizar precio en el diff detector
             if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
                 ejecutar_query("UPDATE productos SET precio=? WHERE id=? AND negocio_id=?", (precio_v, pid, negocio_id))
         else:
+            categoria = (mapped.get('categoria') or '').strip()
+            subcategoria = (mapped.get('subcategoria') or '').strip()
             ejecutar_query(
-                "INSERT INTO productos (negocio_id, nombre, precio, tipo_producto, variante) VALUES (?, ?, ?, 'TRANSFORMADO', ?)",
-                (negocio_id, full_prod, precio_v, talla)
+                "INSERT INTO productos (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria, variante) VALUES (?, ?, ?, 'TRANSFORMADO', ?, ?, ?)",
+                (negocio_id, nombre_prod, precio_v, categoria or None, subcategoria or None, variante or None)
             )
-            pid_r = ejecutar_query("SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (full_prod, negocio_id), fetch=True)
+            pid_r = ejecutar_query(
+                "SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1",
+                (nombre_prod, negocio_id), fetch=True
+            )
             pid = pid_r[0][0] if (pid_r and len(pid_r) > 0 and len(pid_r[0]) > 0) else 1
             creados_info["productos"].append(pid)
+
+            # Guardar atributos del producto en tabla separada
+            if atributo:
+                # El nombre del atributo proviene de la columna Excel original
+                for col_excel, campo_target in mapeo_usuario.items():
+                    if campo_target == "atributo":
+                        val = raw_row.get(col_excel, "").strip()
+                        if val:
+                            ejecutar_query(
+                                "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, 'ATRIBUTO')",
+                                (negocio_id, pid, col_excel, val)
+                            )
+
+            if variante:
+                for col_excel, campo_target in mapeo_usuario.items():
+                    if campo_target == "variante":
+                        val = raw_row.get(col_excel, "").strip()
+                        if val:
+                            ejecutar_query(
+                                "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, 'VARIANTE')",
+                                (negocio_id, pid, col_excel, val)
+                            )
 
         # 2. CARTERA Y CLIENTE
         cli_nombre = (mapped.get('cliente_nombre') or '').strip()
@@ -405,10 +619,13 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
     return True, f"¡Importación exitosa! Se procesaron {procesados} registros.", {"undo_token": undo_token, "resumen": creados_info}
 
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 5: REVERSIÓN ASISTIDA
+# ══════════════════════════════════════════════════════════════════
+
 def revertir_importacion(undo_token, negocio_id, usuario_id):
-    """
-    Etapa 7: Reversión asistida respetando la integridad de datos posteriores.
-    """
+    """Reversión asistida respetando la integridad de datos posteriores."""
     audit = ejecutar_query(
         "SELECT id, creados_json, estado FROM auditoria_importaciones WHERE undo_token=? AND negocio_id=?",
         (undo_token, negocio_id), fetch=True
@@ -424,11 +641,9 @@ def revertir_importacion(undo_token, negocio_id, usuario_id):
     creados = json.loads(creados_json) if creados_json else {}
     ventas_creadas = creados.get('ventas', [])
 
-    # Verificar si las ventas creadas tienen abonos o movimientos posteriores
     for vid in ventas_creadas:
         ventas_service.eliminar_venta(vid, negocio_id, usuario_id)
 
-    # Marcar auditoría como revertida
     ejecutar_query("UPDATE auditoria_importaciones SET estado='REVERTIDO' WHERE id=?", (a_id,))
 
     return True, f"Importación {undo_token} revertida exitosamente. Se restituyó la información."

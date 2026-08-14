@@ -817,26 +817,31 @@
         let currentUndoToken = null;
 
         const CAMPO_OPCIONES = [
-            { value: "IGNORAR", label: "🚫 Ignorar / No importar" },
-            { value: "nombre_producto", label: "👕 Nombre / Identidad del Producto" },
-            { value: "tipo_producto", label: "🏷️ Tipo / Categoría de Prenda" },
-            { value: "jugador_edicion", label: "⚽ Jugador / Edición Especial" },
-            { value: "variante_talla", label: "📏 Talla / Variante (L, XL, etc)" },
-            { value: "costo_unitario_usd", label: "💵 Costo Unitario (USD)" },
-            { value: "tasa_cambio", label: "💱 Tasa de Cambio (USD -> COP)" },
-            { value: "costo_unitario_cop", label: "🇨🇴 Costo Unitario (COP)" },
-            { value: "costo_envio_cop", label: "🚚 Costo de Envío / Logístico (COP)" },
-            { value: "costo_total_cop", label: "📦 Costo Total de Adquisición" },
-            { value: "precio_venta_cop", label: "🏷️ Precio de Venta (COP)" },
-            { value: "cantidad", label: "🔢 Cantidad / Unidades" },
-            { value: "cliente_nombre", label: "👤 Nombre del Cliente" },
-            { value: "saldo_pendiente", label: "💳 Cuentas por Cobrar / Deuda" },
-            { value: "abono_monto", label: "💵 Pago / Abono Recibido" },
-            { value: "fecha_operacion", label: "📅 Fecha de Operación / Compra" },
-            { value: "fecha_llegada", label: "📦 Fecha de Recepción / Llegada" },
-            { value: "utilidad_calculada", label: "📊 Utilidad (Campo Calculado)" },
-            { value: "dias_transito", label: "⏱️ Días en Tránsito (Calculado)" }
+            { value: "IGNORAR",              label: "🚫 No importar" },
+            { value: "nombre_producto",      label: "📦 Nombre del producto o servicio" },
+            { value: "codigo_sku",           label: "🔖 Código / SKU / Referencia" },
+            { value: "categoria",            label: "📂 Categoría" },
+            { value: "subcategoria",         label: "📁 Subcategoría" },
+            { value: "atributo",             label: "🏷️ Atributo del producto" },
+            { value: "variante",             label: "🔀 Variante (talla, color, medida...)" },
+            { value: "costo_unitario_origen",label: "💵 Costo unitario (moneda origen)" },
+            { value: "tasa_cambio",          label: "💱 Tasa de cambio" },
+            { value: "costo_unitario_local", label: "💰 Costo unitario (moneda local)" },
+            { value: "costo_envio",          label: "🚚 Costo logístico / envío" },
+            { value: "costo_total",          label: "📦 Costo total de adquisición" },
+            { value: "precio_venta",         label: "🏷️ Precio de venta" },
+            { value: "cantidad",             label: "🔢 Cantidad / Unidades" },
+            { value: "cliente_nombre",       label: "👤 Cliente" },
+            { value: "saldo_pendiente",      label: "💳 Cuenta por cobrar / Deuda" },
+            { value: "abono_monto",          label: "💵 Pago / Abono recibido" },
+            { value: "fecha_operacion",      label: "📅 Fecha de operación" },
+            { value: "fecha_recepcion",      label: "📦 Fecha de recepción" },
+            { value: "campo_calculado",      label: "📊 Campo calculado (no importar)" }
         ];
+
+        // Mapa para convertir value a label humanizada
+        const CAMPO_LABEL_MAP = {};
+        CAMPO_OPCIONES.forEach(o => CAMPO_LABEL_MAP[o.value] = o.label);
 
         async function onFileSelected(input) {
             if (!input.files || input.files.length === 0) return;
@@ -868,9 +873,18 @@
             tbody.innerHTML = currentPropuestaMapeo.map((item, idx) => {
                 const confBadge = item.confianza === 'ALTA' 
                     ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟢 Alta Confianza</span>'
-                    : '<span style="background: rgba(245,158,11,0.15); color: #f59e0b; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟡 Revisar</span>';
+                    : (item.confianza === 'MEDIA'
+                        ? '<span style="background: rgba(245,158,11,0.15); color: #f59e0b; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟡 Revisar</span>'
+                        : '<span style="background: rgba(239,68,68,0.1); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🔴 Sin identificar</span>');
                 
                 const origLbl = item.origen === 'MEMORIA_TENANT' ? ' 🧠 (Memoria Empresa)' : '';
+
+                // Interpretación humanizada
+                let interpText = item.label || CAMPO_LABEL_MAP[item.campo_propuesto] || item.campo_propuesto;
+                if (item.nombre_atributo && (item.campo_propuesto === 'atributo' || item.campo_propuesto === 'variante')) {
+                    const tipoLbl = item.campo_propuesto === 'atributo' ? 'Atributo' : 'Variante';
+                    interpText = `${tipoLbl} → <strong>${item.nombre_atributo}</strong>`;
+                }
 
                 const selectOptions = CAMPO_OPCIONES.map(opt => 
                     `<option value="${opt.value}" ${opt.value === item.campo_propuesto ? 'selected' : ''}>${opt.label}</option>`
@@ -879,7 +893,7 @@
                 return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
                         <td style="padding: 10px; font-weight: 700; color: white;">${item.columna_excel}</td>
-                        <td style="padding: 10px; color: #38bdf8;">${item.campo_propuesto}</td>
+                        <td style="padding: 10px; color: #38bdf8; font-size: 0.85rem;">${interpText}</td>
                         <td style="padding: 10px;">${confBadge}${origLbl}</td>
                         <td style="padding: 10px;">
                             <select id="map-sel-${idx}" data-col="${item.columna_excel}" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 6px; border-radius: 6px; font-size: 0.8rem;">
@@ -908,8 +922,10 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ batch_id: currentBatchId, mapeo_usuario: mapeo })
                 });
-                const data = await res.json();
-                if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
+                let data = {};
+                try { data = await res.json(); } catch(e_json) { data = { error: `Error HTTP ${res.status} del servidor.` }; }
+
+                if (!res.ok) { alert(`❌ Error: ${data.error || 'No se pudo completar la prevalidación.'}`); return; }
 
                 const r = data.resumen;
                 document.getElementById('semaforo-cards').innerHTML = `
@@ -935,7 +951,7 @@
 
                 document.getElementById('wiz-paso2').style.display = 'none';
                 document.getElementById('wiz-paso3').style.display = 'block';
-            } catch(e) { alert("Error de conexión durante la pre-validación."); }
+            } catch(e) { alert("Error de conexión durante la pre-validación: " + e.message); }
         }
 
         async function procesarImportacionFinal() {

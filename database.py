@@ -55,7 +55,8 @@ def init_db():
             f"CREATE TABLE IF NOT EXISTS costos_variables (id {id_t}, negocio_id INTEGER NOT NULL, concepto TEXT NOT NULL, tipo_calculo TEXT DEFAULT 'POR_UNIDAD', base_calculo TEXT DEFAULT 'COSTO', valor REAL NOT NULL, estado TEXT DEFAULT 'ACTIVO', observaciones TEXT)",
             f"CREATE TABLE IF NOT EXISTS importaciones_staging (id {id_t}, negocio_id INTEGER NOT NULL, batch_id TEXT NOT NULL, fila_num INTEGER, datos_raw_json TEXT NOT NULL, propuesta_mapeo_json TEXT, estado_validacion TEXT DEFAULT 'PENDIENTE', errores_json TEXT, advertencias_json TEXT, fecha_creacion TEXT)",
             f"CREATE TABLE IF NOT EXISTS mapeos_importacion (id {id_t}, negocio_id INTEGER NOT NULL, nombre_mapeo TEXT, estructura_columnas_json TEXT NOT NULL, fecha_creacion TEXT)",
-            f"CREATE TABLE IF NOT EXISTS auditoria_importaciones (id {id_t}, negocio_id INTEGER NOT NULL, usuario_id INTEGER NOT NULL, fecha TEXT NOT NULL, undo_token TEXT UNIQUE NOT NULL, nombre_archivo TEXT NOT NULL, total_registros INTEGER, creados_json TEXT, modificados_json TEXT, estado TEXT DEFAULT 'COMPLETADO')"
+            f"CREATE TABLE IF NOT EXISTS auditoria_importaciones (id {id_t}, negocio_id INTEGER NOT NULL, usuario_id INTEGER NOT NULL, fecha TEXT NOT NULL, undo_token TEXT UNIQUE NOT NULL, nombre_archivo TEXT NOT NULL, total_registros INTEGER, creados_json TEXT, modificados_json TEXT, estado TEXT DEFAULT 'COMPLETADO')",
+            f"CREATE TABLE IF NOT EXISTS producto_atributos (id {id_t}, negocio_id INTEGER NOT NULL, producto_id INTEGER NOT NULL, nombre_atributo TEXT NOT NULL, valor_atributo TEXT, tipo TEXT DEFAULT 'ATRIBUTO')"
         ]
 
         for sql in tablas_sql:
