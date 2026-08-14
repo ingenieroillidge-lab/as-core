@@ -185,8 +185,8 @@
                     <button onclick="toggleTransferDetails()" class="btn-pay btn-transfer">
                         📄 Ver Datos de Cuenta Nequi/Bancolombia
                     </button>
-                    <a href="https://wa.me/573000000000?text=Hola%20equipo%20AS%20Platform,%20quiero%20confirmar%20el%20pago%20PRO%20de%20mi%20empresa%20{{ negocio_nombre }}" target="_blank" class="btn-pay btn-wa">
-                        💬 Notificar por WhatsApp
+                    <a href="https://wa.me/573222174777?text=Hola%20equipo%20AS%20Platform,%20quiero%20confirmar%20el%20pago%20PRO%20de%20mi%20empresa%20{{ negocio_nombre }}" target="_blank" class="btn-pay btn-wa">
+                        💬 Notificar por WhatsApp (+57 322 217 4777)
                     </a>
                 </div>
             </div>
@@ -196,14 +196,14 @@
                 <h4 style="margin: 0 0 1rem 0; color: var(--accent-green);">🏦 Cuentas Oficiales de Recarga</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.85rem; color: #cbd5e1;">
                     <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px;">
-                        <strong style="color: #fff;">📱 Nequi / Daviplata</strong><br>
-                        Número: <strong>300 000 0000</strong><br>
+                        <strong style="color: #fff;">📱 Nequi / Llave Bre-B</strong><br>
+                        Número: <strong style="color: #38bdf8; font-size: 1rem;">322 217 4777</strong><br>
                         Titular: Samuel Illidge / AS Platform
                     </div>
                     <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px;">
                         <strong style="color: #fff;">🏦 Bancolombia Ahorros</strong><br>
-                        Número: <strong>912-000000-00</strong><br>
-                        Titular: AS Solutions / SDILLIDGE
+                        Número: <strong style="color: #38bdf8; font-size: 1rem;">09100004777</strong><br>
+                        Titular: Samuel Illidge / AS Solutions
                     </div>
                 </div>
 
@@ -226,6 +226,9 @@
         function toggleTransferDetails() {
             const el = document.getElementById('transfer-details');
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            if (el.style.display === 'block') {
+                el.scrollIntoView({ behavior: 'smooth' });
+            }
         }
 
         async function iniciarPagoWompi() {
@@ -234,7 +237,6 @@
             if (data.url && !data.url.includes('TU_LINK_AQUI')) {
                 window.location.href = data.url;
             } else {
-                alert('💳 Redirigiendo al sistema de pago seguro... Si requieres asistencia rápida, puedes notificar la transferencia directamente por WhatsApp.');
                 toggleTransferDetails();
             }
         }
