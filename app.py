@@ -1306,30 +1306,58 @@ def api_importador_cargar():
     filas_matriz = []
 
     try:
-        if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            wb = openpyxl.load_workbook(file.stream, data_only=True)
-            ws = wb.active
-            for r in ws.iter_rows(values_only=True):
-                if r and any(cell is not None for cell in r):
-                    filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
+        # Asegurar verificación de tablas
+        crear_tablas()
+
+        file_bytes = file.read()
+        if not file_bytes:
+            return jsonify({"error": "El archivo adjuntado está vacío"}), 400
+
+        if filename.endswith('.xlsx') or filename.endswith('.xlsm'):
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                ws = wb.active
+                for r in ws.iter_rows(values_only=True):
+                    if r and any(cell is not None for cell in r):
+                        filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
+            except Exception as e_xlsx:
+                return jsonify({"error": f"No se pudo leer el archivo Excel (.xlsx): {str(e_xlsx)}"}), 400
+
+        elif filename.endswith('.xls'):
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                ws = wb.active
+                for r in ws.iter_rows(values_only=True):
+                    if r and any(cell is not None for cell in r):
+                        filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
+            except Exception:
+                return jsonify({"error": "Los archivos en formato antiguo Excel (.xls) no se pueden procesar directamente. Por favor abre tu archivo en Excel, selecciona 'Guardar como' -> 'Libro de Excel (.xlsx)' o '.csv' e inténtalo de nuevo."}), 400
+
         else:
-            content = file.stream.read().decode('utf-8-sig', errors='ignore')
-            first_line = content.splitlines()[0] if content.splitlines() else ''
-            delimiter = ';' if ';' in first_line else (',' if ',' in first_line else '\t')
-            reader = csv.reader(io.StringIO(content), delimiter=delimiter)
-            filas_matriz = list(reader)
+            try:
+                content = file_bytes.decode('utf-8-sig', errors='ignore')
+                first_line = content.splitlines()[0] if content.splitlines() else ''
+                delimiter = ';' if ';' in first_line else (',' if ',' in first_line else '\t')
+                reader = csv.reader(io.StringIO(content), delimiter=delimiter)
+                filas_matriz = list(reader)
+            except Exception as e_csv:
+                return jsonify({"error": f"No se pudo interpretar el archivo CSV: {str(e_csv)}"}), 400
+
+        if not filas_matriz or len(filas_matriz) < 1:
+            return jsonify({"error": "El archivo no contiene filas de información para importar."}), 400
 
         ok, msg, res_info = importador_service.crear_lote_staging(nid, file.filename, filas_matriz)
-        if not ok:
-            return jsonify({"error": msg}), 400
+        if not ok or not res_info:
+            return jsonify({"error": msg or "Error al crear lote en la capa de staging"}), 400
 
-        propuesta = importador_service.proponer_mapeo_heuristico(res_info['headers'], nid)
+        propuesta = importador_service.proponer_mapeo_heuristico(res_info.get('headers', []), nid)
         return jsonify({"message": msg, "info": res_info, "propuesta_mapeo": propuesta})
     except Exception as e:
         import traceback
         traceback.print_exc()
         print(f"[IMPORTADOR ERROR] {e}")
-        return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
+        return jsonify({"error": f"Error interno al procesar el archivo: {str(e)}"}), 500
+
 
 
 @app.route('/api/importador/prevalidar', methods=['POST'])
