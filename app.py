@@ -287,6 +287,54 @@ def configuracion_page():
 def upgrade_page():
     return render_template('upgrade_needed.html', feature="Análisis Avanzado")
 
+@app.route('/pago/wompi')
+@login_required
+def pago_wompi_page():
+    nid = session['negocio_id']
+    w_url_res = ejecutar_query("SELECT valor FROM configuracion_global WHERE clave='wompi_checkout_url'", fetch=True)
+    if w_url_res and w_url_res[0][0] and 'TU_LINK_AQUI' not in w_url_res[0][0]:
+        return redirect(w_url_res[0][0])
+    
+    neg = ejecutar_query("SELECT nombre FROM negocios WHERE id=?", (nid,), fetch=True)
+    n_nombre = neg[0][0] if neg else "Tu Empresa"
+    return render_template('pago_wompi.html', negocio_nombre=n_nombre, session=session)
+
+@app.route('/api/wompi/checkout_link')
+@login_required
+def get_wompi_checkout_link():
+    w_url_res = ejecutar_query("SELECT valor FROM configuracion_global WHERE clave='wompi_checkout_url'", fetch=True)
+    url = w_url_res[0][0] if w_url_res and w_url_res[0][0] else ""
+    return jsonify({"url": url})
+
+@app.route('/api/pago/notificar', methods=['POST'])
+@login_required
+def notificar_pago_manual():
+    nid = session['negocio_id']
+    d = request.json or {}
+    ref = (d.get('referencia') or '').strip()
+    monto = float(d.get('monto', 24900))
+    if not ref:
+        return jsonify({"error": "La referencia de pago es requerida"}), 400
+        
+    hoy_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sub_res = ejecutar_query("SELECT id FROM suscripciones WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (nid,), fetch=True)
+    sub_id = sub_res[0][0] if sub_res else None
+    
+    ejecutar_query(
+        """INSERT INTO pagos_wompi 
+           (negocio_id, suscripcion_id, referencia_wompi, transaction_id, monto, concepto, estado, metodo_pago, fecha)
+           VALUES (?, ?, ?, ?, ?, 'RENOVACION_PRO', 'PENDIENTE_VERIFICACION', 'TRANSFERENCIA_MANUAL', ?)""",
+        (nid, sub_id, ref, f"MANUAL-{ref}", monto, hoy_str)
+    )
+    
+    # Crear notificación para Super Admin
+    ejecutar_query(
+        "INSERT INTO notificaciones (negocio_id, fecha, tipo, titulo, mensaje) VALUES (?, ?, 'PAGO_REPORTADO', 'Pago Reportado por Cliente', ?)",
+        (nid, hoy_str, f"La empresa ID #{nid} ha reportado el pago de renovación PRO con referencia: {ref}")
+    )
+    
+    return jsonify({"message": "Notificación registrada con éxito"})
+
 @app.route('/super-admin')
 @login_required
 @super_required

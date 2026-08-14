@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pasarela de Pago — AS Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #050714;
+            --card-bg: #0c0f24;
+            --border-color: rgba(56, 189, 248, 0.2);
+            --accent-cyan: #38bdf8;
+            --accent-purple: #a855f7;
+            --accent-green: #34d399;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        nav {
+            background: rgba(12, 15, 36, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: #fff;
+        }
+
+        .logo-sub {
+            font-size: 0.65rem;
+            color: var(--accent-cyan);
+            letter-spacing: 0.5px;
+            display: block;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 3rem auto;
+            padding: 0 1.5rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .checkout-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .plan-summary {
+            background: rgba(56, 189, 248, 0.05);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .payment-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 640px) {
+            .payment-methods { grid-template-columns: 1fr; }
+        }
+
+        .method-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .method-card:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(56, 189, 248, 0.03);
+        }
+
+        .btn-pay {
+            display: block;
+            width: 100%;
+            padding: 0.9rem;
+            border-radius: 12px;
+            font-weight: 800;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            box-sizing: border-box;
+            border: none;
+            font-size: 0.95rem;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+
+        .btn-pay:hover { transform: translateY(-2px); opacity: 0.95; }
+        .btn-wompi { background: linear-gradient(90deg, #38bdf8, #a855f7); color: #000; }
+        .btn-transfer { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.4); }
+        .btn-wa { background: #25d366; color: #000; margin-top: 0.75rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">
+            AS PLATFORM
+            <span class="logo-sub">⚡ AS PLATFORM BY SDILLIDGE</span>
+        </div>
+        <a href="/" style="color: #94a3b8; text-decoration: none; font-size: 0.85rem;">← Volver al Inicio</a>
+    </nav>
+
+    <div class="container">
+        <div class="checkout-card">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 2.5rem;">💳</div>
+                <div>
+                    <h1 style="font-family: 'Outfit', sans-serif; font-size: 1.75rem; margin: 0; color: #fff;">Suscripción AS Platform PRO</h1>
+                    <p style="color: #94a3b8; margin: 0.25rem 0 0 0; font-size: 0.85rem;">Activación y renovación de licencia para <strong>{{ negocio_nombre }}</strong></p>
+                </div>
+            </div>
+
+            <div class="plan-summary">
+                <div>
+                    <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Plan Seleccionado</span>
+                    <h3 style="margin: 0.2rem 0 0 0; color: #38bdf8; font-family: 'Outfit', sans-serif;">Plan Crecimiento PRO</h3>
+                    <p style="font-size: 0.8rem; color: #cbd5e1; margin: 4px 0 0 0;">Incluye MCU, Punto de Equilibrio, Análisis Financiero, Lotes y Cartera Ilimitados.</p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.8rem; font-weight: 900; color: #fff; font-family: 'Outfit', sans-serif;">$24.900 <span style="font-size: 0.8rem; color: #94a3b8; font-weight: 400;">COP / mes</span></div>
+                    <span style="font-size: 0.75rem; color: var(--accent-green); background: rgba(52,211,153,0.1); padding: 2px 8px; border-radius: 12px; font-weight: 700;">Garantía de Activación Inmediata</span>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 2rem; color: #fff; font-size: 1.1rem;">Selecciona tu Medio de Pago</h3>
+
+            <div class="payment-methods">
+                <!-- METODO 1: WOMPI CHECKOUT -->
+                <div class="method-card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <h4 style="margin: 0; color: #38bdf8;">💳 Pasarela Wompi</h4>
+                        <span style="font-size: 0.7rem; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 2px 8px; border-radius: 10px; font-weight: 700;">PSE / Tarjetas / Nequi</span>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4; margin-bottom: 1.25rem;">
+                        Procesa tu pago seguro en línea mediante la pasarela bancaria oficial de Bancolombia Wompi.
+                    </p>
+                    <button onclick="iniciarPagoWompi()" class="btn-pay btn-wompi">
+                        🚀 Pagar $24.900 con Wompi
+                    </button>
+                </div>
+
+                <!-- METODO 2: TRANSFERENCIA / NEQUI / WHATSAPP -->
+                <div class="method-card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <h4 style="margin: 0; color: var(--accent-green);">📱 Transferencia / Soporte</h4>
+                        <span style="font-size: 0.7rem; background: rgba(52,211,153,0.15); color: var(--accent-green); padding: 2px 8px; border-radius: 10px; font-weight: 700;">Directo</span>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4; margin-bottom: 1.25rem;">
+                        Realiza transferencia a Nequi / Bancolombia o notifica la renovación directamente con nuestro equipo.
+                    </p>
+                    <button onclick="toggleTransferDetails()" class="btn-pay btn-transfer">
+                        📄 Ver Datos de Cuenta Nequi/Bancolombia
+                    </button>
+                    <a href="https://wa.me/573000000000?text=Hola%20equipo%20AS%20Platform,%20quiero%20confirmar%20el%20pago%20PRO%20de%20mi%20empresa%20{{ negocio_nombre }}" target="_blank" class="btn-pay btn-wa">
+                        💬 Notificar por WhatsApp
+                    </a>
+                </div>
+            </div>
+
+            <!-- DETALLES DE TRANSFERENCIA (OCULTO POR DEFECTO) -->
+            <div id="transfer-details" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.5rem; margin-top: 1.5rem;">
+                <h4 style="margin: 0 0 1rem 0; color: var(--accent-green);">🏦 Cuentas Oficiales de Recarga</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.85rem; color: #cbd5e1;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px;">
+                        <strong style="color: #fff;">📱 Nequi / Daviplata</strong><br>
+                        Número: <strong>300 000 0000</strong><br>
+                        Titular: Samuel Illidge / AS Platform
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px;">
+                        <strong style="color: #fff;">🏦 Bancolombia Ahorros</strong><br>
+                        Número: <strong>912-000000-00</strong><br>
+                        Titular: AS Solutions / SDILLIDGE
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 1rem;">
+                    <label style="font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 6px;">Número de Comprobante / Referencia de Pago</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="pago-ref" placeholder="Ej: REF-983421" style="flex: 1; padding: 8px; background: #000; border: 1px solid #333; border-radius: 8px; color: #fff;">
+                        <button onclick="notificarPagoServidor()" style="background: #38bdf8; color: #000; font-weight: 800; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                            Notificar
+                        </button>
+                    </div>
+                    <div id="msg-pago-ref" style="font-size: 0.8rem; margin-top: 6px; display: none;"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function toggleTransferDetails() {
+            const el = document.getElementById('transfer-details');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function iniciarPagoWompi() {
+            const res = await fetch('/api/wompi/checkout_link');
+            const data = await res.json();
+            if (data.url && !data.url.includes('TU_LINK_AQUI')) {
+                window.location.href = data.url;
+            } else {
+                alert('💳 Redirigiendo al sistema de pago seguro... Si requieres asistencia rápida, puedes notificar la transferencia directamente por WhatsApp.');
+                toggleTransferDetails();
+            }
+        }
+
+        async function notificarPagoServidor() {
+            const ref = document.getElementById('pago-ref').value.trim();
+            const msg = document.getElementById('msg-pago-ref');
+            if (!ref) { alert('Ingresa el número de referencia'); return; }
+            msg.style.display = 'block';
+            msg.style.color = '#38bdf8';
+            msg.textContent = 'Enviando notificación al Super Admin...';
+
+            const res = await fetch('/api/pago/notificar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ referencia: ref, monto: 24900 })
+            });
+            if (res.ok) {
+                msg.style.color = '#34d399';
+                msg.textContent = '✅ Notificación enviada. Tu cuenta será verificada e independizada inmediatamente.';
+            } else {
+                msg.style.color = '#fb7185';
+                msg.textContent = 'Error al enviar notificación.';
+            }
+        }
+    </script>
+</body>
+</html>
