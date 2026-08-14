@@ -1297,15 +1297,18 @@ def importar_google_sheets():
 @login_required
 def api_importador_cargar():
     import openpyxl
-    nid = session['negocio_id']
-    if 'file' not in request.files:
-        return jsonify({"error": "No se adjuntó ningún archivo"}), 400
-
-    file = request.files['file']
-    filename = (file.filename or '').lower()
-    filas_matriz = []
-
     try:
+        nid = session.get('negocio_id')
+        if not nid:
+            return jsonify({"error": "Sesión inválida o expirada. Por favor inicia sesión nuevamente."}), 401
+
+        if 'file' not in request.files:
+            return jsonify({"error": "No se adjuntó ningún archivo"}), 400
+
+        file = request.files['file']
+        filename = (file.filename or '').lower()
+        filas_matriz = []
+
         # Asegurar verificación de tablas
         crear_tablas()
 
@@ -1357,6 +1360,7 @@ def api_importador_cargar():
         tb = traceback.format_exc()
         print(f"[IMPORTADOR ERROR TRACEBACK]\n{tb}")
         return jsonify({"error": f"Error interno al procesar el archivo ({type(e).__name__}): {str(e)}"}), 500
+
 
 
 

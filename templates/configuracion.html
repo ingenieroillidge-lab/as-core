@@ -845,7 +845,9 @@
 
             try {
                 const res = await fetch('/api/importador/cargar', { method: 'POST', body: formData });
-                const data = await res.json();
+                let data = {};
+                try { data = await res.json(); } catch(e_json) { data = { error: `Error HTTP ${res.status} del servidor.` }; }
+
                 if (!res.ok) { alert(`❌ Error: ${data.error || 'No se pudo cargar el archivo.'}`); return; }
 
                 currentBatchId = data.info.batch_id;
@@ -855,8 +857,9 @@
                 document.getElementById('wiz-paso1').style.display = 'none';
                 document.getElementById('wiz-paso2').style.display = 'block';
             } catch(e) {
-                alert("Error de conexión al cargar el archivo.");
+                alert("Error de conexión al cargar el archivo: " + e.message);
             }
+
         }
 
         function renderMapeoTabla() {
