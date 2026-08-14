@@ -1314,69 +1314,114 @@ def importar_google_sheets():
 @login_required
 def api_importador_cargar():
     import openpyxl
+    print("[IMPORTADOR] Inicio de carga")
     try:
         nid = session.get('negocio_id')
+        uid = session.get('user_id')
+        print(f"[IMPORTADOR] Usuario/tenant identificado: user_id={uid}, negocio_id={nid}")
         if not nid:
-            return jsonify({"error": "Sesión inválida o expirada. Por favor inicia sesión nuevamente."}), 401
+            print("[IMPORTADOR] ERROR: negocio_id ausente en la sesión")
+            return jsonify({"ok": False, "error": "Sesión inválida o expirada", "detail": "negocio_id ausente", "stage": "auth"}), 401
 
         if 'file' not in request.files:
-            return jsonify({"error": "No se adjuntó ningún archivo"}), 400
+            print("[IMPORTADOR] ERROR: No se adjuntó ningún campo 'file' en request.files")
+            return jsonify({"ok": False, "error": "No se adjuntó ningún archivo", "detail": "Campo 'file' no presente en request.files", "stage": "file_reception"}), 400
 
         file = request.files['file']
-        filename = (file.filename or '').lower()
-        filas_matriz = []
-
-        # Asegurar verificación de tablas
-        crear_tablas()
-
+        raw_filename = file.filename or ''
+        filename = raw_filename.lower()
         file_bytes = file.read()
-        if not file_bytes:
-            return jsonify({"error": "El archivo adjuntado está vacío"}), 400
+        file_size = len(file_bytes)
+        ext = os.path.splitext(filename)[1]
+
+        print(f"[IMPORTADOR] Archivo recibido")
+        print(f"[IMPORTADOR] Nombre: {raw_filename}")
+        print(f"[IMPORTADOR] Extensión: {ext}")
+        print(f"[IMPORTADOR] Tamaño: {file_size} bytes")
+
+        if not file_bytes or file_size == 0:
+            print("[IMPORTADOR] ERROR: Archivo vacío")
+            return jsonify({"ok": False, "error": "El archivo adjuntado está vacío", "detail": "Tamaño de archivo 0 bytes", "stage": "file_reception"}), 400
+
+        print("[IMPORTADOR] Lectura en memoria completada")
+
+        filas_matriz = []
+        hojas_detectadas = []
 
         if filename.endswith('.xlsx') or filename.endswith('.xlsm'):
+            print("[IMPORTADOR] Tipo de archivo detectado: Excel OpenXML (.xlsx/.xlsm)")
             try:
+                print("[IMPORTADOR] Lectura de hojas iniciada")
                 wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                hojas_detectadas = wb.sheetnames
+                print(f"[IMPORTADOR] Hojas detectadas: {hojas_detectadas}")
                 ws = wb.active
                 for r in ws.iter_rows(values_only=True):
                     if r and any(cell is not None for cell in r):
                         filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
             except Exception as e_xlsx:
-                return jsonify({"error": f"No se pudo leer el archivo Excel (.xlsx): {str(e_xlsx)}"}), 400
+                import traceback
+                print(f"[IMPORTADOR ERROR XLSX] Traceback:\n{traceback.format_exc()}")
+                return jsonify({"ok": False, "error": "No se pudo leer el archivo Excel (.xlsx)", "detail": str(e_xlsx), "stage": "excel_reading"}), 400
 
         elif filename.endswith('.xls'):
-            try:
-                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-                ws = wb.active
-                for r in ws.iter_rows(values_only=True):
-                    if r and any(cell is not None for cell in r):
-                        filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
-            except Exception:
-                return jsonify({"error": "Los archivos en formato antiguo Excel (.xls) no se pueden procesar directamente. Por favor abre tu archivo en Excel, selecciona 'Guardar como' -> 'Libro de Excel (.xlsx)' o '.csv' e inténtalo de nuevo."}), 400
+            print("[IMPORTADOR] Tipo de archivo detectado: Excel Binario Antiguo (.xls)")
+            return jsonify({"ok": False, "error": "Formato .xls no soportado directamente", "detail": "Por favor guarda tu archivo como Excel (.xlsx) o CSV y vuelve a intentarlo.", "stage": "format_validation"}), 400
 
         else:
+            print("[IMPORTADOR] Tipo de archivo detectado: Texto Delimitado / CSV")
             try:
+                print("[IMPORTADOR] Lectura de hojas iniciada")
                 content = file_bytes.decode('utf-8-sig', errors='ignore')
                 first_line = content.splitlines()[0] if content.splitlines() else ''
                 delimiter = ';' if ';' in first_line else (',' if ',' in first_line else '\t')
                 reader = csv.reader(io.StringIO(content), delimiter=delimiter)
                 filas_matriz = list(reader)
+                hojas_detectadas = ["CSV_MAIN"]
+                print(f"[IMPORTADOR] Hojas detectadas: {hojas_detectadas}")
             except Exception as e_csv:
-                return jsonify({"error": f"No se pudo interpretar el archivo CSV: {str(e_csv)}"}), 400
+                import traceback
+                print(f"[IMPORTADOR ERROR CSV] Traceback:\n{traceback.format_exc()}")
+                return jsonify({"ok": False, "error": "No se pudo interpretar el archivo CSV", "detail": str(e_csv), "stage": "csv_reading"}), 400
 
         if not filas_matriz or len(filas_matriz) < 1:
-            return jsonify({"error": "El archivo no contiene filas de información para importar."}), 400
+            print("[IMPORTADOR] ERROR: No se encontraron filas de información")
+            return jsonify({"ok": False, "error": "El archivo no contiene filas de información para importar", "detail": "filas_matriz vacía", "stage": "data_validation"}), 400
 
-        ok, msg, res_info = importador_service.crear_lote_staging(nid, file.filename, filas_matriz)
+        headers = [str(c).strip() for c in filas_matriz[0]] if len(filas_matriz) > 0 else []
+        print(f"[IMPORTADOR] Encabezados detectados: {headers}")
+
+        print("[IMPORTADOR] Análisis heurístico iniciado")
+        ok, msg, res_info = importador_service.crear_lote_staging(nid, raw_filename, filas_matriz)
         if not ok or not res_info:
-            return jsonify({"error": msg or "Error al crear lote en la capa de staging"}), 400
+            print(f"[IMPORTADOR] ERROR al crear lote staging: {msg}")
+            return jsonify({"ok": False, "error": msg or "Error al crear lote en staging", "detail": "Fallo en crear_lote_staging", "stage": "staging_creation"}), 400
 
         propuesta = importador_service.proponer_mapeo_heuristico(res_info.get('headers', []), nid)
-        return jsonify({"message": msg, "info": res_info, "propuesta_mapeo": propuesta})
+        print("[IMPORTADOR] Análisis heurístico completado")
+
+        print("[IMPORTADOR] Preparando respuesta")
+        resp_data = {
+            "ok": True,
+            "message": msg,
+            "info": res_info,
+            "propuesta_mapeo": propuesta,
+            "hojas_detectadas": hojas_detectadas
+        }
+        print("[IMPORTADOR] Carga finalizada")
+        return jsonify(resp_data)
+
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        print(f"[IMPORTADOR ERROR TRACEBACK]\n{tb}")
-        return jsonify({"error": f"Error interno al procesar el archivo ({type(e).__name__}): {str(e)}"}), 500
+        print(f"[IMPORTADOR ERROR UNCAUGHT TRACEBACK]\n{tb}")
+        return jsonify({
+            "ok": False,
+            "error": "Error interno durante la carga del archivo",
+            "detail": f"({type(e).__name__}): {str(e)}",
+            "stage": "unhandled_exception"
+        }), 500
+
 
 
 

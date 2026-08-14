@@ -241,21 +241,22 @@
                     🧠 Importador Inteligente Universal
                 </h2>
                 <p style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem;">
-                    Carga tus archivos reales de Excel sin adaptar su estructura. El sistema interpretará las columnas (multimoneda, fletes, deudas), solicitará tu aprobación y alimentará automáticamente Inventario, Ventas y Cartera.
+                    Carga tus archivos reales de Excel o CSV sin adaptar su estructura. El sistema analizará la información, identificará posibles relaciones con AS Platform y te permitirá revisar y aprobar la interpretación antes de incorporarla.
                 </p>
 
                 <!-- PASO 1: CARGA DE ARCHIVO -->
                 <div id="wiz-paso1" style="display: block;">
                     <div style="border: 2px dashed rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 2rem; text-align: center; background: rgba(56, 189, 248, 0.02);">
                         <span style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">📊</span>
-                        <h4 style="margin-bottom: 0.5rem; color: #f8fafc;">Seleccionar Archivo Excel o CSV</h4>
-                        <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 1.5rem;">Soporta archivos de equipos, jugadores, compras USD, fletes COP, clientes o deudas.</p>
+                        <h4 style="margin-bottom: 0.5rem; color: #f8fafc;">Seleccionar archivo Excel o CSV</h4>
+                        <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 1.5rem;">El sistema analizará automáticamente la estructura, los datos y las posibles relaciones con la información existente.</p>
                         <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display: none;" onchange="onFileSelected(this)">
                         <button type="button" onclick="document.getElementById('import-file-input').click()" style="background: #38bdf8; color: #000; font-weight: 800; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;">
                             📁 Buscar Archivo en mi Equipo
                         </button>
                     </div>
                 </div>
+
 
                 <!-- PASO 2: MAPEO DE COLUMNAS -->
                 <div id="wiz-paso2" style="display: none;">
