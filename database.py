@@ -141,7 +141,8 @@ def init_db():
         agregar_columna(t, 'negocio_id', 'INTEGER')
 
     cursor.execute("SELECT COUNT(*) FROM planes")
-    if cursor.fetchone()[0] == 0:
+    res_planes = cursor.fetchone()
+    if not res_planes or len(res_planes) == 0 or res_planes[0] == 0:
         planes_def = [
             ("FREE", "Plan Gratuito", 0.0, 10, 50, json.dumps({
                 "analisis": False, "informes": False, "exportar_excel": False, "cartera": True, "lotes": False
@@ -161,7 +162,8 @@ def init_db():
 
     placeholder = "%s" if IS_PG else "?"
     cursor.execute("SELECT COUNT(*) FROM negocios")
-    if cursor.fetchone()[0] == 0:
+    res_negocios = cursor.fetchone()
+    if not res_negocios or len(res_negocios) == 0 or res_negocios[0] == 0:
         hoy = datetime.now()
         vence = (hoy + timedelta(days=3650)).strftime("%Y-%m-%d")
         cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, trial_activo, tipo_cuenta, es_interna) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 0, 'INTERNA', 1)", 
@@ -169,19 +171,20 @@ def init_db():
         conn.commit()
 
         cursor.execute("SELECT id FROM negocios ORDER BY id DESC LIMIT 1")
-        nid = cursor.fetchone()[0]
+        res_last = cursor.fetchone()
+        nid = res_last[0] if (res_last and len(res_last) > 0 and res_last[0]) else 1
 
         cursor.execute(f"INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion, color_acento) VALUES ({placeholder}, 'AS Solutions', 'SERVICIOS', '#38bdf8')", (nid,))
         conn.commit()
 
     cursor.execute("SELECT id FROM negocios WHERE es_interna=1 ORDER BY id ASC LIMIT 1")
     row = cursor.fetchone()
-    nid = row[0] if row else 1
+    nid = row[0] if (row and len(row) > 0 and row[0]) else 1
 
     # Asegurar que Hincha.store12 exista si hay camisetas
     cursor.execute("SELECT id FROM negocios WHERE LOWER(nombre) LIKE '%hincha%' ORDER BY id ASC LIMIT 1")
     h_row = cursor.fetchone()
-    if not h_row:
+    if not h_row or len(h_row) == 0 or not h_row[0]:
         hoy_str = datetime.now().strftime("%Y-%m-%d")
         vence_str = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
         cursor.execute(f"INSERT INTO negocios (nombre, plan, fecha_registro, fecha_vencimiento, tipo_cuenta) VALUES ({placeholder}, 'PRO', {placeholder}, {placeholder}, 'CLIENTE')",
@@ -190,7 +193,7 @@ def init_db():
         cursor.execute("SELECT id FROM negocios WHERE LOWER(nombre) LIKE '%hincha%' ORDER BY id ASC LIMIT 1")
         h_row = cursor.fetchone()
 
-    if h_row:
+    if h_row and len(h_row) > 0 and h_row[0]:
         hincha_nid = h_row[0]
         # Reasignar cualquier producto de ropa fuera del negocio interno AS CORE
         cursor.execute(f"UPDATE productos SET negocio_id={placeholder} WHERE negocio_id={placeholder} AND (LOWER(nombre) LIKE '%camiseta%' OR LOWER(nombre) LIKE '%hincha%' OR LOWER(nombre) LIKE '%player%')", (hincha_nid, nid))
@@ -199,23 +202,25 @@ def init_db():
     hash_super = generate_password_hash('super2024')
     cursor.execute("SELECT id, password_hash FROM usuarios WHERE LOWER(username) = 'samuel_super'")
     user_row = cursor.fetchone()
-    if not user_row:
+    if not user_row or len(user_row) == 0 or not user_row[0]:
         cursor.execute(f"INSERT INTO usuarios (negocio_id, username, password_hash, role) VALUES ({placeholder}, 'samuel_super', {placeholder}, 'SUPER')", (nid, hash_super))
         conn.commit()
     else:
-        # Preservar la contraseña personalizada que haya cambiado el usuario y solo garantizar rol SUPER
         cursor.execute(f"UPDATE usuarios SET role = 'SUPER' WHERE id = {placeholder}", (user_row[0],))
         conn.commit()
 
     cursor.execute("SELECT id, password, password_hash FROM usuarios")
-    users = cursor.fetchall()
-    for uid, plain_p, p_hash in users:
-        if not p_hash and plain_p:
-            new_h = generate_password_hash(plain_p)
-            cursor.execute(f"UPDATE usuarios SET password_hash = {placeholder} WHERE id = {placeholder}", (new_h, uid))
+    users = cursor.fetchall() or []
+    for u_item in users:
+        if u_item and len(u_item) >= 3:
+            uid, plain_p, p_hash = u_item[0], u_item[1], u_item[2]
+            if not p_hash and plain_p:
+                new_h = generate_password_hash(plain_p)
+                cursor.execute(f"UPDATE usuarios SET password_hash = {placeholder} WHERE id = {placeholder}", (new_h, uid))
     conn.commit()
 
     conn.close()
+
 
 def ejecutar_query(query, params=(), fetch=False):
     db_url = os.environ.get("DATABASE_URL")
