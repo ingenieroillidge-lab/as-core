@@ -380,6 +380,32 @@ def api_producto_detail(pid):
         ejecutar_query("UPDATE productos SET nombre=?, precio=? WHERE id=? AND negocio_id=?", (nombre, precio, pid, nid))
         return jsonify({"message": "Producto actualizado exitosamente"})
 
+@app.route('/api/usuarios', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def api_usuarios():
+    nid = session['negocio_id']
+    if request.method == 'POST':
+        d = request.json or {}
+        u = (d.get('username') or '').strip()
+        p = (d.get('password') or '').strip()
+        role = d.get('role', 'OPERADOR')
+        if not u or not p:
+            return jsonify({"error": "Nombre de usuario y contraseña son obligatorios"}), 400
+        
+        exists = ejecutar_query("SELECT id FROM usuarios WHERE username=?", (u,), fetch=True)
+        if exists:
+            return jsonify({"error": "El nombre de usuario ya está en uso"}), 400
+            
+        p_hash = generate_password_hash(p)
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        ejecutar_query("INSERT INTO usuarios (negocio_id, username, password_hash, role, fecha_registro, estado) VALUES (?, ?, ?, ?, ?, 'ACTIVO')",
+                       (nid, u, p_hash, role, hoy))
+        return jsonify({"message": "Usuario creado exitosamente"})
+        
+    res = ejecutar_query("SELECT id, username, role, estado, ultimo_acceso FROM usuarios WHERE negocio_id=?", (nid,), fetch=True) or []
+    return jsonify([{"id": x[0], "username": x[1], "role": x[2], "estado": x[3], "ultimo_acceso": x[4]} for x in res])
+
 @app.route('/api/ventas', methods=['POST'])
 @login_required
 def post_venta():
