@@ -218,4 +218,31 @@ def ejecutar_query(query, params=(), fetch=False):
                 pass
         return [] if fetch else False
 
+
+
+def ejecutar_query_many(query, params_list):
+
+    if not params_list:
+        return True
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url and POSTGRES_AVAILABLE: query = query.replace("?", "%s")
+    conn = None
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        cursor.executemany(query, params_list)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Database query_many error: {e}")
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except Exception:
+                pass
+        return False
+
 crear_tablas = init_db

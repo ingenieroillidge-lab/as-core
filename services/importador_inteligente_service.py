@@ -32,7 +32,7 @@ DICTIONARY_HEURISTICS = {
 def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
     """
     Etapa 1: Carga y análisis inicial sin escribir datos finales.
-    guarda las filas raw en la tabla importaciones_staging.
+    Filtra columnas vacías y guarda masivamente las filas raw en importaciones_staging.
     """
     if not filas_matriz or len(filas_matriz) < 1:
         return False, "El archivo no contiene filas de datos", None
@@ -40,28 +40,46 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
     batch_id = f"BATCH-{uuid.uuid4().hex[:12].upper()}"
     fecha_creacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    headers = [str(c).strip() for c in filas_matriz[0]]
+    raw_headers = [str(c).strip() for c in filas_matriz[0]]
+    headers_info = []
+    headers = []
+    for orig_idx, h in enumerate(raw_headers):
+        if h:
+            headers_info.append((orig_idx, h))
+            headers.append(h)
+
+    if not headers:
+        return False, "El archivo no contiene encabezados válidos en la primera fila", None
+
     filas_datos = filas_matriz[1:]
 
     muestras = []
     for idx, row in enumerate(filas_datos[:5]):
         dict_row = {}
-        for c_idx, h in enumerate(headers):
-            dict_row[h] = str(row[c_idx]).strip() if c_idx < len(row) and row[c_idx] is not None else ""
+        for orig_idx, h in headers_info:
+            dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
         muestras.append(dict_row)
 
-    # Inserción en staging
+    # Inserción masiva ultra-eficiente en staging (1 transacción en lote)
+    params_staging = []
     for idx, row in enumerate(filas_datos):
         dict_row = {}
-        for c_idx, h in enumerate(headers):
-            dict_row[h] = str(row[c_idx]).strip() if c_idx < len(row) and row[c_idx] is not None else ""
+        for orig_idx, h in headers_info:
+            dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
 
-        ejecutar_query(
-            """INSERT INTO importaciones_staging 
-               (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion)
-               VALUES (?, ?, ?, ?, 'PENDIENTE', ?)""",
-            (negocio_id, batch_id, idx + 1, json.dumps(dict_row, ensure_ascii=False), fecha_creacion)
-        )
+        params_staging.append((
+            negocio_id,
+            batch_id,
+            idx + 1,
+            json.dumps(dict_row, ensure_ascii=False),
+            fecha_creacion
+        ))
+
+    from database import ejecutar_query_many
+    sql_insert = """INSERT INTO importaciones_staging 
+                    (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion)
+                    VALUES (?, ?, ?, ?, 'PENDIENTE', ?)"""
+    ejecutar_query_many(sql_insert, params_staging)
 
     res_info = {
         "batch_id": batch_id,
@@ -71,6 +89,7 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
         "muestras": muestras
     }
     return True, "Archivo cargado en staging con éxito", res_info
+
 
 def proponer_mapeo_heuristico(headers, negocio_id):
     """
