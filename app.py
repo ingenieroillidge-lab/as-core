@@ -19,6 +19,13 @@ import urllib.request
 app = Flask(__name__)
 app.secret_key = "as_platform_high_conversion_2024"
 
+# Garantizar creación/verificación de tablas en PostgreSQL/SQLite al iniciar la aplicación
+try:
+    crear_tablas()
+except Exception as _e_db:
+    print(f"[DB INIT ERROR] Error al crear/verificar tablas: {_e_db}")
+
+
 # Asegurar tablas al iniciar
 try:
     crear_tablas()
@@ -1319,7 +1326,11 @@ def api_importador_cargar():
         propuesta = importador_service.proponer_mapeo_heuristico(res_info['headers'], nid)
         return jsonify({"message": msg, "info": res_info, "propuesta_mapeo": propuesta})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[IMPORTADOR ERROR] {e}")
         return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
+
 
 @app.route('/api/importador/prevalidar', methods=['POST'])
 @login_required
