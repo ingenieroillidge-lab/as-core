@@ -82,7 +82,13 @@ def proponer_mapeo_heuristico(headers, negocio_id):
         "SELECT estructura_columnas_json FROM mapeos_importacion WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
         (negocio_id,), fetch=True
     )
-    mapeo_guardado = json.loads(mem_res[0][0]) if mem_res and mem_res[0][0] else {}
+    mapeo_guardado = {}
+    if mem_res and len(mem_res) > 0 and len(mem_res[0]) > 0 and mem_res[0][0]:
+        try:
+            mapeo_guardado = json.loads(mem_res[0][0])
+        except Exception:
+            mapeo_guardado = {}
+
 
     propuesta = []
     for h in headers:
@@ -325,7 +331,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
         # 1. REGLA DE PRODUCTO / VARIANTE
         p_res = ejecutar_query("SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?", (full_prod, negocio_id), fetch=True)
-        if p_res:
+        if p_res and len(p_res) > 0 and len(p_res[0]) > 0:
             pid = p_res[0][0]
             # Si el usuario autorizó actualizar precio en el diff detector
             if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
@@ -336,7 +342,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 (negocio_id, full_prod, precio_v, talla)
             )
             pid_r = ejecutar_query("SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1", (full_prod, negocio_id), fetch=True)
-            pid = pid_r[0][0] if pid_r else 1
+            pid = pid_r[0][0] if (pid_r and len(pid_r) > 0 and len(pid_r[0]) > 0) else 1
             creados_info["productos"].append(pid)
 
         # 2. CARTERA Y CLIENTE
@@ -357,7 +363,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
         if ok_v:
             procesados += 1
             v_res = ejecutar_query("SELECT id FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (negocio_id,), fetch=True)
-            if v_res:
+            if v_res and len(v_res) > 0 and len(v_res[0]) > 0:
                 vid = v_res[0][0]
                 creados_info["ventas"].append(vid)
                 if abono_val > 0:
@@ -388,10 +394,11 @@ def revertir_importacion(undo_token, negocio_id, usuario_id):
         "SELECT id, creados_json, estado FROM auditoria_importaciones WHERE undo_token=? AND negocio_id=?",
         (undo_token, negocio_id), fetch=True
     )
-    if not audit:
+    if not audit or len(audit) == 0 or len(audit[0]) < 3:
         return False, "Token de reversión no encontrado o ya fue revertido"
 
     a_id, creados_json, estado = audit[0]
+
     if estado == 'REVERTIDO':
         return False, "Esta importación ya había sido revertida previamente"
 
