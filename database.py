@@ -50,7 +50,11 @@ def init_db():
         f"CREATE TABLE IF NOT EXISTS pagos_wompi (id {id_t}, negocio_id INTEGER NOT NULL, suscripcion_id INTEGER, referencia_wompi TEXT UNIQUE NOT NULL, transaction_id TEXT UNIQUE, monto REAL NOT NULL, tipo_pago TEXT DEFAULT 'RECURRENTE_MRR', concepto TEXT NOT NULL, periodo_facturado TEXT, estado TEXT NOT NULL, metodo_pago TEXT, fecha TEXT NOT NULL, respuesta_raw TEXT)",
         f"CREATE TABLE IF NOT EXISTS auditoria_impersonacion (id {id_t}, super_admin_id INTEGER NOT NULL, target_negocio_id INTEGER NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, ip_origen TEXT, motivo TEXT DEFAULT 'SOPORTE')",
         f"CREATE TABLE IF NOT EXISTS log_impersonacion (id {id_t}, super_user_id INTEGER NOT NULL, target_negocio_id INTEGER NOT NULL, fecha_inicio TEXT NOT NULL, fecha_fin TEXT, motivo TEXT DEFAULT 'SOPORTE')",
-        f"CREATE TABLE IF NOT EXISTS notificaciones (id {id_t}, negocio_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensaje TEXT NOT NULL, leida INTEGER DEFAULT 0)"
+        f"CREATE TABLE IF NOT EXISTS notificaciones (id {id_t}, negocio_id INTEGER NOT NULL, fecha TEXT NOT NULL, tipo TEXT NOT NULL, titulo TEXT NOT NULL, mensaje TEXT NOT NULL, leida INTEGER DEFAULT 0)",
+        f"CREATE TABLE IF NOT EXISTS costos_variables (id {id_t}, negocio_id INTEGER NOT NULL, concepto TEXT NOT NULL, tipo_calculo TEXT DEFAULT 'POR_UNIDAD', base_calculo TEXT DEFAULT 'COSTO', valor REAL NOT NULL, estado TEXT DEFAULT 'ACTIVO', observaciones TEXT)",
+        f"CREATE TABLE IF NOT EXISTS importaciones_staging (id {id_t}, negocio_id INTEGER NOT NULL, batch_id TEXT NOT NULL, fila_num INTEGER, datos_raw_json TEXT NOT NULL, propuesta_mapeo_json TEXT, estado_validacion TEXT DEFAULT 'PENDIENTE', errores_json TEXT, advertencias_json TEXT, fecha_creacion TEXT)",
+        f"CREATE TABLE IF NOT EXISTS mapeos_importacion (id {id_t}, negocio_id INTEGER NOT NULL, nombre_mapeo TEXT, estructura_columnas_json TEXT NOT NULL, fecha_creacion TEXT)",
+        f"CREATE TABLE IF NOT EXISTS auditoria_importaciones (id {id_t}, negocio_id INTEGER NOT NULL, usuario_id INTEGER NOT NULL, fecha TEXT NOT NULL, undo_token TEXT UNIQUE NOT NULL, nombre_archivo TEXT NOT NULL, total_registros INTEGER, creados_json TEXT, modificados_json TEXT, estado TEXT DEFAULT 'COMPLETADO')"
     ]
 
     for sql in tablas_sql:
@@ -106,6 +110,11 @@ def init_db():
     agregar_columna('productos', 'codigo', 'TEXT')
     agregar_columna('productos', 'tipo_producto', 'TEXT DEFAULT \'TRANSFORMADO\'')
     agregar_columna('productos', 'categoria', 'TEXT')
+    agregar_columna('productos', 'subcategoria', 'TEXT')
+    agregar_columna('productos', 'marca_equipo', 'TEXT')
+    agregar_columna('productos', 'variante', 'TEXT')
+    agregar_columna('productos', 'variantes_json', 'TEXT')
+
     
     agregar_columna('ventas', 'producto_id', 'INTEGER')
     agregar_columna('ventas', 'cantidad', 'REAL')

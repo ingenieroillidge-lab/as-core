@@ -41,10 +41,13 @@
         <div class="config-tabs">
             <button class="tab-btn active" onclick="showSection('sec-micuenta')">👤 Mi Cuenta</button>
             <button class="tab-btn" onclick="showSection('sec-perfil')">🏢 Perfil y Marca</button>
-            <button class="tab-btn" onclick="showSection('sec-cargue')">📥 Cargue Masivo (Drive / Excel)</button>
+            <button class="tab-btn" onclick="showSection('sec-importador-inteligente')">🧠 Importador Inteligente</button>
+            <button class="tab-btn" onclick="showSection('sec-costos-variables')">🚚 Costos Variables</button>
+            <button class="tab-btn" onclick="showSection('sec-cargue')">📥 Cargue Básico (Plantillas)</button>
             <button class="tab-btn" onclick="showSection('sec-usuarios')">Gestión de Usuarios</button>
             <button class="tab-btn" onclick="showSection('sec-mantenimiento')" style="color: #fb7185;">Mantenimiento</button>
         </div>
+
 
         <!-- SECCIÓN MI CUENTA -->
         <div id="sec-micuenta" class="config-section active">
@@ -231,8 +234,159 @@
             </div>
         </div>
 
+        <!-- SECCIÓN IMPORTADOR INTELIGENTE UNIVERSAL -->
+        <div id="sec-importador-inteligente" class="config-section">
+            <div class="card" style="max-width: 900px; margin-bottom: 2rem;">
+                <h2 style="color: #38bdf8; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
+                    🧠 Importador Inteligente Universal
+                </h2>
+                <p style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem;">
+                    Carga tus archivos reales de Excel sin adaptar su estructura. El sistema interpretará las columnas (multimoneda, fletes, deudas), solicitará tu aprobación y alimentará automáticamente Inventario, Ventas y Cartera.
+                </p>
+
+                <!-- PASO 1: CARGA DE ARCHIVO -->
+                <div id="wiz-paso1" style="display: block;">
+                    <div style="border: 2px dashed rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 2rem; text-align: center; background: rgba(56, 189, 248, 0.02);">
+                        <span style="font-size: 3rem; display: block; margin-bottom: 0.5rem;">📊</span>
+                        <h4 style="margin-bottom: 0.5rem; color: #f8fafc;">Seleccionar Archivo Excel o CSV</h4>
+                        <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 1.5rem;">Soporta archivos de equipos, jugadores, compras USD, fletes COP, clientes o deudas.</p>
+                        <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" style="display: none;" onchange="onFileSelected(this)">
+                        <button type="button" onclick="document.getElementById('import-file-input').click()" style="background: #38bdf8; color: #000; font-weight: 800; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;">
+                            📁 Buscar Archivo en mi Equipo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASO 2: MAPEO DE COLUMNAS -->
+                <div id="wiz-paso2" style="display: none;">
+                    <h3 style="color: #38bdf8; margin-bottom: 1rem;">2. Revisar y Autorizar Mapeo de Columnas</h3>
+                    <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;">
+                        El sistema propone las siguientes correspondencias. Ajusta según sea necesario:
+                    </p>
+                    <div style="overflow-x: auto; max-height: 350px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1.5rem;">
+                        <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: rgba(255,255,255,0.05); color: #94a3b8; text-align: left;">
+                                    <th style="padding: 10px;">Columna en tu Excel</th>
+                                    <th style="padding: 10px;">Interpretación Propuesta</th>
+                                    <th style="padding: 10px;">Confianza / Origen</th>
+                                    <th style="padding: 10px;">Acción del Usuario</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbl-mapeo-body"></tbody>
+                        </table>
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" onclick="prevalidarImportacion()" style="flex: 1; background: #38bdf8; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
+                            🔍 Pre-validar Datos y Conciliar
+                        </button>
+                        <button type="button" onclick="resetWizard()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                            ✕ Cancelar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASO 3: PREVALIDACIÓN Y SEMÁFORO -->
+                <div id="wiz-paso3" style="display: none;">
+                    <h3 style="color: #34d399; margin-bottom: 1rem;">3. Resumen de Pre-validación y Conciliación</h3>
+                    <div id="semaforo-cards" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem;"></div>
+
+                    <div id="diff-detector-container" style="margin-bottom: 1.5rem; display: none; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 1rem;">
+                        <h4 style="color: #f59e0b; margin-bottom: 0.5rem;">⚠️ Diferencias Detectadas con Registros Existentes</h4>
+                        <p style="font-size: 0.8rem; color: #cbd5e1; margin-bottom: 0.75rem;">Para evitar sobrescrituras silenciosas, confirma si deseas actualizar los precios o conservar los valores actuales:</p>
+                        <label style="font-size: 0.85rem; color: white; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="chk-autorizar-diffs" checked>
+                            <strong>Autorizo actualizar los precios existentes con los nuevos valores del Excel</strong>
+                        </label>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" onclick="procesarImportacionFinal()" style="flex: 1; background: #34d399; color: black; font-weight: 800; padding: 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem;">
+                            🚀 Confirmar e Importar al Sistema
+                        </button>
+                        <button type="button" onclick="document.getElementById('wiz-paso3').style.display='none'; document.getElementById('wiz-paso2').style.display='block';" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                            ← Volver al Mapeo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASO 4: RESULTADO Y REVERSIÓN -->
+                <div id="wiz-paso4" style="display: none;">
+                    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 1.5rem; text-align: center;">
+                        <span style="font-size: 2.5rem; display: block; margin-bottom: 0.5rem;">🎉</span>
+                        <h3 style="color: #10b981; margin-bottom: 0.5rem;" id="txt-resumen-titulo">¡Importación Procesada Exitosamente!</h3>
+                        <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;" id="txt-resumen-desc"></p>
+                        <div style="font-size: 0.8rem; background: #000; padding: 10px; border-radius: 8px; display: inline-block; color: #38bdf8; font-family: monospace;" id="txt-undo-token"></div>
+                        <div style="margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem;">
+                            <button type="button" onclick="resetWizard()" style="background: #38bdf8; color: black; font-weight: 800; border: none; padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer;">
+                                🔄 Nueva Importación
+                            </button>
+                            <button type="button" id="btn-undo-now" onclick="deshacerImportacionDirecta()" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700; padding: 0.75rem 1.25rem; border-radius: 8px; cursor: pointer;">
+                                ↩️ Deshacer Esta Importación
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORIAL Y AUDITORÍA DE IMPORTACIONES -->
+            <div class="card" style="max-width: 900px;">
+                <h3 style="margin-bottom: 1rem; color: #f8fafc;">📋 Historial y Auditoría de Importaciones Pasadas</h3>
+                <div style="max-height: 250px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: #94a3b8; text-align: left;">
+                                <th style="padding: 8px;">Fecha</th>
+                                <th style="padding: 8px;">Token de Auditoría</th>
+                                <th style="padding: 8px;">Registros</th>
+                                <th style="padding: 8px;">Estado</th>
+                                <th style="padding: 8px; text-align: center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-auditoria-body">
+                            <tr><td colspan="5" style="text-align: center; color: #666; padding: 12px;">Cargando historial...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN COSTOS VARIABLES -->
+        <div id="sec-costos-variables" class="config-section">
+            <div class="card" style="max-width: 900px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="color: #38bdf8; margin: 0;">🚚 Gestión de Costos Variables & Logísticos</h3>
+                        <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 4px;">Administra fletes, empaques, comisiones bancarias e impuestos asociados a tus compras u operaciones.</p>
+                    </div>
+                    <button type="button" onclick="mostrarModalNuevoCostoVariable()" style="background: #38bdf8; color: black; font-weight: 800; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                        + Nuevo Costo Variable
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto; max-height: 350px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: #94a3b8; text-align: left;">
+                                <th style="padding: 10px;">Concepto</th>
+                                <th style="padding: 10px;">Método de Cálculo</th>
+                                <th style="padding: 10px;">Base de Aplicación</th>
+                                <th style="padding: 10px; text-align: right;">Valor</th>
+                                <th style="padding: 10px; text-align: center;">Estado</th>
+                                <th style="padding: 10px; text-align: center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-costos-var-body">
+                            <tr><td colspan="6" style="text-align: center; color: #666; padding: 12px;">Cargando costos variables...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- SECCIÓN CARGUE MASIVO Y PLANTILLAS -->
         <div id="sec-cargue" class="config-section">
+
             <div class="grid-forms">
                 <!-- Tarjeta 1: Descarga de Plantillas Oficiales -->
                 <div class="card">
@@ -654,14 +808,310 @@
             }
         }
 
+        // ==========================================
+        // IMPORTADOR INTELIGENTE UNIVERSAL JS LOGIC
+        // ==========================================
+        let currentBatchId = null;
+        let currentPropuestaMapeo = [];
+        let currentUndoToken = null;
+
+        const CAMPO_OPCIONES = [
+            { value: "IGNORAR", label: "🚫 Ignorar / No importar" },
+            { value: "nombre_producto", label: "👕 Nombre / Identidad del Producto" },
+            { value: "tipo_producto", label: "🏷️ Tipo / Categoría de Prenda" },
+            { value: "jugador_edicion", label: "⚽ Jugador / Edición Especial" },
+            { value: "variante_talla", label: "📏 Talla / Variante (L, XL, etc)" },
+            { value: "costo_unitario_usd", label: "💵 Costo Unitario (USD)" },
+            { value: "tasa_cambio", label: "💱 Tasa de Cambio (USD -> COP)" },
+            { value: "costo_unitario_cop", label: "🇨🇴 Costo Unitario (COP)" },
+            { value: "costo_envio_cop", label: "🚚 Costo de Envío / Logístico (COP)" },
+            { value: "costo_total_cop", label: "📦 Costo Total de Adquisición" },
+            { value: "precio_venta_cop", label: "🏷️ Precio de Venta (COP)" },
+            { value: "cantidad", label: "🔢 Cantidad / Unidades" },
+            { value: "cliente_nombre", label: "👤 Nombre del Cliente" },
+            { value: "saldo_pendiente", label: "💳 Cuentas por Cobrar / Deuda" },
+            { value: "abono_monto", label: "💵 Pago / Abono Recibido" },
+            { value: "fecha_operacion", label: "📅 Fecha de Operación / Compra" },
+            { value: "fecha_llegada", label: "📦 Fecha de Recepción / Llegada" },
+            { value: "utilidad_calculada", label: "📊 Utilidad (Campo Calculado)" },
+            { value: "dias_transito", label: "⏱️ Días en Tránsito (Calculado)" }
+        ];
+
+        async function onFileSelected(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/importador/cargar', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (!res.ok) { alert(`❌ Error: ${data.error || 'No se pudo cargar el archivo.'}`); return; }
+
+                currentBatchId = data.info.batch_id;
+                currentPropuestaMapeo = data.propuesta_mapeo || [];
+
+                renderMapeoTabla();
+                document.getElementById('wiz-paso1').style.display = 'none';
+                document.getElementById('wiz-paso2').style.display = 'block';
+            } catch(e) {
+                alert("Error de conexión al cargar el archivo.");
+            }
+        }
+
+        function renderMapeoTabla() {
+            const tbody = document.getElementById('tbl-mapeo-body');
+            tbody.innerHTML = currentPropuestaMapeo.map((item, idx) => {
+                const confBadge = item.confianza === 'ALTA' 
+                    ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟢 Alta Confianza</span>'
+                    : '<span style="background: rgba(245,158,11,0.15); color: #f59e0b; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟡 Revisar</span>';
+                
+                const origLbl = item.origen === 'MEMORIA_TENANT' ? ' 🧠 (Memoria Empresa)' : '';
+
+                const selectOptions = CAMPO_OPCIONES.map(opt => 
+                    `<option value="${opt.value}" ${opt.value === item.campo_propuesto ? 'selected' : ''}>${opt.label}</option>`
+                ).join('');
+
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <td style="padding: 10px; font-weight: 700; color: white;">${item.columna_excel}</td>
+                        <td style="padding: 10px; color: #38bdf8;">${item.campo_propuesto}</td>
+                        <td style="padding: 10px;">${confBadge}${origLbl}</td>
+                        <td style="padding: 10px;">
+                            <select id="map-sel-${idx}" data-col="${item.columna_excel}" style="width: 100%; background: #111; color: white; border: 1px solid #333; padding: 6px; border-radius: 6px; font-size: 0.8rem;">
+                                ${selectOptions}
+                            </select>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getUserMapping() {
+            const mapping = {};
+            currentPropuestaMapeo.forEach((item, idx) => {
+                const sel = document.getElementById(`map-sel-${idx}`);
+                if (sel) { mapping[item.columna_excel] = sel.value; }
+            });
+            return mapping;
+        }
+
+        async function prevalidarImportacion() {
+            const mapeo = getUserMapping();
+            try {
+                const res = await fetch('/api/importador/prevalidar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ batch_id: currentBatchId, mapeo_usuario: mapeo })
+                });
+                const data = await res.json();
+                if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
+
+                const r = data.resumen;
+                document.getElementById('semaforo-cards').innerHTML = `
+                    <div style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 10px; padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 800; color: #10b981;">${r.validos}</div>
+                        <div style="font-size: 0.75rem; color: #a7f3d0; font-weight: 700;">🟢 Registros Válidos</div>
+                    </div>
+                    <div style="background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;">${r.advertencias}</div>
+                        <div style="font-size: 0.75rem; color: #fde68a; font-weight: 700;">🟡 Advertencias</div>
+                    </div>
+                    <div style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 1rem; text-align: center;">
+                        <div style="font-size: 1.8rem; font-weight: 800; color: #ef4444;">${r.errores}</div>
+                        <div style="font-size: 0.75rem; color: #fca5a5; font-weight: 700;">🔴 Errores</div>
+                    </div>
+                `;
+
+                if (r.diferencias_detectadas && r.diferencias_detectadas.length > 0) {
+                    document.getElementById('diff-detector-container').style.display = 'block';
+                } else {
+                    document.getElementById('diff-detector-container').style.display = 'none';
+                }
+
+                document.getElementById('wiz-paso2').style.display = 'none';
+                document.getElementById('wiz-paso3').style.display = 'block';
+            } catch(e) { alert("Error de conexión durante la pre-validación."); }
+        }
+
+        async function procesarImportacionFinal() {
+            const mapeo = getUserMapping();
+            const chkDiffs = document.getElementById('chk-autorizar-diffs') ? document.getElementById('chk-autorizar-diffs').checked : false;
+
+            try {
+                const res = await fetch('/api/importador/procesar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        batch_id: currentBatchId,
+                        mapeo_usuario: mapeo,
+                        autorizaciones: { actualizar_precios: chkDiffs }
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
+
+                currentUndoToken = data.data.undo_token;
+                document.getElementById('txt-resumen-desc').textContent = data.message;
+                document.getElementById('txt-undo-token').textContent = `Token de Auditoría: ${currentUndoToken}`;
+
+                document.getElementById('wiz-paso3').style.display = 'none';
+                document.getElementById('wiz-paso4').style.display = 'block';
+                cargarHistorialAuditoria();
+            } catch(e) { alert("Error de conexión al procesar la importación."); }
+        }
+
+        async function deshacerImportacionDirecta() {
+            if (!currentUndoToken) return;
+            if (!confirm(`⚠️ ¿Deseas revertir la importación con token ${currentUndoToken}?`)) return;
+            
+            try {
+                const res = await fetch(`/api/importador/deshacer/${currentUndoToken}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`✅ ${data.message}`);
+                    resetWizard();
+                    cargarHistorialAuditoria();
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            } catch(e) { alert("Error al solicitar la reversión."); }
+        }
+
+        function resetWizard() {
+            currentBatchId = null;
+            currentPropuestaMapeo = [];
+            currentUndoToken = null;
+            document.getElementById('import-file-input').value = '';
+            document.getElementById('wiz-paso1').style.display = 'block';
+            document.getElementById('wiz-paso2').style.display = 'none';
+            document.getElementById('wiz-paso3').style.display = 'none';
+            document.getElementById('wiz-paso4').style.display = 'none';
+        }
+
+        async function cargarHistorialAuditoria() {
+            try {
+                const res = await fetch('/api/importador/historial');
+                const data = await res.json();
+                const tbody = document.getElementById('tbl-auditoria-body');
+                if (!tbody) return;
+
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #666; padding: 12px;">No hay importaciones registradas.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(item => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <td style="padding: 8px; color: #cbd5e1;">${item.fecha}</td>
+                        <td style="padding: 8px; font-family: monospace; color: #38bdf8;">${item.undo_token}</td>
+                        <td style="padding: 8px;">${item.total_registros} filas</td>
+                        <td style="padding: 8px;"><span style="color: ${item.estado==='COMPLETADO'?'#10b981':'#ef4444'}; font-weight:700;">${item.estado}</span></td>
+                        <td style="padding: 8px; text-align: center;">
+                            ${item.estado === 'COMPLETADO' ? `
+                                <button onclick="deshacerAuditToken('${item.undo_token}')" style="background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; cursor: pointer; font-weight:700;">
+                                    ↩️ Deshacer
+                                </button>
+                            ` : '<span style="color:#666; font-size:0.75rem;">Revertido</span>'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {}
+        }
+
+        async function deshacerAuditToken(token) {
+            if (!confirm(`⚠️ ¿Confirmas la reversión de la importación ${token}?`)) return;
+            try {
+                const res = await fetch(`/api/importador/deshacer/${token}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`✅ ${data.message}`);
+                    cargarHistorialAuditoria();
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+            } catch(e) { alert("Error de conexión."); }
+        }
+
+        async function cargarCostosVariables() {
+            try {
+                const res = await fetch('/api/costos-variables');
+                const data = await res.json();
+                const tbody = document.getElementById('tbl-costos-var-body');
+                if (!tbody) return;
+
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #666; padding: 12px;">No hay costos variables registrados.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(c => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <td style="padding: 10px; font-weight: 700; color: white;">${c.concepto}</td>
+                        <td style="padding: 10px; color: #38bdf8;">${c.tipo_calculo}</td>
+                        <td style="padding: 10px; color: #cbd5e1;">${c.base_calculo}</td>
+                        <td style="padding: 10px; text-align: right; font-weight: 700; color: #34d399;">$${c.valor.toLocaleString()}</td>
+                        <td style="padding: 10px; text-align: center;"><span style="color: ${c.estado==='ACTIVO'?'#10b981':'#ef4444'}; font-weight: 700;">${c.estado}</span></td>
+                        <td style="padding: 10px; text-align: center;">
+                            ${c.estado === 'ACTIVO' ? `
+                                <button onclick="desactivarCostoVariable(${c.id})" style="background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 4px 8px; font-size: 0.75rem; cursor: pointer;">Desactivar</button>
+                            ` : '<span style="color:#666;">Inactivo</span>'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {}
+        }
+
+        async function mostrarModalNuevoCostoVariable() {
+            const conc = prompt("Concepto del costo variable (Ej: Flete de Envío / Comisión Bancaria):");
+            if (!conc) return;
+
+            const valStr = prompt("Valor ($ o %):", "2500");
+            if (!valStr) return;
+
+            const tipo = prompt("Método de Cálculo (POR_UNIDAD, POR_PEDIDO, PORCENTAJE):", "POR_UNIDAD");
+            const base = prompt("Base de Aplicación (COSTO, VENTA, PEDIDO):", "COSTO");
+
+            try {
+                const res = await fetch('/api/costos-variables', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        concepto: conc.trim(),
+                        valor: parseFloat(valStr),
+                        tipo_calculo: (tipo || 'POR_UNIDAD').trim().toUpperCase(),
+                        base_calculo: (base || 'COSTO').trim().toUpperCase()
+                    })
+                });
+                if (res.ok) {
+                    cargarCostosVariables();
+                } else {
+                    alert("Error al registrar costo variable");
+                }
+            } catch(e) { alert("Error de conexión"); }
+        }
+
+        async function desactivarCostoVariable(id) {
+            if (!confirm("¿Deseas desactivar este costo variable? Se conservará para el historial de compras pasadas.")) return;
+            try {
+                const res = await fetch(`/api/costos-variables/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    cargarCostosVariables();
+                } else { alert("Error al desactivar costo variable"); }
+            } catch(e) { alert("Error de conexión"); }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             cargarCatalogoProductos();
+            cargarHistorialAuditoria();
+            cargarCostosVariables();
         });
 
         async function doBackup() { await fetch('/api/mantenimiento/backup', {method:'POST'}); alert('Backup creado en la carpeta /backups'); }
         async function doReset() { if(confirm('¡ATENCIÓN! Esto borrará todos tus datos. ¿Proceder?')) { await fetch('/api/mantenimiento/reset', {method:'POST'}); location.reload(); } }
 
         window.onload = loadAll;
+
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css') }}">
     <script src="{{ url_for('static', filename='assistant_engine.js') }}"></script>

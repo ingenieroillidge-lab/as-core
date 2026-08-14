@@ -83,3 +83,122 @@ def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, nego
         return True, total_ingreso
     except Exception as e:
         return False, f"Error en la transacción: {str(e)}"
+
+def eliminar_venta(venta_id, negocio_id, usuario_id):
+    """
+    Elimina una venta almacenada y reintegra el stock correspondiente al inventario.
+    Solo debe ser invocado por administradores del negocio.
+    """
+    try:
+        # 1. Obtener la venta
+        res = ejecutar_query(
+            "SELECT producto_id, cantidad FROM ventas WHERE id=? AND negocio_id=?",
+            (venta_id, negocio_id), fetch=True
+        )
+        if not res:
+            return False, "Venta no encontrada o no pertenece a la empresa"
+
+        producto_id, cantidad_vendida = res[0]
+
+        # 2. Obtener receta para reintegrar stock
+        insumos_receta = ejecutar_query(
+            """SELECT i.id, ri.cantidad_usada 
+               FROM producto_insumo ri 
+               JOIN inventario i ON ri.insumo_id = i.id 
+               WHERE ri.producto_id = ? AND ri.negocio_id = ?""",
+            (producto_id, negocio_id), fetch=True
+        ) or []
+
+        for i_id, cant_receta in insumos_receta:
+            cant_reintegrar = cant_receta * cantidad_vendida
+            inventario_service.registrar_movimiento(
+                i_id, 'entrada', cant_reintegrar, f"Reversión / Anulación Venta #{venta_id}", usuario_id, negocio_id
+            )
+
+        # 3. Revertir lotes si existen movimientos de lote para la venta
+        movs_lote = ejecutar_query(
+            "SELECT lote_id, cantidad FROM movimientos_lote WHERE venta_id=? AND negocio_id=?",
+            (venta_id, negocio_id), fetch=True
+        ) or []
+        for lote_id, cant_lote in movs_lote:
+            ejecutar_query(
+                "UPDATE lotes_inventario SET cantidad_disponible = cantidad_disponible + ? WHERE id=? AND negocio_id=?",
+                (cant_lote, lote_id, negocio_id)
+            )
+        if movs_lote:
+            ejecutar_query("DELETE FROM movimientos_lote WHERE venta_id=? AND negocio_id=?", (venta_id, negocio_id))
+
+        # 4. Eliminar abonos de cartera asociados a la venta si existen
+        ejecutar_query("DELETE FROM abonos_cartera WHERE venta_id=? AND negocio_id=?", (venta_id, negocio_id))
+
+        # 5. Eliminar la venta
+        ejecutar_query("DELETE FROM ventas WHERE id=? AND negocio_id=?", (venta_id, negocio_id))
+
+        return True, "Venta eliminada exitosamente y stock reintegrado al inventario"
+    except Exception as e:
+        return False, f"Error al eliminar la venta: {str(e)}"
+
+def modificar_venta(venta_id, negocio_id, usuario_id, datos):
+    """
+    Modifica una venta existente. Permite actualizar método de pago, fecha, total, observaciones o cantidad.
+    Solo disponible para administradores del negocio.
+    """
+    try:
+        res = ejecutar_query(
+            "SELECT id, producto_id, cantidad, total FROM ventas WHERE id=? AND negocio_id=?",
+            (venta_id, negocio_id), fetch=True
+        )
+        if not res:
+            return False, "Venta no encontrada"
+
+        _, p_id_actual, cant_actual, total_actual = res[0]
+
+        metodo_pago = datos.get('metodo_pago')
+        fecha = datos.get('fecha')
+        nueva_cant = float(datos.get('cantidad', cant_actual))
+        nuevo_total = float(datos.get('total', total_actual))
+        observacion = datos.get('observacion')
+        cliente_nombre = datos.get('cliente_nombre')
+
+        # Ajuste de inventario si cambia la cantidad
+        if nueva_cant != cant_actual:
+            diferencia = nueva_cant - cant_actual
+            insumos_receta = ejecutar_query(
+                "SELECT insumo_id, cantidad_usada FROM producto_insumo WHERE producto_id=? AND negocio_id=?",
+                (p_id_actual, negocio_id), fetch=True
+            ) or []
+
+            for i_id, cant_receta in insumos_receta:
+                cant_ajuste = abs(diferencia) * cant_receta
+                if diferencia > 0:
+                    inventario_service.registrar_movimiento(
+                        i_id, 'salida', cant_ajuste, f"Ajuste Venta #{venta_id} (+cant)", usuario_id, negocio_id
+                    )
+                else:
+                    inventario_service.registrar_movimiento(
+                        i_id, 'entrada', cant_ajuste, f"Ajuste Venta #{venta_id} (-cant)", usuario_id, negocio_id
+                    )
+
+        campos = ["cantidad = ?", "total = ?"]
+        params = [nueva_cant, nuevo_total]
+
+        if metodo_pago:
+            campos.append("metodo_pago = ?")
+            params.append(metodo_pago)
+        if fecha:
+            campos.append("fecha = ?")
+            params.append(fecha)
+        if observacion is not None:
+            campos.append("observacion = ?")
+            params.append(observacion)
+        if cliente_nombre is not None:
+            campos.append("cliente_nombre = ?")
+            params.append(cliente_nombre)
+
+        params.extend([venta_id, negocio_id])
+        query_sql = f"UPDATE ventas SET {', '.join(campos)} WHERE id=? AND negocio_id=?"
+        ejecutar_query(query_sql, params)
+
+        return True, "Venta actualizada exitosamente"
+    except Exception as e:
+        return False, f"Error al modificar la venta: {str(e)}"

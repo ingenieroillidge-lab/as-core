@@ -3,7 +3,10 @@ import services.ventas_service as ventas_service
 import services.inventario_service as inventario_service
 import services.financiero_service as financiero_service
 import services.cartera_service as cartera_service
+import services.importador_inteligente_service as importador_service
+import services.costos_variables_service as costos_variables_service
 from database import conectar, crear_tablas, ejecutar_query
+
 from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -49,9 +52,13 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('role') not in ['ADMIN', 'SUPER']: return redirect(url_for('index'))
+        if session.get('role') not in ['ADMIN', 'SUPER']:
+            if request.is_json or request.path.startswith('/api/'):
+                return jsonify({"error": "Acceso denegado: Solo el administrador del negocio puede realizar esta acción."}), 403
+            return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
+
 
 def super_required(f):
     @wraps(f)
@@ -454,9 +461,37 @@ def api_usuarios():
     res = ejecutar_query("SELECT id, username, role, estado, ultimo_acceso FROM usuarios WHERE negocio_id=?", (nid,), fetch=True) or []
     return jsonify([{"id": x[0], "username": x[1], "role": x[2], "estado": x[3], "ultimo_acceso": x[4]} for x in res])
 
-@app.route('/api/ventas', methods=['POST'])
+@app.route('/api/ventas', methods=['GET', 'POST'])
 @login_required
 def post_venta():
+    nid = session['negocio_id']
+    if request.method == 'GET':
+        res = ejecutar_query("""
+            SELECT v.id, v.fecha, p.nombre as producto_nombre, v.cantidad, v.total, v.metodo_pago,
+                   u.username as usuario_nombre, COALESCE(v.cliente_nombre, '') as cliente_nombre,
+                   COALESCE(v.observacion, '') as observacion, v.producto_id
+            FROM ventas v
+            LEFT JOIN productos p ON v.producto_id = p.id
+            LEFT JOIN usuarios u ON v.usuario_id = u.id
+            WHERE v.negocio_id = ?
+            ORDER BY v.id DESC LIMIT 200
+        """, (nid,), fetch=True) or []
+        out = []
+        for x in res:
+            out.append({
+                "id": x[0],
+                "fecha": x[1],
+                "producto_nombre": x[2] or "Producto no especificado",
+                "cantidad": x[3],
+                "total": x[4],
+                "metodo_pago": x[5],
+                "usuario_nombre": x[6] or "Sistema",
+                "cliente_nombre": x[7],
+                "observacion": x[8],
+                "producto_id": x[9]
+            })
+        return jsonify(out)
+
     d = request.json
     metodo = d.get('metodo_pago', 'Efectivo')
     producto_id = int(d['producto_id'])
@@ -515,6 +550,25 @@ def post_venta():
         return jsonify({"message": "ok", "total": r})
     else:
         return jsonify({"error": r}), 400
+
+@app.route('/api/ventas/<int:vid>', methods=['PUT', 'DELETE'])
+@login_required
+@admin_required
+def api_venta_detail(vid):
+    nid = session['negocio_id']
+    uid = session['user_id']
+    if request.method == 'DELETE':
+        ok, msg = ventas_service.eliminar_venta(vid, nid, uid)
+        if ok:
+            return jsonify({"message": msg})
+        return jsonify({"error": msg}), 400
+    elif request.method == 'PUT':
+        d = request.json or {}
+        ok, msg = ventas_service.modificar_venta(vid, nid, uid, d)
+        if ok:
+            return jsonify({"message": msg})
+        return jsonify({"error": msg}), 400
+
 
 @app.route('/api/inventario')
 @login_required
@@ -938,10 +992,6 @@ def get_diagnostico():
 @app.route('/api/plantilla/<tipo>')
 @login_required
 def descargar_plantilla(tipo):
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
-    from openpyxl.utils import get_column_letter
-
     fmt = request.args.get('fmt', 'xlsx').lower()
 
     if tipo == 'productos':
@@ -965,7 +1015,7 @@ def descargar_plantilla(tipo):
         ]
         base_name = 'plantilla_cargue_ventas'
 
-    if fmt == 'csv':
+    def _generar_csv():
         output = io.StringIO()
         writer = csv.writer(output, delimiter=';')
         writer.writerow(headers)
@@ -978,39 +1028,51 @@ def descargar_plantilla(tipo):
             mimetype="text/csv; charset=utf-8",
             headers={"Content-disposition": f"attachment; filename={base_name}.csv"}
         )
+
+    if fmt == 'csv':
+        return _generar_csv()
     else:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Cargue Masivo"
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.utils import get_column_letter
 
-        header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
-        header_fill = PatternFill(start_color='0EA5E9', end_color='0EA5E9', fill_type='solid')
-        align_center = Alignment(horizontal='center', vertical='center')
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Cargue Masivo"
 
-        ws.append(headers)
-        for col_num in range(1, len(headers) + 1):
-            cell = ws.cell(row=1, column=col_num)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = align_center
+            header_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+            header_fill = PatternFill(start_color='0EA5E9', end_color='0EA5E9', fill_type='solid')
+            align_center = Alignment(horizontal='center', vertical='center')
 
-        for row in data_rows:
-            ws.append(row)
+            ws.append(headers)
+            for col_num in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=col_num)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = align_center
 
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
-            col_letter = get_column_letter(col[0].column)
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            for row in data_rows:
+                ws.append(row)
 
-        out_stream = io.BytesIO()
-        wb.save(out_stream)
-        out_stream.seek(0)
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
-        return Response(
-            out_stream.getvalue(),
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-disposition": f"attachment; filename={base_name}.xlsx"}
-        )
+            out_stream = io.BytesIO()
+            wb.save(out_stream)
+            out_stream.seek(0)
+
+            return Response(
+                out_stream.getvalue(),
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-disposition": f"attachment; filename={base_name}.xlsx"}
+            )
+        except Exception as e:
+            print(f"Error generando Excel con openpyxl, cayendo a CSV: {e}", file=sys.stderr)
+            return _generar_csv()
+
 
 @app.route('/api/importar/csv', methods=['POST'])
 @login_required
@@ -1221,8 +1283,132 @@ def importar_google_sheets():
         return jsonify({"error": f"No se pudo descargar la hoja de Google Sheets. Asegúrate de compartirla como pública ('Cualquier persona con el enlace'): {str(e)}"}), 500
 
 # ==========================
+# API: IMPORTADOR INTELIGENTE UNIVERSAL Y COSTOS VARIABLES
+# ==========================
+
+@app.route('/api/importador/cargar', methods=['POST'])
+@login_required
+def api_importador_cargar():
+    import openpyxl
+    nid = session['negocio_id']
+    if 'file' not in request.files:
+        return jsonify({"error": "No se adjuntó ningún archivo"}), 400
+
+    file = request.files['file']
+    filename = (file.filename or '').lower()
+    filas_matriz = []
+
+    try:
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            wb = openpyxl.load_workbook(file.stream, data_only=True)
+            ws = wb.active
+            for r in ws.iter_rows(values_only=True):
+                if r and any(cell is not None for cell in r):
+                    filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
+        else:
+            content = file.stream.read().decode('utf-8-sig', errors='ignore')
+            first_line = content.splitlines()[0] if content.splitlines() else ''
+            delimiter = ';' if ';' in first_line else (',' if ',' in first_line else '\t')
+            reader = csv.reader(io.StringIO(content), delimiter=delimiter)
+            filas_matriz = list(reader)
+
+        ok, msg, res_info = importador_service.crear_lote_staging(nid, file.filename, filas_matriz)
+        if not ok:
+            return jsonify({"error": msg}), 400
+
+        propuesta = importador_service.proponer_mapeo_heuristico(res_info['headers'], nid)
+        return jsonify({"message": msg, "info": res_info, "propuesta_mapeo": propuesta})
+    except Exception as e:
+        return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
+
+@app.route('/api/importador/prevalidar', methods=['POST'])
+@login_required
+def api_importador_prevalidar():
+    nid = session['negocio_id']
+    d = request.json or {}
+    batch_id = d.get('batch_id')
+    mapeo_usuario = d.get('mapeo_usuario', {})
+
+    if not batch_id or not mapeo_usuario:
+        return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
+
+    ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
+    if ok:
+        return jsonify({"message": msg, "resumen": resumen})
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/importador/procesar', methods=['POST'])
+@login_required
+def api_importador_procesar():
+    nid = session['negocio_id']
+    uid = session['user_id']
+    d = request.json or {}
+    batch_id = d.get('batch_id')
+    mapeo_usuario = d.get('mapeo_usuario', {})
+    autorizaciones = d.get('autorizaciones', {})
+
+    if not batch_id or not mapeo_usuario:
+        return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
+
+    ok, msg, result = importador_service.procesar_importacion_aprobada(batch_id, nid, uid, mapeo_usuario, autorizaciones)
+    if ok:
+        return jsonify({"message": msg, "data": result})
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/importador/historial', methods=['GET'])
+@login_required
+def api_importador_historial():
+    nid = session['negocio_id']
+    res = ejecutar_query(
+        "SELECT id, fecha, undo_token, nombre_archivo, total_registros, estado FROM auditoria_importaciones WHERE negocio_id=? ORDER BY id DESC LIMIT 50",
+        (nid,), fetch=True
+    ) or []
+    return jsonify([{
+        "id": x[0], "fecha": x[1], "undo_token": x[2], "nombre_archivo": x[3], "total_registros": x[4], "estado": x[5]
+    } for x in res])
+
+@app.route('/api/importador/deshacer/<undo_token>', methods=['POST'])
+@login_required
+def api_importador_deshacer(undo_token):
+    nid = session['negocio_id']
+    uid = session['user_id']
+    ok, msg = importador_service.revertir_importacion(undo_token, nid, uid)
+    if ok:
+        return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/costos-variables', methods=['GET', 'POST'])
+@login_required
+def api_costos_variables():
+    nid = session['negocio_id']
+    if request.method == 'POST':
+        d = request.json or {}
+        ok, msg = costos_variables_service.crear_costo_variable(
+            nid, d.get('concepto'), d.get('tipo_calculo'), d.get('base_calculo'), d.get('valor'), d.get('observaciones', '')
+        )
+        return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
+    else:
+        costos = costos_variables_service.obtener_costos_variables(nid)
+        return jsonify(costos)
+
+@app.route('/api/costos-variables/<int:cid>', methods=['PUT', 'DELETE'])
+@login_required
+def api_costos_variables_detail(cid):
+    nid = session['negocio_id']
+    if request.method == 'DELETE':
+        ok, msg = costos_variables_service.desactivar_o_eliminar_costo_variable(cid, nid)
+        return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
+    elif request.method == 'PUT':
+        d = request.json or {}
+        ok, msg = costos_variables_service.actualizar_costo_variable(
+            cid, nid, d.get('concepto'), d.get('tipo_calculo'), d.get('base_calculo'), d.get('valor'), d.get('estado', 'ACTIVO'), d.get('observaciones', '')
+        )
+        return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
+
+# ==========================
 # API: SUPER ADMIN ENDPOINTS
 # ==========================
+
 
 @app.route('/api/super/stats')
 @login_required
