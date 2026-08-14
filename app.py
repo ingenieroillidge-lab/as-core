@@ -5,6 +5,7 @@ import services.financiero_service as financiero_service
 import services.cartera_service as cartera_service
 import services.importador_inteligente_service as importador_service
 import services.costos_variables_service as costos_variables_service
+import services.analisis_service as analisis_service
 from database import conectar, crear_tablas, ejecutar_query
 
 from datetime import datetime, timedelta
@@ -1533,6 +1534,27 @@ def api_costos_variables_detail(cid):
             cid, nid, d.get('concepto'), d.get('tipo_calculo'), d.get('base_calculo'), d.get('valor'), d.get('estado', 'ACTIVO'), d.get('observaciones', '')
         )
         return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
+
+
+# ==========================
+# API: CENTRO DE ANÁLISIS EMPRESARIAL (CONTEXTO GLOBAL DE FILTROS)
+# ==========================
+
+@app.route('/api/analisis/opciones-filtros', methods=['GET'])
+@login_required
+def api_analisis_opciones_filtros():
+    nid = session['negocio_id']
+    data = analisis_service.obtener_opciones_filtros(nid)
+    return jsonify(data)
+
+@app.route('/api/analisis/centro', methods=['POST'])
+@login_required
+def api_analisis_centro():
+    nid = session['negocio_id']
+    filtros = request.json or {}
+    data = analisis_service.obtener_centro_analisis_completo(nid, filtros)
+    return jsonify(data)
+
 
 # ==========================
 # API: SUPER ADMIN ENDPOINTS

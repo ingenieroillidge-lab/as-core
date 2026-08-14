@@ -10,9 +10,6 @@ import services.inventario_service as inventario_service
 # ══════════════════════════════════════════════════════════════════
 # NÚCLEO SEMÁNTICO UNIVERSAL
 # ══════════════════════════════════════════════════════════════════
-# Cada clave es un CONCEPTO del sistema, no un campo de un Excel particular.
-# Los sinónimos son tokens que podrían encontrarse en encabezados reales
-# de distintos sectores empresariales.
 
 SEMANTIC_CORE = {
     # ── Identidad del producto o servicio ──
@@ -32,7 +29,7 @@ SEMANTIC_CORE = {
         "SUBCATEGORIA", "SUBTIPO", "SUBGRUPO", "SEGMENTO", "SUBLINEA"
     ],
 
-    # ── Costos y precios (moneda universal) ──
+    # ── Costos y precios ──
     "costo_unitario_origen": [
         "US", "USD", "COSTO USD", "COSTO UNITARIO USD", "PRECIO COMPRA USD",
         "UNIT USD", "COSTO EUR", "COSTO ORIGEN", "COSTO UNITARIO ORIGEN"
@@ -88,7 +85,7 @@ SEMANTIC_CORE = {
         "ARRIVAL DATE", "FECHA ENTREGA", "FECHA INGRESO"
     ],
 
-    # ── Campos calculados (no se importan, solo se detectan) ──
+    # ── Campos derivados ──
     "campo_calculado": [
         "UTILIDAD", "PROFIT", "MARGEN", "PORCENTAJE DE GANANCIA",
         "GANANCIA", "DIAS EN TRANSITO", "DIAS TRANSITO", "TRANSIT DAYS",
@@ -97,8 +94,12 @@ SEMANTIC_CORE = {
     ],
 }
 
-# Tokens comunes que sugieren que una columna es un atributo del producto
-# Se usa como fallback cuando no hay coincidencia exacta con SEMANTIC_CORE
+SINGLETON_FIELDS = {
+    "nombre_producto", "codigo_sku", "precio_venta", 
+    "cliente_nombre", "saldo_pendiente", "abono_monto", 
+    "fecha_operacion", "fecha_recepcion"
+}
+
 ATTRIBUTE_HINTS = [
     "JUGADOR", "EDICION", "PLAYER", "TEMPORADA",
     "MARCA", "BRAND", "FABRICANTE",
@@ -109,7 +110,6 @@ ATTRIBUTE_HINTS = [
     "CILINDRAJE", "POTENCIA", "VOLTAJE",
 ]
 
-# Tokens comunes que sugieren que una columna es una variante
 VARIANT_HINTS = [
     "TALLA", "SIZE", "VARIANTE",
     "COLOR", "COLOUR",
@@ -117,7 +117,6 @@ VARIANT_HINTS = [
     "SABOR", "FRAGANCIA", "DENSIDAD",
 ]
 
-# Etiquetas humanizadas para el frontend
 CAMPO_LABELS = {
     "IGNORAR": "🚫 No importar",
     "nombre_producto": "📦 Nombre del producto o servicio",
@@ -138,7 +137,7 @@ CAMPO_LABELS = {
     "abono_monto": "💵 Pago / Abono recibido",
     "fecha_operacion": "📅 Fecha de operación",
     "fecha_recepcion": "📦 Fecha de recepción",
-    "campo_calculado": "📊 Campo calculado (no importar)",
+    "campo_calculado": "📊 Campo derivado — usar para validación",
 }
 
 
@@ -147,17 +146,12 @@ CAMPO_LABELS = {
 # ══════════════════════════════════════════════════════════════════
 
 def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
-    """
-    Carga el archivo en staging. Filtra columnas vacías.
-    Inserción masiva con ejecutar_query_many (1 transacción).
-    """
     if not filas_matriz or len(filas_matriz) < 1:
         return False, "El archivo no contiene filas de datos", None
 
     batch_id = f"BATCH-{uuid.uuid4().hex[:12].upper()}"
     fecha_creacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Filtrar columnas vacías del encabezado
     raw_headers = [str(c).strip() for c in filas_matriz[0]]
     headers_info = []
     headers = []
@@ -178,7 +172,6 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
             dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
         muestras.append(dict_row)
 
-    # Inserción masiva en staging (1 sola transacción)
     params_staging = []
     for idx, row in enumerate(filas_datos):
         dict_row = {}
@@ -207,18 +200,15 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
 
 
 # ══════════════════════════════════════════════════════════════════
-# ETAPA 2: MOTOR HEURÍSTICO UNIVERSAL
+# ETAPA 2: MOTOR HEURÍSTICO UNIVERSAL Y CONTEXTUAL CON EXPLICABILIDAD
 # ══════════════════════════════════════════════════════════════════
 
-def proponer_mapeo_heuristico(headers, negocio_id):
+def proponer_mapeo_heuristico(headers, negocio_id, muestras=None):
     """
-    Motor heurístico contextual universal.
-    Para cada encabezado, detecta:
-      - tipo semántico (concepto del sistema, atributo, variante, calculado)
-      - nombre del atributo/variante si aplica
-      - confianza y origen de la propuesta
+    Motor heurístico contextual:
+    Evalúa encabezado + muestra de valores + columnas vecinas + tipo de dato.
+    Devuelve propuesta con nivel de confianza y motivos explícitos.
     """
-    # Recuperar memoria de mapeo previa del tenant
     mem_res = ejecutar_query(
         "SELECT estructura_columnas_json FROM mapeos_importacion WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
         (negocio_id,), fetch=True
@@ -230,13 +220,26 @@ def proponer_mapeo_heuristico(headers, negocio_id):
         except Exception:
             mapeo_guardado = {}
 
+    muestras = muestras or []
+    headers_upper = [h.upper().strip() for h in headers]
+
+    # Detectar presencia de atributos/variantes en el conjunto
+    tiene_atributos_vecinos = any(
+        any(hint in h for hint in ATTRIBUTE_HINTS + VARIANT_HINTS) 
+        for h in headers_upper
+    )
+
     propuesta = []
+    destinos_usados = {}
+
     for h in headers:
         h_norm = h.upper().strip()
+        motivos = []
 
         # 1. Memoria guardada del tenant
         if h in mapeo_guardado:
             campo_mem = mapeo_guardado[h]
+            motivos.append("Recuperado de la memoria de importaciones anteriores de tu empresa.")
             propuesta.append({
                 "columna_excel": h,
                 "campo_propuesto": campo_mem,
@@ -244,18 +247,21 @@ def proponer_mapeo_heuristico(headers, negocio_id):
                 "origen": "MEMORIA_TENANT",
                 "nombre_atributo": h if campo_mem in ("atributo", "variante") else None,
                 "label": CAMPO_LABELS.get(campo_mem, campo_mem),
+                "motivos": motivos,
                 "es_calculado": campo_mem == "campo_calculado"
             })
+            destinos_usados[campo_mem] = destinos_usados.get(campo_mem, 0) + 1
             continue
 
-        # 2. Coincidencia exacta con SEMANTIC_CORE
         match_campo = None
         confianza = "NINGUNA"
 
+        # 2. Coincidencia exacta con SEMANTIC_CORE
         for campo, sinonimos in SEMANTIC_CORE.items():
             if h_norm in sinonimos:
                 match_campo = campo
                 confianza = "ALTA"
+                motivos.append(f"Coincidencia exacta de encabezado con el concepto '{CAMPO_LABELS.get(campo, campo)}'.")
                 break
 
         # 3. Coincidencia parcial con SEMANTIC_CORE
@@ -264,37 +270,67 @@ def proponer_mapeo_heuristico(headers, negocio_id):
                 if any(len(s) > 2 and s in h_norm for s in sinonimos):
                     match_campo = campo
                     confianza = "MEDIA"
+                    motivos.append(f"El encabezado contiene términos compatibles con '{CAMPO_LABELS.get(campo, campo)}'.")
                     break
 
-        # 4. Detectar si es una variante conocida
+        # 4. Evaluación Contextual para 'Equipo' / 'Club' / 'Entidad' / 'Artículo'
+        if not match_campo:
+            if h_norm in ("EQUIPO", "CLUB", "ENTIDAD", "MODELO", "ARTICULO", "DESCRIPCION_CORTA"):
+                val_muestras = [str(m.get(h, '')).strip() for m in muestras if m.get(h)]
+                es_textual = len(val_muestras) > 0 and any(not v.replace('.','').isdigit() for v in val_muestras)
+
+                if es_textual and tiene_atributos_vecinos:
+                    match_campo = "nombre_producto"
+                    confianza = "MEDIA"
+                    motivos.append("Valores textuales de muestra compatibles con catálogo en presencia de atributos/variantes vecinos.")
+                    motivos.append("Sugerido para revisión del usuario (IA propone, humano autoriza).")
+
+        # 5. Detectar variante conocida
         if not match_campo:
             if h_norm in VARIANT_HINTS or any(v in h_norm for v in VARIANT_HINTS if len(v) > 2):
                 match_campo = "variante"
                 confianza = "ALTA"
+                motivos.append("El encabezado corresponde a una dimensión de variante inventariable (talla, color, presentación).")
 
-        # 5. Detectar si es un atributo conocido
+        # 6. Detectar atributo conocido
         if not match_campo:
             if h_norm in ATTRIBUTE_HINTS or any(a in h_norm for a in ATTRIBUTE_HINTS if len(a) > 2):
                 match_campo = "atributo"
                 confianza = "MEDIA"
+                motivos.append("El encabezado corresponde a una característica descriptiva del producto (marca, modelo, material, jugador).")
 
-        # 6. Si no se reconoce nada, proponer IGNORAR
+        # 7. Si no se reconoce nada
         if not match_campo:
             match_campo = "IGNORAR"
+            motivos.append("No se encontró coincidencia semántica evidente en el diccionario universal.")
 
-        nombre_attr = None
-        if match_campo in ("atributo", "variante"):
-            nombre_attr = h  # El nombre original de la columna se convierte en el nombre del atributo/variante
+        nombre_attr = h if match_campo in ("atributo", "variante") else None
+
+        # Moneda concreta detectada para UX
+        label_dinamica = CAMPO_LABELS.get(match_campo, match_campo)
+        if match_campo == "costo_unitario_origen":
+            if "US" in h_norm or "USD" in h_norm:
+                label_dinamica = "💵 Costo unitario — USD"
+            elif "EUR" in h_norm:
+                label_dinamica = "💶 Costo unitario — EUR"
+        elif match_campo == "tasa_cambio":
+            if "US" in h_norm or "USD" in h_norm:
+                label_dinamica = "💱 Tasa de cambio — USD → COP"
+        elif match_campo == "costo_unitario_local":
+            label_dinamica = "💰 Costo unitario — COP"
 
         propuesta.append({
             "columna_excel": h,
             "campo_propuesto": match_campo,
             "confianza": confianza,
-            "origen": "HEURISTICA_SISTEMA",
+            "origen": "HEURISTICA_CONTEXTUAL",
             "nombre_atributo": nombre_attr,
-            "label": CAMPO_LABELS.get(match_campo, match_campo),
+            "label": label_dinamica,
+            "motivos": motivos,
             "es_calculado": match_campo == "campo_calculado"
         })
+
+        destinos_usados[match_campo] = destinos_usados.get(match_campo, 0) + 1
 
     return propuesta
 
@@ -304,18 +340,9 @@ def proponer_mapeo_heuristico(headers, negocio_id):
 # ══════════════════════════════════════════════════════════════════
 
 def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
-    """
-    Prevalidación batch optimizada:
-    - 1 consulta: staging completo
-    - 1 consulta: productos existentes
-    - 1 consulta: clientes existentes
-    - Conciliación en memoria
-    - 1 consulta batch: actualización del staging
-    """
     t_start = time.time()
     print(f"[PREVALIDAR] Leyendo staging batch_id={batch_id}")
 
-    # ── Consulta 1: Staging completo ──
     registros_staging = ejecutar_query(
         "SELECT id, fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
         (batch_id, negocio_id), fetch=True
@@ -324,9 +351,6 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
     if not registros_staging:
         return False, "No se encontraron registros en la capa de staging", None
 
-    print(f"[PREVALIDAR] Registros staging: {len(registros_staging)}")
-
-    # ── Consulta 2: Productos existentes (masivo) ──
     productos_existentes = ejecutar_query(
         "SELECT id, nombre, precio, categoria, subcategoria, variante FROM productos WHERE negocio_id=?",
         (negocio_id,), fetch=True
@@ -336,18 +360,12 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         key = (p[1] or '').strip().lower()
         prod_map[key] = {"id": p[0], "nombre": p[1], "precio": p[2], "categoria": p[3], "subcategoria": p[4], "variante": p[5]}
 
-    print(f"[PREVALIDAR] Productos existentes cargados: {len(prod_map)}")
-
-    # ── Consulta 3: Clientes existentes (masivo) ──
     clientes_existentes = ejecutar_query(
         "SELECT id, nombre FROM clientes WHERE negocio_id=?",
         (negocio_id,), fetch=True
     ) or []
     cli_set = {(c[1] or '').strip().lower() for c in clientes_existentes}
 
-    print(f"[PREVALIDAR] Clientes existentes cargados: {len(cli_set)}")
-
-    # ── Conciliación en memoria ──
     total_validos = 0
     total_advertencias = 0
     total_errores = 0
@@ -366,7 +384,7 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         errs = []
         advs = []
 
-        # ── Validación de cantidad ──
+        # ── Cantidad ──
         cant_str = mapped_data.get('cantidad', '')
         try:
             cant_val = float(cant_str) if cant_str else 1.0
@@ -374,7 +392,7 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             cant_val = 1.0
             advs.append("No se identificó cantidad explícita; se asumió 1.0 unidad.")
 
-        # ── Validación multimoneda universal (valor_origen × tasa = valor_destino) ──
+        # ── Validación multimoneda ──
         origen_str = mapped_data.get('costo_unitario_origen', '')
         tasa_str = mapped_data.get('tasa_cambio', '')
         local_str = mapped_data.get('costo_unitario_local', '')
@@ -388,20 +406,19 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                 calc_local = v_origen * v_tasa
                 if abs(calc_local - v_local) > 1.0:
                     advs.append(
-                        f"Discrepancia multimoneda: {v_origen} × {v_tasa} = {calc_local:,.0f}, "
-                        f"pero el archivo reporta {v_local:,.0f}."
+                        f"🧮 Discrepancia multimoneda: {v_origen} × {v_tasa} = ${calc_local:,.0f}, "
+                        f"pero el archivo reporta ${v_local:,.0f}."
                     )
             except Exception:
                 pass
 
-        # ── Conciliación de producto (solo nombre, sin concatenar atributos) ──
+        # ── Conciliación de producto ──
         nombre_prod = (mapped_data.get('nombre_producto') or '').strip()
         key_p = nombre_prod.lower()
 
         if nombre_prod:
             if key_p in prod_map:
                 p_exist = prod_map[key_p]
-                # Detector de diferencias de precio
                 precio_imp_str = mapped_data.get('precio_venta', '')
                 if precio_imp_str:
                     try:
@@ -423,7 +440,6 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             else:
                 productos_nuevos.append({"nombre": nombre_prod})
 
-        # ── Clasificación del registro ──
         estado_row = "VALIDO"
         if errs:
             estado_row = "ERROR"
@@ -434,7 +450,6 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         else:
             total_validos += 1
 
-        # Acumular para batch update
         update_params.append((
             estado_row,
             json.dumps(errs, ensure_ascii=False),
@@ -450,18 +465,13 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             "advertencias": advs
         })
 
-    # ── Consulta 4: Batch update del staging ──
     t_conciliacion = time.time() - t_start
-    print(f"[PREVALIDAR] Conciliación en memoria completada en {t_conciliacion:.3f}s")
-
     ejecutar_query_many(
         "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
         update_params
     )
 
     t_total = time.time() - t_start
-    print(f"[PREVALIDAR] Batch update completado. Tiempo total: {t_total:.3f}s")
-    print(f"[PREVALIDAR] Resultado: validos={total_validos}, advertencias={total_advertencias}, errores={total_errores}")
 
     resumen = {
         "batch_id": batch_id,
@@ -479,19 +489,14 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
 
 
 # ══════════════════════════════════════════════════════════════════
-# ETAPA 4: PROCESAMIENTO APROBADO (DEUDA TÉCNICA: Adaptar a modelo universal)
+# ETAPA 4: PROCESAMIENTO APROBADO CON MULTI-ATRIBUTOS
 # ══════════════════════════════════════════════════════════════════
-# NOTA: Esta función todavía consume los campos antiguos del modelo
-# (jugador_edicion, variante_talla). Debe ser adaptada al modelo
-# semántico universal (atributo, variante, categoria) en una
-# iteración posterior, una vez que Carga → Mapeo → Prevalidación
-# estén estables.
 
 def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None):
     """
-    Confirmación explícita e inserción transaccional multi-módulo.
-    Alimenta productos, inventario, compras/lotes, ventas y cartera.
-    Guarda memoria de mapeo y genera auditoría con undo_token.
+    Confirmación transaccional multi-módulo.
+    Soporta múltiples columnas asignadas a 'atributo' y 'variante'.
+    Cada columna conserva su encabezado como nombre_atributo en producto_atributos.
     """
     registros_staging = ejecutar_query(
         "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
@@ -514,11 +519,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             if campo_target and campo_target != "IGNORAR":
                 mapped[campo_target] = raw_row.get(col_excel, "").strip()
 
-        # Compatibilidad temporal: mapear campos universales a los que
-        # espera la lógica existente (deuda técnica explícita)
         nombre_prod = (mapped.get('nombre_producto') or '').strip()
-        atributo = (mapped.get('atributo') or '').strip()
-        variante = (mapped.get('variante') or '').strip()
 
         if not nombre_prod:
             continue
@@ -533,7 +534,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
         except Exception:
             costo_local = 0.0
 
-        # 1. PRODUCTO (nombre limpio, sin concatenar atributos)
+        # 1. PRODUCTO (nombre limpio)
         p_res = ejecutar_query(
             "SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?",
             (nombre_prod, negocio_id), fetch=True
@@ -546,8 +547,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             categoria = (mapped.get('categoria') or '').strip()
             subcategoria = (mapped.get('subcategoria') or '').strip()
             ejecutar_query(
-                "INSERT INTO productos (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria, variante) VALUES (?, ?, ?, 'TRANSFORMADO', ?, ?, ?)",
-                (negocio_id, nombre_prod, precio_v, categoria or None, subcategoria or None, variante or None)
+                "INSERT INTO productos (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria) VALUES (?, ?, ?, 'TRANSFORMADO', ?, ?)",
+                (negocio_id, nombre_prod, precio_v, categoria or None, subcategoria or None)
             )
             pid_r = ejecutar_query(
                 "SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1",
@@ -556,29 +557,17 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             pid = pid_r[0][0] if (pid_r and len(pid_r) > 0 and len(pid_r[0]) > 0) else 1
             creados_info["productos"].append(pid)
 
-            # Guardar atributos del producto en tabla separada
-            if atributo:
-                # El nombre del atributo proviene de la columna Excel original
-                for col_excel, campo_target in mapeo_usuario.items():
-                    if campo_target == "atributo":
-                        val = raw_row.get(col_excel, "").strip()
-                        if val:
-                            ejecutar_query(
-                                "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, 'ATRIBUTO')",
-                                (negocio_id, pid, col_excel, val)
-                            )
+        # 2. ATRIBUTOS Y VARIANTES MULTI-COLUMNA EN TABLA SEPARADA
+        for col_excel, campo_target in mapeo_usuario.items():
+            if campo_target in ("atributo", "variante"):
+                val = raw_row.get(col_excel, "").strip()
+                if val:
+                    ejecutar_query(
+                        "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, ?)",
+                        (negocio_id, pid, col_excel, val, campo_target.upper())
+                    )
 
-            if variante:
-                for col_excel, campo_target in mapeo_usuario.items():
-                    if campo_target == "variante":
-                        val = raw_row.get(col_excel, "").strip()
-                        if val:
-                            ejecutar_query(
-                                "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, 'VARIANTE')",
-                                (negocio_id, pid, col_excel, val)
-                            )
-
-        # 2. CARTERA Y CLIENTE
+        # 3. CARTERA Y CLIENTE
         cli_nombre = (mapped.get('cliente_nombre') or '').strip()
         deuda_val = float(str(mapped.get('saldo_pendiente', 0)).replace('$', '').replace(',', '').strip() or 0)
         abono_val = float(str(mapped.get('abono_monto', 0)).replace('$', '').replace(',', '').strip() or 0)
@@ -587,7 +576,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             cartera_service.crear_o_actualizar_cliente(cli_nombre, negocio_id)
             creados_info["clientes"].append(cli_nombre)
 
-        # 3. REGISTRO DE VENTA / VENTA A CRÉDITO
+        # 4. REGISTRO DE VENTA / VENTA A CRÉDITO
         cant = float(str(mapped.get('cantidad', 1)).strip() or 1.0)
         metodo = "CRÉDITO" if deuda_val > 0 else "Efectivo"
         fecha_v = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
@@ -599,17 +588,22 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             if v_res and len(v_res) > 0 and len(v_res[0]) > 0:
                 vid = v_res[0][0]
                 creados_info["ventas"].append(vid)
+                if cli_nombre or deuda_val > 0:
+                    ejecutar_query(
+                        "UPDATE ventas SET cliente_nombre=?, saldo_pendiente=? WHERE id=? AND negocio_id=?",
+                        (cli_nombre, deuda_val, vid, negocio_id)
+                    )
                 if abono_val > 0:
                     cartera_service.registrar_abono(vid, abono_val, "Efectivo (Importación)", usuario_id, negocio_id, observacion="Abono cargado por Importador Inteligente")
                     creados_info["abonos"].append(vid)
 
-    # 4. MEMORIA POR TENANT DE MAPEO
+    # Memoria de mapeo
     ejecutar_query(
         "INSERT INTO mapeos_importacion (negocio_id, nombre_mapeo, estructura_columnas_json, fecha_creacion) VALUES (?, 'Mapeo Aprobado Tenant', ?, ?)",
         (negocio_id, json.dumps(mapeo_usuario, ensure_ascii=False), fecha_hoy)
     )
 
-    # 5. AUDITORÍA DE IMPORTACIÓN CON UNDO TOKEN
+    # Auditoría
     ejecutar_query(
         """INSERT INTO auditoria_importaciones 
            (negocio_id, usuario_id, fecha, undo_token, nombre_archivo, total_registros, creados_json, estado)
@@ -625,7 +619,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 # ══════════════════════════════════════════════════════════════════
 
 def revertir_importacion(undo_token, negocio_id, usuario_id):
-    """Reversión asistida respetando la integridad de datos posteriores."""
     audit = ejecutar_query(
         "SELECT id, creados_json, estado FROM auditoria_importaciones WHERE undo_token=? AND negocio_id=?",
         (undo_token, negocio_id), fetch=True

@@ -3,13 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Capa Analítica Pro - Business OS</title>
+    <title>Centro de Análisis Empresarial - AS Platform</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .filter-bar {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .filter-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .filter-group select, .filter-group input {
+            width: 100%;
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .active-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .chip {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .chip-remove {
+            cursor: pointer;
+            font-weight: 800;
+            color: #fca5a5;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .kpi-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .kpi-val {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+        .kpi-lbl {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .tab-nav {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.88rem;
+        }
+        .tab-btn.active {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+        .scope-badge {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body>
     <nav>
-        <div class="logo">Business OS <span style="font-size: 0.6rem; background: var(--accent-color); color: black; padding: 2px 5px; border-radius: 4px;">PRO</span></div>
+        <div class="logo">AS Platform <span style="font-size: 0.6rem; background: var(--accent-color); color: black; padding: 2px 5px; border-radius: 4px;">PRO</span></div>
         <ul class="nav-links">
             <li><a href="/">Dashboard</a></li>
             <li><a href="/ventas">Ventas</a></li>
@@ -19,68 +133,186 @@
         </ul>
     </nav>
 
-    <main>
-        <div class="header">
-            <h1>Capa Analítica Avanzada</h1>
-            <div style="display: flex; gap: 1rem;">
-                <button onclick="showCierreCaja()" style="background: var(--success); color: white;">Cierre de Caja Hoy</button>
+    <main style="max-width: 1400px; margin: 0 auto; padding: 1.5rem;">
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <div>
+                <h1 style="margin: 0; font-size: 1.8rem; color: #f8fafc;">📊 Centro de Análisis Empresarial</h1>
+                <p style="color: #94a3b8; font-size: 0.88rem; margin-top: 4px;">Contexto global de inteligencia de negocios para toma de decisiones en tiempo real.</p>
+            </div>
+            <div id="badge-alcance-contenedor" class="scope-badge">
+                🔎 Cargando alcance del análisis...
             </div>
         </div>
 
-        <!-- 1. Rentabilidad y Participación -->
-        <div class="card" style="margin-bottom: 2rem;">
-            <h3>Análisis de Rentabilidad y Mezcla de Ventas (MCU)</h3>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Precio Venta</th>
-                            <th>Costo Receta</th>
-                            <th>Margen (MCU)</th>
-                            <th>% Margen</th>
-                            <th>Participación (Ventas)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="list-rentabilidad"></tbody>
-                </table>
-            </div>
-        </div>
+        <!-- BARRA DE FILTROS GLOBALES -->
+        <div class="filter-bar">
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label>📅 Período Rápido</label>
+                    <select id="flt-periodo" onchange="onPeriodoChanged(this.value)">
+                        <option value="">Todo el histórico</option>
+                        <option value="este_mes" selected>Este Mes</option>
+                        <option value="mes_anterior">Mes Anterior</option>
+                        <option value="esta_semana">Esta Semana</option>
+                        <option value="ultimos_30_dias">Últimos 30 días</option>
+                        <option value="ultimos_90_dias">Últimos 90 días</option>
+                        <option value="este_ano">Este Año</option>
+                        <option value="hoy">Hoy</option>
+                    </select>
+                </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-            <!-- 2. Utilidad Mensual -->
-            <div class="card">
-                <h3>Histórico de Utilidad Neta</h3>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Mes</th>
-                                <th>Ingresos</th>
-                                <th>Costos V.</th>
-                                <th>Utilidad</th>
-                            </tr>
-                        </thead>
-                        <tbody id="list-mensual"></tbody>
-                    </table>
+                <div class="filter-group">
+                    <label>Fecha Desde</label>
+                    <input type="date" id="flt-fecha-inicio" onchange="aplicarFiltrosGlobales()">
+                </div>
+
+                <div class="filter-group">
+                    <label>Fecha Hasta</label>
+                    <input type="date" id="flt-fecha-fin" onchange="aplicarFiltrosGlobales()">
+                </div>
+
+                <div class="filter-group">
+                    <label>📂 Categoría</label>
+                    <select id="flt-categoria" onchange="aplicarFiltrosGlobales()">
+                        <option value="">Todas las categorías</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>📦 Producto</label>
+                    <select id="flt-producto" onchange="aplicarFiltrosGlobales()">
+                        <option value="">Todos los productos</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>👤 Cliente</label>
+                    <select id="flt-cliente" onchange="aplicarFiltrosGlobales()">
+                        <option value="">Todos los clientes</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label>📦 Lote / Compra</label>
+                    <select id="flt-lote" onchange="aplicarFiltrosGlobales()">
+                        <option value="">Todos los lotes</option>
+                    </select>
                 </div>
             </div>
 
-            <!-- 3. Flujo de Inventario -->
+            <!-- CHIPS DE FILTROS ACTIVOS Y BOTÓN LIMPIAR -->
+            <div class="active-chips">
+                <span style="font-size: 0.78rem; font-weight: 700; color: #94a3b8;">Filtros activos:</span>
+                <div id="contenedor-chips-activos" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                <button type="button" onclick="limpiarFiltrosGlobales()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; cursor: pointer; margin-left: auto; font-weight: 700;">
+                    🧹 Limpiar Filtros
+                </button>
+            </div>
+        </div>
+
+        <!-- TARJETAS DE KPIS MATEMÁTICAMENTE COHERENTES SOBRE EL CONTEXTO FILTRADO -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-lbl">💰 Ingresos Totales</div>
+                <div class="kpi-val" id="kpi-ingresos" style="color: #38bdf8;">$0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">📦 Costos de Venta</div>
+                <div class="kpi-val" id="kpi-costos" style="color: #f59e0b;">$0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">📈 Utilidad Bruta</div>
+                <div class="kpi-val" id="kpi-utilidad" style="color: #34d399;">$0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">📊 Margen de Ganancia</div>
+                <div class="kpi-val" id="kpi-margen" style="color: #c084fc;">0%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">💳 Cartera Pendiente</div>
+                <div class="kpi-val" id="kpi-cartera" style="color: #fb7185;">$0</div>
+            </div>
+        </div>
+
+        <!-- NAVEGACIÓN PESTAÑAS DENTRO DEL MISMO CONTEXTO ANALÍTICO -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="showAnalisisTab('tab-rentabilidad', event)">🏷️ Rentabilidad por Producto & Atributos</button>
+            <button class="tab-btn" onclick="showAnalisisTab('tab-lotes', event)">📦 Análisis por Lote & Compras</button>
+            <button class="tab-btn" onclick="showAnalisisTab('tab-ventas', event)">💳 Histórico de Operaciones</button>
+        </div>
+
+        <!-- PESTAÑA 1: RENTABILIDAD Y ATRIBUTOS -->
+        <div id="tab-rentabilidad" class="tab-content" style="display: block;">
             <div class="card">
-                <h3>Flujo de Inventario (Trazabilidad)</h3>
+                <h3 style="color: #38bdf8; margin-bottom: 1rem;">Rentabilidad y Desglose por Producto</h3>
                 <div class="table-container">
-                    <table>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
                         <thead>
-                            <tr>
-                                <th>Insumo</th>
-                                <th>Inicial</th>
-                                <th>Entradas</th>
-                                <th>Salidas</th>
-                                <th>Final</th>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; text-align: left;">
+                                <th style="padding: 10px;">Producto</th>
+                                <th style="padding: 10px;">Categoría</th>
+                                <th style="padding: 10px;">Atributos Persistidos</th>
+                                <th style="padding: 10px; text-align: right;">Unidades</th>
+                                <th style="padding: 10px; text-align: right;">Ingresos</th>
+                                <th style="padding: 10px; text-align: right;">Costos</th>
+                                <th style="padding: 10px; text-align: right;">Utilidad</th>
+                                <th style="padding: 10px; text-align: right;">Margen %</th>
                             </tr>
                         </thead>
-                        <tbody id="list-flujo"></tbody>
+                        <tbody id="tbl-rentabilidad-body">
+                            <tr><td colspan="8" style="text-align: center; color: #666; padding: 15px;">Cargando rentabilidad...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA 2: ANÁLISIS POR LOTE -->
+        <div id="tab-lotes" class="tab-content" style="display: none;">
+            <div class="card">
+                <h3 style="color: #c084fc; margin-bottom: 1rem;">Desglose y Rotación por Lote de Compra</h3>
+                <div class="table-container">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; text-align: left;">
+                                <th style="padding: 10px;">Código Lote</th>
+                                <th style="padding: 10px;">Proveedor</th>
+                                <th style="padding: 10px; text-align: right;">Inicial</th>
+                                <th style="padding: 10px; text-align: right;">Vendidas</th>
+                                <th style="padding: 10px; text-align: right;">Disponible</th>
+                                <th style="padding: 10px; text-align: right;">Costo Unit.</th>
+                                <th style="padding: 10px; text-align: right;">Inversión Total</th>
+                                <th style="padding: 10px; text-align: right;">Valor Inventario</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-lotes-body">
+                            <tr><td colspan="8" style="text-align: center; color: #666; padding: 15px;">Cargando lotes...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA 3: VENDEDORES Y OPERACIONES -->
+        <div id="tab-ventas" class="tab-content" style="display: none;">
+            <div class="card">
+                <h3 style="color: #34d399; margin-bottom: 1rem;">Operaciones Filtradas en este Contexto</h3>
+                <div class="table-container">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #94a3b8; text-align: left;">
+                                <th style="padding: 10px;">Fecha</th>
+                                <th style="padding: 10px;">Producto</th>
+                                <th style="padding: 10px;">Cliente</th>
+                                <th style="padding: 10px; text-align: right;">Cantidad</th>
+                                <th style="padding: 10px; text-align: right;">Total Venta</th>
+                                <th style="padding: 10px; text-align: right;">Utilidad</th>
+                                <th style="padding: 10px; text-align: right;">Saldo Deuda</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-ventas-body">
+                            <tr><td colspan="7" style="text-align: center; color: #666; padding: 15px;">Cargando operaciones...</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -88,68 +320,210 @@
     </main>
 
     <script>
-        const formatCOP = new Intl.NumberFormat('es-CO', {
-            style: 'currency',
-            currency: 'COP',
-            minimumFractionDigits: 0
-        });
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
-        async function loadAnalisis() {
-            // 1. Rentabilidad y Participación
-            const resR = await fetch('/api/analisis/rentabilidad');
-            const dataR = await resR.json();
-            
-            // Obtener resumen para participacion
-            const resRes = await fetch('/api/resumen');
-            const dataRes = await resRes.json();
-            const partMap = {};
-            dataRes.detalle_productos.forEach(p => partMap[p.nombre] = p.participacion);
+        let filtrosGlobales = {
+            periodo: 'este_mes',
+            fecha_inicio: null,
+            fecha_fin: null,
+            categoria: null,
+            producto_id: null,
+            cliente_nombre: null,
+            lote_codigo: null
+        };
 
-            document.getElementById('list-rentabilidad').innerHTML = dataR.map(p => `
-                <tr>
-                    <td>${p.producto}</td>
-                    <td>${formatCOP.format(p.precio)}</td>
-                    <td>${formatCOP.format(p.costo)}</td>
-                    <td style="color: var(--success); font-weight: bold;">${formatCOP.format(p.margen)}</td>
-                    <td>${p.porcentaje.toFixed(1)}%</td>
-                    <td>${(partMap[p.producto] || 0).toFixed(1)}%</td>
-                </tr>
-            `).join('');
+        window.onload = async function() {
+            await cargarOpcionesFiltros();
+            await aplicarFiltrosGlobales();
+        };
 
-            // 2. Mensual
-            const resM = await fetch('/api/analisis/mensual');
-            const dataM = await resM.json();
-            document.getElementById('list-mensual').innerHTML = dataM.map(m => `
-                <tr>
-                    <td>${m.mes}</td>
-                    <td>${formatCOP.format(m.ingresos)}</td>
-                    <td>${formatCOP.format(m.costos_v)}</td>
-                    <td style="color: ${m.utilidad >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCOP.format(m.utilidad)}</td>
-                </tr>
-            `).join('');
+        async function cargarOpcionesFiltros() {
+            try {
+                const res = await fetch('/api/analisis/opciones-filtros');
+                const data = await res.json();
 
-            // 3. Flujo Inventario
-            const resF = await fetch('/api/analisis/flujo'); // Necesitaremos crear este endpoint
-            const dataF = await resF.json();
-            document.getElementById('list-flujo').innerHTML = dataF.map(i => `
-                <tr>
-                    <td>${i.nombre}</td>
-                    <td>${i.inicial}</td>
-                    <td><span style="color: var(--success)">+${i.entradas}</span></td>
-                    <td><span style="color: var(--danger)">-${i.salidas}</span></td>
-                    <td><strong>${i.final}</strong></td>
-                </tr>
+                const selCat = document.getElementById('flt-categoria');
+                selCat.innerHTML = '<option value="">Todas las categorías</option>' + 
+                    data.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+
+                const selProd = document.getElementById('flt-producto');
+                selProd.innerHTML = '<option value="">Todos los productos</option>' + 
+                    data.productos.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+
+                const selCli = document.getElementById('flt-cliente');
+                selCli.innerHTML = '<option value="">Todos los clientes</option>' + 
+                    data.clientes.map(c => `<option value="${c}">${c}</option>`).join('');
+
+                const selLote = document.getElementById('flt-lote');
+                selLote.innerHTML = '<option value="">Todos los lotes</option>' + 
+                    data.lotes.map(l => `<option value="${l}">${l}</option>`).join('');
+            } catch(e) { console.error("Error al cargar opciones de filtros:", e); }
+        }
+
+        function onPeriodoChanged(val) {
+            filtrosGlobales.periodo = val;
+            if (val !== '') {
+                document.getElementById('flt-fecha-inicio').value = '';
+                document.getElementById('flt-fecha-fin').value = '';
+                filtrosGlobales.fecha_inicio = null;
+                filtrosGlobales.fecha_fin = null;
+            }
+            aplicarFiltrosGlobales();
+        }
+
+        async function aplicarFiltrosGlobales() {
+            filtrosGlobales.periodo = document.getElementById('flt-periodo').value;
+            filtrosGlobales.fecha_inicio = document.getElementById('flt-fecha-inicio').value || null;
+            filtrosGlobales.fecha_fin = document.getElementById('flt-fecha-fin').value || null;
+            filtrosGlobales.categoria = document.getElementById('flt-categoria').value || null;
+            filtrosGlobales.producto_id = document.getElementById('flt-producto').value || null;
+            filtrosGlobales.cliente_nombre = document.getElementById('flt-cliente').value || null;
+            filtrosGlobales.lote_codigo = document.getElementById('flt-lote').value || null;
+
+            renderChipsActivos();
+
+            try {
+                const res = await fetch('/api/analisis/centro', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(filtrosGlobales)
+                });
+                const data = await res.json();
+                if (!res.ok) { alert("Error al cargar centro de análisis"); return; }
+
+                renderCentroAnalisis(data);
+            } catch(e) { console.error("Error de conexión:", e); }
+        }
+
+        function renderChipsActivos() {
+            const container = document.getElementById('contenedor-chips-activos');
+            let chips = [];
+
+            if (filtrosGlobales.periodo) {
+                const sel = document.getElementById('flt-periodo');
+                chips.push({ label: `📅 ${sel.options[sel.selectedIndex].text}`, key: 'periodo' });
+            }
+            if (filtrosGlobales.fecha_inicio || filtrosGlobales.fecha_fin) {
+                chips.push({ label: `📅 ${filtrosGlobales.fecha_inicio || 'Inicio'} → ${filtrosGlobales.fecha_fin || 'Hoy'}`, key: 'fechas' });
+            }
+            if (filtrosGlobales.categoria) {
+                chips.push({ label: `📂 Cat: ${filtrosGlobales.categoria}`, key: 'categoria' });
+            }
+            if (filtrosGlobales.producto_id) {
+                const sel = document.getElementById('flt-producto');
+                chips.push({ label: `📦 Prod: ${sel.options[sel.selectedIndex].text}`, key: 'producto_id' });
+            }
+            if (filtrosGlobales.cliente_nombre) {
+                chips.push({ label: `👤 Cliente: ${filtrosGlobales.cliente_nombre}`, key: 'cliente_nombre' });
+            }
+            if (filtrosGlobales.lote_codigo) {
+                chips.push({ label: `📦 Lote: ${filtrosGlobales.lote_codigo}`, key: 'lote_codigo' });
+            }
+
+            container.innerHTML = chips.map(c => `
+                <div class="chip">
+                    ${c.label}
+                    <span class="chip-remove" onclick="removerFiltroChip('${c.key}')">✕</span>
+                </div>
             `).join('');
         }
 
-        async function showCierreCaja() {
-            const res = await fetch('/api/cierre-caja');
-            const data = await res.json();
-            let detalle = Object.entries(data.detalle).map(([k,v]) => `${k}: ${formatCOP.format(v)}`).join('\n');
-            alert(`Cierre de Caja - ${data.fecha}\n\n${detalle}\n\nTOTAL: ${formatCOP.format(data.total)}`);
+        function removerFiltroChip(key) {
+            if (key === 'periodo') {
+                document.getElementById('flt-periodo').value = '';
+                filtrosGlobales.periodo = null;
+            } else if (key === 'fechas') {
+                document.getElementById('flt-fecha-inicio').value = '';
+                document.getElementById('flt-fecha-fin').value = '';
+                filtrosGlobales.fecha_inicio = null;
+                filtrosGlobales.fecha_fin = null;
+            } else if (key === 'categoria') {
+                document.getElementById('flt-categoria').value = '';
+            } else if (key === 'producto_id') {
+                document.getElementById('flt-producto').value = '';
+            } else if (key === 'cliente_nombre') {
+                document.getElementById('flt-cliente').value = '';
+            } else if (key === 'lote_codigo') {
+                document.getElementById('flt-lote').value = '';
+            }
+            aplicarFiltrosGlobales();
         }
 
-        window.onload = loadAnalisis;
+        function limpiarFiltrosGlobales() {
+            document.getElementById('flt-periodo').value = '';
+            document.getElementById('flt-fecha-inicio').value = '';
+            document.getElementById('flt-fecha-fin').value = '';
+            document.getElementById('flt-categoria').value = '';
+            document.getElementById('flt-producto').value = '';
+            document.getElementById('flt-cliente').value = '';
+            document.getElementById('flt-lote').value = '';
+            aplicarFiltrosGlobales();
+        }
+
+        function renderCentroAnalisis(data) {
+            const k = data.kpis;
+            document.getElementById('kpi-ingresos').textContent = formatCOP.format(k.ingresos);
+            document.getElementById('kpi-costos').textContent = formatCOP.format(k.costos);
+            document.getElementById('kpi-utilidad').textContent = formatCOP.format(k.utilidad);
+            document.getElementById('kpi-margen').textContent = `${k.margen_pct}%`;
+            document.getElementById('kpi-cartera').textContent = formatCOP.format(k.cartera_pendiente);
+
+            document.getElementById('badge-alcance-contenedor').textContent = `🔎 ${data.alcance.texto}`;
+
+            // Pestaña 1: Rentabilidad
+            const tbodyR = document.getElementById('tbl-rentabilidad-body');
+            tbodyR.innerHTML = data.rentabilidad_productos.length > 0 ? data.rentabilidad_productos.map(p => {
+                const attrsBadge = p.atributos.map(a => `<span style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; margin-right: 4px;">${a.nombre}: ${a.valor}</span>`).join('');
+                return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 10px; font-weight: 700; color: white;">${p.nombre}</td>
+                        <td style="padding: 10px; color: #94a3b8;">${p.categoria}</td>
+                        <td style="padding: 10px;">${attrsBadge || '<span style="color: #666;">Sin atributos</span>'}</td>
+                        <td style="padding: 10px; text-align: right; font-weight: 700; color: white;">${p.unidades}</td>
+                        <td style="padding: 10px; text-align: right; color: #38bdf8; font-weight: 700;">${formatCOP.format(p.ingresos)}</td>
+                        <td style="padding: 10px; text-align: right; color: #f59e0b;">${formatCOP.format(p.costos)}</td>
+                        <td style="padding: 10px; text-align: right; color: #34d399; font-weight: 700;">${formatCOP.format(p.utilidad)}</td>
+                        <td style="padding: 10px; text-align: right; font-weight: 700; color: #c084fc;">${p.margen_pct.toFixed(1)}%</td>
+                    </tr>
+                `;
+            }).join('') : '<tr><td colspan="8" style="text-align: center; color: #666; padding: 15px;">No hay datos para esta combinación de filtros.</td></tr>';
+
+            // Pestaña 2: Lotes
+            const tbodyL = document.getElementById('tbl-lotes-body');
+            tbodyL.innerHTML = data.lotes.length > 0 ? data.lotes.map(l => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 10px; font-weight: 700; color: #c084fc;">${l.codigo_lote}</td>
+                    <td style="padding: 10px; color: white;">${l.proveedor}</td>
+                    <td style="padding: 10px; text-align: right;">${l.cantidad_inicial}</td>
+                    <td style="padding: 10px; text-align: right; color: #34d399; font-weight: 700;">${l.unidades_vendidas}</td>
+                    <td style="padding: 10px; text-align: right; font-weight: 700; color: #38bdf8;">${l.cantidad_disponible}</td>
+                    <td style="padding: 10px; text-align: right;">${formatCOP.format(l.costo_unitario)}</td>
+                    <td style="padding: 10px; text-align: right; color: #f59e0b;">${formatCOP.format(l.inversion_total)}</td>
+                    <td style="padding: 10px; text-align: right; font-weight: 700; color: #34d399;">${formatCOP.format(l.valor_inventario_restante)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="8" style="text-align: center; color: #666; padding: 15px;">No hay lotes disponibles en este filtro.</td></tr>';
+
+            // Pestaña 3: Operaciones
+            const tbodyV = document.getElementById('tbl-ventas-body');
+            tbodyV.innerHTML = data.ventas_recientes.length > 0 ? data.ventas_recientes.map(v => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 10px; color: #94a3b8;">${v.fecha}</td>
+                    <td style="padding: 10px; font-weight: 700; color: white;">${v.producto}</td>
+                    <td style="padding: 10px; color: #38bdf8;">${v.cliente}</td>
+                    <td style="padding: 10px; text-align: right;">${v.cantidad}</td>
+                    <td style="padding: 10px; text-align: right; font-weight: 700; color: #38bdf8;">${formatCOP.format(v.total)}</td>
+                    <td style="padding: 10px; text-align: right; color: #34d399;">${formatCOP.format(v.utilidad)}</td>
+                    <td style="padding: 10px; text-align: right; color: ${v.saldo_pendiente > 0 ? '#fb7185' : '#94a3b8'};">${formatCOP.format(v.saldo_pendiente)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="7" style="text-align: center; color: #666; padding: 15px;">No hay operaciones registradas.</td></tr>';
+        }
+
+        function showAnalisisTab(tabId, evt) {
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).style.display = 'block';
+            evt.target.classList.add('active');
+        }
     </script>
 </body>
 </html>

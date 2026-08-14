@@ -277,6 +277,11 @@
                             <tbody id="tbl-mapeo-body"></tbody>
                         </table>
                     </div>
+                    <!-- TARJETA DE RESUMEN DE INTERPRETACIONAL AL FINAL DEL PASO 2 -->
+                    <div id="card-resumen-interpretacion" style="margin-bottom: 1.5rem; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 10px; padding: 1rem;">
+                        <!-- Poblado dinámicamente en JS -->
+                    </div>
+
                     <div style="display: flex; gap: 1rem;">
                         <button type="button" onclick="prevalidarImportacion()" style="flex: 1; background: #38bdf8; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer;">
                             🔍 Pre-validar Datos y Conciliar
@@ -286,6 +291,7 @@
                         </button>
                     </div>
                 </div>
+
 
                 <!-- PASO 3: PREVALIDACIÓN Y SEMÁFORO -->
                 <div id="wiz-paso3" style="display: none;">
@@ -870,7 +876,21 @@
 
         function renderMapeoTabla() {
             const tbody = document.getElementById('tbl-mapeo-body');
+            let cntAlta = 0, cntMedia = 0, cntBaja = 0;
+            let cntProds = 0, cntAttrs = 0, cntMonedas = 0, cntClientes = 0, cntDerivados = 0;
+
             tbody.innerHTML = currentPropuestaMapeo.map((item, idx) => {
+                if (item.confianza === 'ALTA') cntAlta++;
+                else if (item.confianza === 'MEDIA') cntMedia++;
+                else cntBaja++;
+
+                const cp = item.campo_propuesto;
+                if (cp === 'nombre_producto' || cp === 'categoria' || cp === 'subcategoria') cntProds++;
+                else if (cp === 'atributo' || cp === 'variante') cntAttrs++;
+                else if (cp.includes('costo') || cp.includes('precio') || cp === 'tasa_cambio') cntMonedas++;
+                else if (cp === 'cliente_nombre' || cp === 'saldo_pendiente') cntClientes++;
+                else if (cp === 'campo_calculado') cntDerivados++;
+
                 const confBadge = item.confianza === 'ALTA' 
                     ? '<span style="background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🟢 Alta Confianza</span>'
                     : (item.confianza === 'MEDIA'
@@ -878,6 +898,15 @@
                         : '<span style="background: rgba(239,68,68,0.1); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 0.72rem;">🔴 Sin identificar</span>');
                 
                 const origLbl = item.origen === 'MEMORIA_TENANT' ? ' 🧠 (Memoria Empresa)' : '';
+
+                // Explicabilidad ("¿Por qué?")
+                const motivosList = (item.motivos || []).map(m => `<li>${m}</li>`).join('');
+                const porqueBtn = item.motivos && item.motivos.length > 0 
+                    ? `<details style="margin-top: 4px; font-size: 0.75rem; color: #94a3b8; cursor: pointer;">
+                        <summary style="color: #38bdf8; font-weight: 700;">💡 ¿Por qué?</summary>
+                        <ul style="margin: 4px 0 0 16px; padding: 0;">${motivosList}</ul>
+                       </details>`
+                    : '';
 
                 // Interpretación humanizada
                 let interpText = item.label || CAMPO_LABEL_MAP[item.campo_propuesto] || item.campo_propuesto;
@@ -892,7 +921,10 @@
 
                 return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
-                        <td style="padding: 10px; font-weight: 700; color: white;">${item.columna_excel}</td>
+                        <td style="padding: 10px; font-weight: 700; color: white;">
+                            ${item.columna_excel}
+                            ${porqueBtn}
+                        </td>
                         <td style="padding: 10px; color: #38bdf8; font-size: 0.85rem;">${interpText}</td>
                         <td style="padding: 10px;">${confBadge}${origLbl}</td>
                         <td style="padding: 10px;">
@@ -903,6 +935,25 @@
                     </tr>
                 `;
             }).join('');
+
+            // Poblar Tarjeta de Resumen de Interpretación
+            const resCard = document.getElementById('card-resumen-interpretacion');
+            if (resCard) {
+                resCard.innerHTML = `
+                    <div style="font-weight: 800; color: #f8fafc; font-size: 0.9rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>📋 Resumen de Interpretación (${currentPropuestaMapeo.length} columnas analizadas)</span>
+                        <span style="font-size: 0.8rem; color: #94a3b8;">🟢 ${cntAlta} Alta | 🟡 ${cntMedia} Revisar | 🔴 ${cntBaja} Sin identificar</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.75rem;">
+                        <span style="background: rgba(56,189,248,0.1); color: #38bdf8; padding: 3px 8px; border-radius: 6px;">📦 ${cntProds} Productos/Categorías</span>
+                        <span style="background: rgba(168,85,247,0.1); color: #c084fc; padding: 3px 8px; border-radius: 6px;">🏷️ ${cntAttrs} Atributos/Variantes</span>
+                        <span style="background: rgba(52,211,153,0.1); color: #34d399; padding: 3px 8px; border-radius: 6px;">💰 ${cntMonedas} Campos Monetarios</span>
+                        <span style="background: rgba(245,158,11,0.1); color: #f59e0b; padding: 3px 8px; border-radius: 6px;">👤 ${cntClientes} Clientes/Cartera</span>
+                        <span style="background: rgba(148,163,184,0.1); color: #cbd5e1; padding: 3px 8px; border-radius: 6px;">📊 ${cntDerivados} Campos Derivados</span>
+                    </div>
+                    ${cntBaja > 0 ? `<div style="margin-top: 8px; font-size: 0.75rem; color: #fca5a5;">⚠️ Hay ${cntBaja} columna(s) no identificada(s). Puedes cambiar la propuesta manualmente o se ignorarán al procesar.</div>` : ''}
+                `;
+            }
         }
 
         function getUserMapping() {
