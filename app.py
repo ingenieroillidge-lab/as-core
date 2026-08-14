@@ -41,20 +41,27 @@ except Exception as e:
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session: return redirect(url_for('login'))
+        if 'user_id' not in session:
+            if request.is_json or request.path.startswith('/api/'):
+                return jsonify({"error": "SESSION_EXPIRED", "message": "Tu sesión ha expirado. Inicia sesión nuevamente."}), 401
+            return redirect(url_for('login'))
 
         if not session.get('is_impersonating') and session.get('role') != 'SUPER':
-            chk = ejecutar_query("SELECT n.status, u.estado FROM negocios n JOIN usuarios u ON u.negocio_id = n.id WHERE n.id=? AND u.id=?",
-                                 (session.get('negocio_id'), session.get('user_id')), fetch=True)
-            if chk and chk[0]:
-                n_stat, u_est = chk[0]
-                if n_stat == 'SUSPENDIDO' or u_est == 'INACTIVO':
-                    session.clear()
-                    if request.is_json:
-                        return jsonify({"error": "ACCOUNT_SUSPENDED", "message": "Tu cuenta o usuario esta suspendido."}), 403
-                    return redirect(url_for('login'))
+            try:
+                chk = ejecutar_query("SELECT n.status, u.estado FROM negocios n JOIN usuarios u ON u.negocio_id = n.id WHERE n.id=? AND u.id=?",
+                                     (session.get('negocio_id'), session.get('user_id')), fetch=True)
+                if chk and len(chk) > 0 and len(chk[0]) >= 2:
+                    n_stat, u_est = chk[0][0], chk[0][1]
+                    if n_stat == 'SUSPENDIDO' or u_est == 'INACTIVO':
+                        session.clear()
+                        if request.is_json or request.path.startswith('/api/'):
+                            return jsonify({"error": "ACCOUNT_SUSPENDED", "message": "Tu cuenta o usuario esta suspendido."}), 403
+                        return redirect(url_for('login'))
+            except Exception as _e_chk:
+                print(f"[LOGIN CHK ERROR] {_e_chk}")
         return f(*args, **kwargs)
     return decorated_function
+
 
 def admin_required(f):
     @wraps(f)
@@ -73,6 +80,16 @@ def super_required(f):
         if session.get('role') != 'SUPER': return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
+
+@app.errorhandler(500)
+def handle_internal_server_error(e):
+    import traceback
+    tb = traceback.format_exc()
+    print(f"[GLOBAL 500 ERROR TRACEBACK]\n{tb}")
+    if request.path.startswith('/api/'):
+        return jsonify({"error": f"Error interno del servidor (500): {str(e)}"}), 500
+    return "Error interno del servidor (500)", 500
+
 
 # ==========================
 # LÓGICA DE MONETIZACIÓN / CONVERSIÓN

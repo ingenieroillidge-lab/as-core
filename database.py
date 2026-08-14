@@ -194,20 +194,28 @@ def init_db():
 def ejecutar_query(query, params=(), fetch=False):
     db_url = os.environ.get("DATABASE_URL")
     if db_url and POSTGRES_AVAILABLE: query = query.replace("?", "%s")
-    conn = conectar(); cursor = conn.cursor()
+    conn = None
     try:
+        conn = conectar()
+        cursor = conn.cursor()
         cursor.execute(query, params)
         if fetch:
             res = cursor.fetchall()
+            cursor.close()
             conn.close()
             return res
         conn.commit()
+        cursor.close()
         conn.close()
         return True
     except Exception as e:
         print(f"Database query error: {e}")
-        conn.rollback()
-        conn.close()
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except Exception:
+                pass
         return [] if fetch else False
 
 crear_tablas = init_db
