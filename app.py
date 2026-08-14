@@ -1354,9 +1354,10 @@ def api_importador_cargar():
         return jsonify({"message": msg, "info": res_info, "propuesta_mapeo": propuesta})
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        print(f"[IMPORTADOR ERROR] {e}")
-        return jsonify({"error": f"Error interno al procesar el archivo: {str(e)}"}), 500
+        tb = traceback.format_exc()
+        print(f"[IMPORTADOR ERROR TRACEBACK]\n{tb}")
+        return jsonify({"error": f"Error interno al procesar el archivo ({type(e).__name__}): {str(e)}"}), 500
+
 
 
 
