@@ -839,6 +839,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             cursor.execute(f"SELECT producto_id, insumo_id FROM producto_insumo WHERE negocio_id={ph}", (negocio_id,))
             producto_insumo_set = {(row[0], row[1]) for row in cursor.fetchall() if row}
 
+            # Listas para inserción masiva en 1 solo viaje de red (executemany)
+            batch_atributos = []
+            batch_compras = []
+            batch_movimientos = []
+            batch_abonos = []
+
             for fila_num, raw_json in registros_staging:
                 raw_row = json.loads(raw_json)
                 mapped = {campo: raw_row.get(col, "").strip() for col, campo in mapeo_usuario.items() if campo and campo != "IGNORAR"}
@@ -896,18 +902,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     creados_info["productos"].append(pid)
                     productos_cache[key_p] = pid
 
-                # ── 2. ATRIBUTOS Y VARIANTES EN PRODUCTO_ATRIBUTOS ──
+                # ── 2. ATRIBUTOS Y VARIANTES (Batch) ──
                 for col_excel, campo_target in mapeo_usuario.items():
                     if campo_target in ("atributo", "variante"):
                         val = raw_row.get(col_excel, "").strip()
                         if val:
-                            attr_id = insertar_con_id(cursor,
-                                f"""INSERT INTO producto_atributos 
-                                    (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo, importacion_id)
-                                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
-                                (negocio_id, pid, col_excel, val, campo_target.upper(), undo_token),
-                                ph, is_pg)
-                            creados_info["atributos"].append(attr_id)
+                            batch_atributos.append((negocio_id, pid, col_excel, val, campo_target.upper(), undo_token))
 
                 # ── 3. INVENTARIO + PRODUCTO_INSUMO + COMPRAS + LOTES ──
                 inv_id = None
@@ -935,12 +935,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                     # ── Enlace Producto ↔ Inventario via producto_insumo ──
                     if (pid, inv_id) not in producto_insumo_set:
-                        insertar_con_id(cursor,
+                        cursor.execute(
                             f"""INSERT INTO producto_insumo 
                                 (negocio_id, producto_id, insumo_id, cantidad_usada, tipo_relacion)
                                 VALUES ({ph}, {ph}, {ph}, 1.0, 'PRODUCTO_DIRECTO')""",
-                            (negocio_id, pid, inv_id),
-                            ph, is_pg)
+                            (negocio_id, pid, inv_id)
+                        )
                         producto_insumo_set.add((pid, inv_id))
 
                     # ── Compra y Lote de adquisición ──
@@ -949,34 +949,25 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     cant_disp_lote = 0.0 if tipo_fila == "COMPRA_Y_VENTA" else cant
                     estado_lote = 'AGOTADO' if tipo_fila == "COMPRA_Y_VENTA" else 'ACTIVO'
 
-                    compra_id = insertar_con_id(cursor,
-                        f"""INSERT INTO compras_entradas 
-                            (negocio_id, fecha_compra, proveedor, insumo_id, codigo_lote, 
-                             cantidad_comprada, costo_unitario_compra, costo_total_compra, importacion_id, usuario_id)
-                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
-                        (negocio_id, fecha_v, cli_nombre or "Proveedor Importación", inv_id, codigo_lote,
-                         cant, costo_adq, costo_total_lote, undo_token, usuario_id),
-                        ph, is_pg)
-                    creados_info["compras"].append(compra_id)
+                    batch_compras.append((
+                        negocio_id, fecha_v, cli_nombre or "Proveedor Importación", inv_id, codigo_lote,
+                        cant, costo_adq, costo_total_lote, undo_token, usuario_id
+                    ))
 
                     lote_id = insertar_con_id(cursor,
                         f"""INSERT INTO lotes_inventario 
                             (negocio_id, compra_id, insumo_id, codigo_lote, fecha_compra, 
                              cantidad_inicial, cantidad_disponible, costo_unitario, proveedor, estado, importacion_id)
-                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
-                        (negocio_id, compra_id, inv_id, codigo_lote, fecha_v[:10],
+                            VALUES ({ph}, NULL, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                        (negocio_id, inv_id, codigo_lote, fecha_v[:10],
                          cant, cant_disp_lote, costo_adq, cli_nombre or "Proveedor Importación", estado_lote, undo_token),
                         ph, is_pg)
                     creados_info["lotes"].append(lote_id)
 
-                    # Movimiento de entrada del lote
-                    mov_e_id = insertar_con_id(cursor,
-                        f"""INSERT INTO movimientos_lote 
-                            (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, usuario_id)
-                            VALUES ({ph}, {ph}, {ph}, 'ENTRADA', {ph}, {ph}, {ph}, {ph}, {ph})""",
-                        (negocio_id, lote_id, fecha_v, cant, costo_adq, costo_total_lote, f"Importación {undo_token}", usuario_id),
-                        ph, is_pg)
-                    creados_info["movimientos"].append(mov_e_id)
+                    # Movimiento de entrada del lote (Batch)
+                    batch_movimientos.append((
+                        negocio_id, lote_id, fecha_v, 'ENTRADA', cant, costo_adq, costo_total_lote, f"Importación {undo_token}", None, usuario_id
+                    ))
 
                 # ── 4. CLIENTE ──
                 cli_id = None
@@ -1011,23 +1002,30 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     procesados += 1
 
                     if tipo_fila == "COMPRA_Y_VENTA" and inv_id and lote_id:
-                        mov_s_id = insertar_con_id(cursor,
-                            f"""INSERT INTO movimientos_lote 
-                                (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, venta_id, usuario_id)
-                                VALUES ({ph}, {ph}, {ph}, 'SALIDA_VENTA', {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
-                            (negocio_id, lote_id, fecha_v, cant, costo_adq, costo_venta_total, f"Venta #{vid} (Importación {undo_token})", vid, usuario_id),
-                            ph, is_pg)
-                        creados_info["movimientos"].append(mov_s_id)
+                        batch_movimientos.append((
+                            negocio_id, lote_id, fecha_v, 'SALIDA_VENTA', cant, costo_adq, costo_venta_total, f"Venta #{vid} (Importación {undo_token})", vid, usuario_id
+                        ))
 
-                    # Abono inicial si aplica
+                    # Abono inicial si aplica (Batch)
                     if abono_val > 0 and vid:
-                        abono_id = insertar_con_id(cursor,
-                            f"""INSERT INTO abonos_cartera 
-                                (negocio_id, venta_id, fecha, monto, metodo_pago, usuario_id, observacion)
-                                VALUES ({ph}, {ph}, {ph}, {ph}, 'Efectivo', {ph}, 'Abono cargado por Importador Inteligente')""",
-                            (negocio_id, vid, fecha_v, abono_val, usuario_id),
-                            ph, is_pg)
-                        creados_info["abonos"].append(abono_id)
+                        batch_abonos.append((negocio_id, vid, fecha_v, abono_val, 'Efectivo', usuario_id, 'Abono cargado por Importador Inteligente'))
+
+            # ── INSERCIONES EN BATCH (1 SOLO VIAJE DE RED POR TABLA) ──
+            if batch_atributos:
+                sql_attr = f"INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo, importacion_id) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                cursor.executemany(sql_attr, batch_atributos)
+
+            if batch_compras:
+                sql_comp = f"INSERT INTO compras_entradas (negocio_id, fecha_compra, proveedor, insumo_id, codigo_lote, cantidad_comprada, costo_unitario_compra, costo_total_compra, importacion_id, usuario_id) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                cursor.executemany(sql_comp, batch_compras)
+
+            if batch_movimientos:
+                sql_mov = f"INSERT INTO movimientos_lote (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, venta_id, usuario_id) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                cursor.executemany(sql_mov, batch_movimientos)
+
+            if batch_abonos:
+                sql_ab = f"INSERT INTO abonos_cartera (negocio_id, venta_id, fecha, monto, metodo_pago, usuario_id, observacion) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                cursor.executemany(sql_ab, batch_abonos)
 
             # ── 6. MEMORIA DE MAPEO ──
             insertar_con_id(cursor,
