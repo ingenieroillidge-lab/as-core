@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, session, redirect, url_for, Response
+from flask import Flask, jsonify, request, render_template, session, redirect, url_for, Response, stream_with_context
 import services.ventas_service as ventas_service
 import services.inventario_service as inventario_service
 import services.lotes_service as lotes_service
@@ -1504,6 +1504,30 @@ def api_importador_procesar():
     if ok:
         return jsonify({"message": msg, "data": result})
     return jsonify({"error": msg}), 400
+
+@app.route('/api/importador/procesar_stream', methods=['POST'])
+@login_required
+def api_importador_procesar_stream():
+    nid = session['negocio_id']
+    uid = session['user_id']
+    data = request.json or {}
+
+    batch_id = data.get('batch_id')
+    mapeo_usuario = data.get('mapeo_usuario')
+    autorizaciones = data.get('autorizaciones', {})
+    granularidad_costos = data.get('granularidad_costos', 'POR_UNIDAD')
+
+    if not batch_id or not mapeo_usuario:
+        return jsonify({"error": "Faltan datos obligatorios (batch_id o mapeo_usuario)"}), 400
+
+    return Response(
+        stream_with_context(
+            importador_service.procesar_importacion_aprobada_stream(
+                batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos
+            )
+        ),
+        mimetype='text/event-stream'
+    )
 
 @app.route('/api/importador/historial', methods=['GET'])
 @login_required

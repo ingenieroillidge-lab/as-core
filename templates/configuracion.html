@@ -318,12 +318,119 @@
                     </div>
 
                     <div style="display: flex; gap: 1rem;">
-                        <button type="button" onclick="procesarImportacionFinal()" style="flex: 1; background: #34d399; color: black; font-weight: 800; padding: 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem;">
+                        <button type="button" id="btn-confirmar-importar" onclick="procesarImportacionFinal()" style="flex: 1; background: #34d399; color: black; font-weight: 800; padding: 0.85rem; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem;">
                             🚀 Confirmar e Importar al Sistema
                         </button>
-                        <button type="button" onclick="document.getElementById('wiz-paso3').style.display='none'; document.getElementById('wiz-paso2').style.display='block';" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                        <button type="button" id="btn-volver-mapeo" onclick="document.getElementById('wiz-paso3').style.display='none'; document.getElementById('wiz-paso2').style.display='block';" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
                             ← Volver al Mapeo
                         </button>
+                    </div>
+                </div>
+
+                <!-- WIZARD MODAL DE PROGRESO EN VIVO (SSE STREAMING) -->
+                <div id="wiz-progreso-modal" style="display: none; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(56, 189, 248, 0.3); backdrop-filter: blur(12px); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                        <div>
+                            <h3 style="color: #38bdf8; margin: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+                                🧠 Wizard de Progreso de Importación
+                            </h3>
+                            <p style="color: #94a3b8; font-size: 0.8rem; margin-top: 3px; margin-bottom: 0;">Ejecutando pipeline de importación atómica en tiempo real.</p>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 6px 14px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                            <span>⏱️ Tiempo:</span>
+                            <span id="import-timer" style="font-weight: 800; color: #fff;">00:00.0s</span>
+                        </div>
+                    </div>
+
+                    <!-- LISTA DE ETAPAS DEL PIPELINE -->
+                    <div id="wizard-stages-list" style="display: flex; flex-direction: column; gap: 0.6rem;">
+                        <div class="wiz-stage-item" id="stage-ANALIZANDO" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">🧠</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Analizando archivo...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Esperando inicio...</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-ESTRUCTURA" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">🔎</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Interpretando estructura...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-CONCILIANDO" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">🔗</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Conciliando productos y clientes...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-LOTES" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">📦</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Preparando inventario y lotes...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-COSTOS" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">💰</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Calculando costos y rentabilidad...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-CARTERA" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">💳</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Preparando cartera y ventas...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-TRANSACCION" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">🔐</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Ejecutando importación segura...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
+
+                        <div class="wiz-stage-item" id="stage-GUARDANDO" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="stage-icon" style="font-size: 1.1rem;">💾</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #f8fafc; font-size: 0.85rem;">Guardando cambios...</div>
+                                    <div class="stage-detail" style="font-size: 0.75rem; color: #94a3b8;">Pendiente</div>
+                                </div>
+                            </div>
+                            <span class="stage-status-badge" style="font-size: 0.75rem; font-weight: 700; color: #64748b; background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 12px;">Pendiente</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1094,32 +1201,179 @@
             } catch(e) { alert("Error de conexión durante la pre-validación: " + e.message); }
         }
 
+        let importStartTime = 0;
+        let importTimerInterval = null;
+
+        function startImportTimer() {
+            importStartTime = Date.now();
+            const timerElem = document.getElementById('import-timer');
+            if (importTimerInterval) clearInterval(importTimerInterval);
+            importTimerInterval = setInterval(() => {
+                const elapsedMs = Date.now() - importStartTime;
+                const totalSecs = (elapsedMs / 1000).toFixed(1);
+                const mins = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+                const secs = String((totalSecs % 60).toFixed(1)).padStart(4, '0');
+                if (timerElem) timerElem.textContent = `${mins}:${secs}s`;
+            }, 100);
+        }
+
+        function stopImportTimer() {
+            if (importTimerInterval) {
+                clearInterval(importTimerInterval);
+                importTimerInterval = null;
+            }
+        }
+
+        function resetWizardStageUI() {
+            const stages = ["ANALIZANDO", "ESTRUCTURA", "CONCILIANDO", "LOTES", "COSTOS", "CARTERA", "TRANSACCION", "GUARDANDO"];
+            stages.forEach(stg => {
+                const elem = document.getElementById(`stage-${stg}`);
+                if (elem) {
+                    elem.style.border = "1px solid rgba(255,255,255,0.05)";
+                    elem.style.background = "rgba(255,255,255,0.03)";
+                    const detail = elem.querySelector('.stage-detail');
+                    const badge = elem.querySelector('.stage-status-badge');
+                    if (detail) detail.textContent = "Pendiente";
+                    if (badge) {
+                        badge.textContent = "Pendiente";
+                        badge.style.color = "#64748b";
+                        badge.style.background = "rgba(255,255,255,0.05)";
+                    }
+                }
+            });
+        }
+
+        function updateWizardStageUI(stageId, title, status, detail) {
+            const elem = document.getElementById(`stage-${stageId}`);
+            if (!elem) return;
+
+            const detailElem = elem.querySelector('.stage-detail');
+            const badgeElem = elem.querySelector('.stage-status-badge');
+
+            if (detailElem && detail) detailElem.textContent = detail;
+
+            if (status === 'processing') {
+                elem.style.border = "1px solid rgba(56, 189, 248, 0.4)";
+                elem.style.background = "rgba(56, 189, 248, 0.06)";
+                if (badgeElem) {
+                    badgeElem.textContent = "En Proceso...";
+                    badgeElem.style.color = "#38bdf8";
+                    badgeElem.style.background = "rgba(56, 189, 248, 0.15)";
+                }
+            } else if (status === 'completed') {
+                elem.style.border = "1px solid rgba(52, 211, 153, 0.3)";
+                elem.style.background = "rgba(52, 211, 153, 0.05)";
+                if (badgeElem) {
+                    badgeElem.textContent = "✓ Completado";
+                    badgeElem.style.color = "#34d399";
+                    badgeElem.style.background = "rgba(52, 211, 153, 0.15)";
+                }
+            } else if (status === 'error') {
+                elem.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+                elem.style.background = "rgba(239, 68, 68, 0.08)";
+                if (badgeElem) {
+                    badgeElem.textContent = "❌ Error";
+                    badgeElem.style.color = "#ef4444";
+                    badgeElem.style.background = "rgba(239, 68, 68, 0.15)";
+                }
+            }
+        }
+
         async function procesarImportacionFinal() {
             const mapeo = getUserMapping();
             const chkDiffs = document.getElementById('chk-autorizar-diffs') ? document.getElementById('chk-autorizar-diffs').checked : false;
 
+            const btnConfirm = document.getElementById('btn-confirmar-importar');
+            const btnVolver = document.getElementById('btn-volver-mapeo');
+            if (btnConfirm) btnConfirm.disabled = true;
+            if (btnVolver) btnVolver.disabled = true;
+
+            const modalProg = document.getElementById('wiz-progreso-modal');
+            modalProg.style.display = 'block';
+
+            resetWizardStageUI();
+            startImportTimer();
+
+            const payload = {
+                batch_id: currentBatchId,
+                mapeo_usuario: mapeo,
+                autorizaciones: { actualizar_precios: chkDiffs },
+                granularidad_costos: currentGranularidadCostos || 'POR_UNIDAD'
+            };
+
             try {
-                const res = await fetch('/api/importador/procesar', {
+                const response = await fetch('/api/importador/procesar_stream', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        batch_id: currentBatchId,
-                        mapeo_usuario: mapeo,
-                        autorizaciones: { actualizar_precios: chkDiffs },
-                        granularidad_costos: currentGranularidadCostos
-                    })
+                    body: JSON.stringify(payload)
                 });
-                const data = await res.json();
-                if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
 
-                currentUndoToken = data.data.undo_token;
-                document.getElementById('txt-resumen-desc').textContent = data.message;
-                document.getElementById('txt-undo-token').textContent = `Token de Auditoría: ${currentUndoToken}`;
+                if (!response.ok) {
+                    let errText = 'Error de servidor';
+                    try { const errJson = await response.json(); errText = errJson.error || errText; } catch(e){}
+                    throw new Error(errText);
+                }
 
-                document.getElementById('wiz-paso3').style.display = 'none';
-                document.getElementById('wiz-paso4').style.display = 'block';
-                cargarHistorialAuditoria();
-            } catch(e) { alert("Error de conexión al procesar la importación."); }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.replace('data: ', '').trim();
+                            if (!jsonStr) continue;
+                            try {
+                                const evt = JSON.parse(jsonStr);
+                                if (evt.stage === 'ERROR') {
+                                    stopImportTimer();
+                                    updateWizardStageUI(evt.stage, evt.title, evt.status, evt.detail);
+                                    alert("❌ Error durante la importación:\n" + evt.detail);
+                                    modalProg.style.display = 'none';
+                                    document.getElementById('wiz-paso3').style.display = 'block';
+                                    if (btnConfirm) btnConfirm.disabled = false;
+                                    if (btnVolver) btnVolver.disabled = false;
+                                    return;
+                                }
+
+                                updateWizardStageUI(evt.stage, evt.title, evt.status, evt.detail);
+
+                                if (evt.stage === 'COMPLETADO' && evt.result) {
+                                    stopImportTimer();
+                                    currentUndoToken = evt.result.undo_token;
+                                    document.getElementById('txt-resumen-desc').textContent = evt.detail;
+                                    document.getElementById('txt-undo-token').textContent = `Token de Auditoría: ${currentUndoToken}`;
+
+                                    setTimeout(() => {
+                                        modalProg.style.display = 'none';
+                                        document.getElementById('wiz-paso3').style.display = 'none';
+                                        document.getElementById('wiz-paso4').style.display = 'block';
+                                        if (btnConfirm) btnConfirm.disabled = false;
+                                        if (btnVolver) btnVolver.disabled = false;
+                                        cargarHistorialAuditoria();
+                                    }, 400);
+                                }
+                            } catch (eJson) {
+                                console.error("Error al procesar mensaje SSE:", eJson);
+                            }
+                        }
+                    }
+                }
+            } catch(e) {
+                stopImportTimer();
+                alert("❌ Error de comunicación al procesar la importación: " + e.message);
+                modalProg.style.display = 'none';
+                document.getElementById('wiz-paso3').style.display = 'block';
+                if (btnConfirm) btnConfirm.disabled = false;
+                if (btnVolver) btnVolver.disabled = false;
+            }
         }
 
         async function deshacerImportacionDirecta() {
