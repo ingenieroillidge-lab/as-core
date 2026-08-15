@@ -826,9 +826,18 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
     try:
         with transaccion() as (cursor, ph, is_pg):
-            productos_cache = {}   # key_lower → pid
-            clientes_cache = {}    # key_lower → cli_id
-            inventario_cache = {}  # key_lower → inv_id
+            # Pre-cargar cachés en memoria para eliminar latencia N+1 en la nube
+            cursor.execute(f"SELECT LOWER(nombre), id FROM productos WHERE negocio_id={ph}", (negocio_id,))
+            productos_cache = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+
+            cursor.execute(f"SELECT LOWER(nombre), id FROM inventario WHERE negocio_id={ph}", (negocio_id,))
+            inventario_cache = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+
+            cursor.execute(f"SELECT LOWER(nombre), id FROM clientes WHERE negocio_id={ph}", (negocio_id,))
+            clientes_cache = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
+
+            cursor.execute(f"SELECT producto_id, insumo_id FROM producto_insumo WHERE negocio_id={ph}", (negocio_id,))
+            producto_insumo_set = {(row[0], row[1]) for row in cursor.fetchall() if row}
 
             for fila_num, raw_json in registros_staging:
                 raw_row = json.loads(raw_json)
@@ -870,29 +879,21 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 key_p = nombre_prod.lower()
                 if key_p in productos_cache:
                     pid = productos_cache[key_p]
+                    if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
+                        cursor.execute(
+                            f"UPDATE productos SET precio={ph} WHERE id={ph} AND negocio_id={ph}",
+                            (precio_v, pid, negocio_id)
+                        )
                 else:
-                    cursor.execute(
-                        f"SELECT id FROM productos WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
-                        (nombre_prod, negocio_id)
-                    )
-                    exist_p = cursor.fetchone()
-                    if exist_p:
-                        pid = exist_p[0]
-                        if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
-                            cursor.execute(
-                                f"UPDATE productos SET precio={ph} WHERE id={ph} AND negocio_id={ph}",
-                                (precio_v, pid, negocio_id)
-                            )
-                    else:
-                        categoria = (mapped.get('categoria') or '').strip() or None
-                        subcategoria = (mapped.get('subcategoria') or '').strip() or None
-                        pid = insertar_con_id(cursor,
-                            f"""INSERT INTO productos 
-                                (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria, importacion_id)
-                                VALUES ({ph}, {ph}, {ph}, 'COMERCIALIZADO', {ph}, {ph}, {ph})""",
-                            (negocio_id, nombre_prod, precio_v, categoria, subcategoria, undo_token),
-                            ph, is_pg)
-                        creados_info["productos"].append(pid)
+                    categoria = (mapped.get('categoria') or '').strip() or None
+                    subcategoria = (mapped.get('subcategoria') or '').strip() or None
+                    pid = insertar_con_id(cursor,
+                        f"""INSERT INTO productos 
+                            (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria, importacion_id)
+                            VALUES ({ph}, {ph}, {ph}, 'COMERCIALIZADO', {ph}, {ph}, {ph})""",
+                        (negocio_id, nombre_prod, precio_v, categoria, subcategoria, undo_token),
+                        ph, is_pg)
+                    creados_info["productos"].append(pid)
                     productos_cache[key_p] = pid
 
                 # ── 2. ATRIBUTOS Y VARIANTES EN PRODUCTO_ATRIBUTOS ──
@@ -915,50 +916,38 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
                     if key_p in inventario_cache:
                         inv_id = inventario_cache[key_p]
-                        # Incrementar stock
-                        cursor.execute(
-                            f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
-                            (cant, inv_id, negocio_id)
-                        )
-                    else:
-                        cursor.execute(
-                            f"SELECT id FROM inventario WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
-                            (nombre_prod, negocio_id)
-                        )
-                        exist_inv = cursor.fetchone()
-                        if exist_inv:
-                            inv_id = exist_inv[0]
+                        if tipo_fila == "SOLO_COMPRA":
                             cursor.execute(
                                 f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
                                 (cant, inv_id, negocio_id)
                             )
-                        else:
-                            codigo_inv = (mapped.get('codigo_sku') or '').strip() or None
-                            inv_id = insertar_con_id(cursor,
-                                f"""INSERT INTO inventario 
-                                    (negocio_id, nombre, stock_actual, codigo, costo_unitario_base, importacion_id)
-                                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
-                                (negocio_id, nombre_prod, cant, codigo_inv, costo_adq, undo_token),
-                                ph, is_pg)
-                            creados_info["inventario"].append(inv_id)
+                    else:
+                        codigo_inv = (mapped.get('codigo_sku') or '').strip() or None
+                        stock_ini = cant if tipo_fila == "SOLO_COMPRA" else 0.0
+                        inv_id = insertar_con_id(cursor,
+                            f"""INSERT INTO inventario 
+                                (negocio_id, nombre, stock_actual, codigo, costo_unitario_base, importacion_id)
+                                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                            (negocio_id, nombre_prod, stock_ini, codigo_inv, costo_adq, undo_token),
+                            ph, is_pg)
+                        creados_info["inventario"].append(inv_id)
                         inventario_cache[key_p] = inv_id
 
-                    # ── Enlace Producto ↔ Inventario via producto_insumo (tipo_relacion='PRODUCTO_DIRECTO') ──
-                    cursor.execute(
-                        f"SELECT id FROM producto_insumo WHERE producto_id={ph} AND insumo_id={ph} AND negocio_id={ph}",
-                        (pid, inv_id, negocio_id)
-                    )
-                    if not cursor.fetchone():
+                    # ── Enlace Producto ↔ Inventario via producto_insumo ──
+                    if (pid, inv_id) not in producto_insumo_set:
                         insertar_con_id(cursor,
                             f"""INSERT INTO producto_insumo 
                                 (negocio_id, producto_id, insumo_id, cantidad_usada, tipo_relacion)
                                 VALUES ({ph}, {ph}, {ph}, 1.0, 'PRODUCTO_DIRECTO')""",
                             (negocio_id, pid, inv_id),
                             ph, is_pg)
+                        producto_insumo_set.add((pid, inv_id))
 
                     # ── Compra y Lote de adquisición ──
                     codigo_lote = f"IMP-{undo_token[-6:]}-F{fila_num}"
                     costo_total_lote = costo_adq * cant
+                    cant_disp_lote = 0.0 if tipo_fila == "COMPRA_Y_VENTA" else cant
+                    estado_lote = 'AGOTADO' if tipo_fila == "COMPRA_Y_VENTA" else 'ACTIVO'
 
                     compra_id = insertar_con_id(cursor,
                         f"""INSERT INTO compras_entradas 
@@ -974,9 +963,9 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                         f"""INSERT INTO lotes_inventario 
                             (negocio_id, compra_id, insumo_id, codigo_lote, fecha_compra, 
                              cantidad_inicial, cantidad_disponible, costo_unitario, proveedor, estado, importacion_id)
-                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'ACTIVO', {ph})""",
+                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
                         (negocio_id, compra_id, inv_id, codigo_lote, fecha_v[:10],
-                         cant, cant, costo_adq, cli_nombre or "Proveedor Importación", undo_token),
+                         cant, cant_disp_lote, costo_adq, cli_nombre or "Proveedor Importación", estado_lote, undo_token),
                         ph, is_pg)
                     creados_info["lotes"].append(lote_id)
 
@@ -996,18 +985,10 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     if key_c in clientes_cache:
                         cli_id = clientes_cache[key_c]
                     else:
-                        cursor.execute(
-                            f"SELECT id FROM clientes WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
-                            (cli_nombre, negocio_id)
-                        )
-                        exist_c = cursor.fetchone()
-                        if exist_c:
-                            cli_id = exist_c[0]
-                        else:
-                            cli_id = insertar_con_id(cursor,
-                                f"INSERT INTO clientes (negocio_id, nombre, importacion_id) VALUES ({ph}, {ph}, {ph})",
-                                (negocio_id, cli_nombre, undo_token), ph, is_pg)
-                            creados_info["clientes"].append(cli_id)
+                        cli_id = insertar_con_id(cursor,
+                            f"INSERT INTO clientes (negocio_id, nombre, importacion_id) VALUES ({ph}, {ph}, {ph})",
+                            (negocio_id, cli_nombre, undo_token), ph, is_pg)
+                        creados_info["clientes"].append(cli_id)
                         clientes_cache[key_c] = cli_id
 
                 # ── 5. REGISTRO DE VENTA ──
@@ -1029,20 +1010,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     creados_info["ventas"].append(vid)
                     procesados += 1
 
-                    # Si fue COMPRA_Y_VENTA, la venta consume la existencia recién ingresada
                     if tipo_fila == "COMPRA_Y_VENTA" and inv_id and lote_id:
-                        cursor.execute(
-                            f"UPDATE inventario SET stock_actual = stock_actual - {ph} WHERE id={ph} AND negocio_id={ph}",
-                            (cant, inv_id, negocio_id)
-                        )
-                        cursor.execute(
-                            f"""UPDATE lotes_inventario 
-                                SET cantidad_disponible = cantidad_disponible - {ph},
-                                    estado = CASE WHEN (cantidad_disponible - {ph}) <= 0.0001 THEN 'AGOTADO' ELSE 'ACTIVO' END
-                                WHERE id={ph} AND negocio_id={ph}""",
-                            (cant, cant, lote_id, negocio_id)
-                        )
-
                         mov_s_id = insertar_con_id(cursor,
                             f"""INSERT INTO movimientos_lote 
                                 (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, venta_id, usuario_id)
