@@ -273,17 +273,25 @@ def proponer_mapeo_heuristico(headers, negocio_id, muestras=None):
                     motivos.append(f"El encabezado contiene términos compatibles con '{CAMPO_LABELS.get(campo, campo)}'.")
                     break
 
-        # 4. Evaluación Contextual para 'Equipo' / 'Club' / 'Entidad' / 'Artículo'
+        # 4. Evaluación Contextual Genérica (Valores de muestra + Tipo de dato + Contexto de dataset)
         if not match_campo:
-            if h_norm in ("EQUIPO", "CLUB", "ENTIDAD", "MODELO", "ARTICULO", "DESCRIPCION_CORTA"):
-                val_muestras = [str(m.get(h, '')).strip() for m in muestras if m.get(h)]
-                es_textual = len(val_muestras) > 0 and any(not v.replace('.','').isdigit() for v in val_muestras)
+            val_muestras = [str(m.get(h, '')).strip() for m in muestras if m.get(h)]
+            
+            # Comprobar si los valores de la columna son predominantemente texto (no números, no fechas)
+            es_textual = len(val_muestras) > 0 and all(
+                not v.replace('.', '').replace(',', '').replace('$', '').replace('-', '').isdigit() and
+                not (len(v) == 10 and v.count('-') == 2)
+                for v in val_muestras
+            )
 
-                if es_textual and tiene_atributos_vecinos:
-                    match_campo = "nombre_producto"
-                    confianza = "MEDIA"
-                    motivos.append("Valores textuales de muestra compatibles con catálogo en presencia de atributos/variantes vecinos.")
-                    motivos.append("Sugerido para revisión del usuario (IA propone, humano autoriza).")
+            # Comprobar si aún no se ha identificado una columna principal de nombre_producto
+            no_hay_producto_todavia = 'nombre_producto' not in destinos_usados
+
+            if es_textual and tiene_atributos_vecinos and no_hay_producto_todavia:
+                match_campo = "nombre_producto"
+                confianza = "MEDIA"
+                motivos.append("Valores de muestra predominantemente textuales en presencia de atributos/variantes vecinos en el archivo.")
+                motivos.append("Hipótesis contextual: Se infiere como la identidad principal del producto o catálogo (IA propone, humano autoriza).")
 
         # 5. Detectar variante conocida
         if not match_campo:
