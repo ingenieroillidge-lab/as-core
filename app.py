@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for, Response
 import services.ventas_service as ventas_service
 import services.inventario_service as inventario_service
+import services.lotes_service as lotes_service
 import services.financiero_service as financiero_service
 import services.cartera_service as cartera_service
 import services.importador_inteligente_service as importador_service
