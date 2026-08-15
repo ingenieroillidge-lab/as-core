@@ -1400,7 +1400,7 @@ def api_importador_cargar():
             print(f"[IMPORTADOR] ERROR al crear lote staging: {msg}")
             return jsonify({"ok": False, "error": msg or "Error al crear lote en staging", "detail": "Fallo en crear_lote_staging", "stage": "staging_creation"}), 400
 
-        propuesta = importador_service.proponer_mapeo_heuristico(res_info.get('headers', []), nid)
+        propuesta = importador_service.proponer_mapeo_heuristico(res_info.get('headers', []), nid, muestras=res_info.get('muestras', []))
         print("[IMPORTADOR] Análisis heurístico completado")
 
         print("[IMPORTADOR] Preparando respuesta")

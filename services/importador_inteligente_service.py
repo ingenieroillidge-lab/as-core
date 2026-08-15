@@ -274,43 +274,83 @@ def proponer_mapeo_heuristico(headers, negocio_id, muestras=None):
                     break
 
         # 4. Evaluación Contextual Genérica (Valores de muestra + Tipo de dato + Contexto de dataset)
-        if not match_campo:
+        #    No depende del nombre del encabezado; inspecciona los DATOS reales.
+        if not match_campo and muestras:
             val_muestras = [str(m.get(h, '')).strip() for m in muestras if m.get(h)]
             
-            # Comprobar si los valores de la columna son predominantemente texto (no números, no fechas)
-            es_textual = len(val_muestras) > 0 and all(
-                not v.replace('.', '').replace(',', '').replace('$', '').replace('-', '').isdigit() and
-                not (len(v) == 10 and v.count('-') == 2)
-                for v in val_muestras
-            )
+            if val_muestras:
+                # ── 4a. ¿Predominantemente texto no numérico ni fecha? ──
+                es_textual = all(
+                    not v.replace('.', '').replace(',', '').replace('$', '').replace('-', '').replace(' ', '').isdigit() and
+                    not (len(v) == 10 and v.count('-') == 2)
+                    for v in val_muestras
+                )
+                
+                # ── 4b. ¿Predominantemente numérico? ──
+                es_numerico = all(
+                    v.replace('.', '').replace(',', '').replace('$', '').replace('-', '').replace(' ', '').isdigit()
+                    for v in val_muestras
+                ) if val_muestras else False
+                
+                # ── 4c. ¿Valores de tipo estado? (patrones booleanos/binarios/workflow) ──
+                #    Estados reales: Sí/No, Activo/Inactivo, Pagado/Pendiente, Entregado/En tránsito.
+                #    No confundir con nombres de producto de baja cardinalidad (Napoli, Barcelona, Italia).
+                vals_unicos = set(v.lower() for v in val_muestras)
+                avg_len = sum(len(v) for v in vals_unicos) / max(len(vals_unicos), 1)
+                estado_keywords = {"si", "no", "sí", "activo", "inactivo", "pagado", "pendiente",
+                                   "entregado", "cancelado", "en transito", "en tránsito", "devuelto",
+                                   "completado", "procesando", "aprobado", "rechazado", "vendido",
+                                   "disponible", "agotado", "reservado", "true", "false", "yes"}
+                tiene_patron_estado = any(v in estado_keywords for v in vals_unicos)
+                es_estado = es_textual and len(vals_unicos) <= 2 and tiene_patron_estado
+                # Alternativa: estados cortos sin match de keywords, pero solo si son <= 2 valores y muy cortos
+                if not es_estado and es_textual and len(vals_unicos) <= 2 and avg_len <= 12:
+                    es_estado = True
 
-            # Comprobar si aún no se ha identificado una columna principal de nombre_producto
-            no_hay_producto_todavia = 'nombre_producto' not in destinos_usados
+                no_hay_producto_todavia = 'nombre_producto' not in destinos_usados
 
-            if es_textual and tiene_atributos_vecinos and no_hay_producto_todavia:
-                match_campo = "nombre_producto"
-                confianza = "MEDIA"
-                motivos.append("Valores de muestra predominantemente textuales en presencia de atributos/variantes vecinos en el archivo.")
-                motivos.append("Hipótesis contextual: Se infiere como la identidad principal del producto o catálogo (IA propone, humano autoriza).")
+                if es_textual and tiene_atributos_vecinos and no_hay_producto_todavia and not es_estado:
+                    # Primera columna textual no-estado con vecinos de atributo → probable identidad de producto
+                    match_campo = "nombre_producto"
+                    confianza = "MEDIA"
+                    motivos.append(f"Valores de muestra textuales ({', '.join(val_muestras[:3])}) en presencia de atributos/variantes vecinos.")
+                    motivos.append("Hipótesis contextual: posible identidad del producto o catálogo (IA propone, humano autoriza).")
 
-        # 5. Detectar variante conocida
+                elif es_estado:
+                    # Columna con pocos valores únicos textuales → probable estado/clasificación
+                    match_campo = "IGNORAR"
+                    confianza = "MEDIA"
+                    motivos.append(f"Valores categóricos detectados ({', '.join(sorted(vals_unicos)[:4])}). Posible estado o clasificación.")
+                    motivos.append("Se recomienda revisar si corresponde a un estado de pago, operación, inventario u otro.")
+
+                elif es_numerico and not match_campo:
+                    # Numérico sin coincidencia previa → probable campo derivado/calculable
+                    match_campo = "campo_calculado"
+                    confianza = "MEDIA"
+                    motivos.append(f"Valores numéricos ({', '.join(val_muestras[:3])}) sin coincidencia semántica directa.")
+                    motivos.append("Se interpreta como campo derivado o calculable. Se usará para validación, no como fuente de verdad.")
+
+        # 5. Detectar variante conocida (por nombre de encabezado)
         if not match_campo:
             if h_norm in VARIANT_HINTS or any(v in h_norm for v in VARIANT_HINTS if len(v) > 2):
                 match_campo = "variante"
                 confianza = "ALTA"
                 motivos.append("El encabezado corresponde a una dimensión de variante inventariable (talla, color, presentación).")
 
-        # 6. Detectar atributo conocido
+        # 6. Detectar atributo conocido (por nombre de encabezado)
         if not match_campo:
             if h_norm in ATTRIBUTE_HINTS or any(a in h_norm for a in ATTRIBUTE_HINTS if len(a) > 2):
                 match_campo = "atributo"
                 confianza = "MEDIA"
-                motivos.append("El encabezado corresponde a una característica descriptiva del producto (marca, modelo, material, jugador).")
+                motivos.append("El encabezado corresponde a una característica descriptiva del producto (marca, modelo, material).")
 
-        # 7. Si no se reconoce nada
+        # 7. Fallback final
         if not match_campo:
             match_campo = "IGNORAR"
-            motivos.append("No se encontró coincidencia semántica evidente en el diccionario universal.")
+            if not muestras:
+                motivos.append("No se dispone de datos de muestra para evaluación contextual. Se recomienda revisión manual.")
+            else:
+                motivos.append("No se encontró coincidencia semántica ni patrón contextual en los datos de muestra.")
 
         nombre_attr = h if match_campo in ("atributo", "variante") else None
 
