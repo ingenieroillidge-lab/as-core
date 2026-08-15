@@ -1,11 +1,10 @@
 import json
 import uuid
 import time
+import hashlib
 from datetime import datetime
-from database import ejecutar_query, ejecutar_query_many
-import services.ventas_service as ventas_service
+from database import ejecutar_query, ejecutar_query_many, transaccion, insertar_con_id
 import services.cartera_service as cartera_service
-import services.inventario_service as inventario_service
 
 # ══════════════════════════════════════════════════════════════════
 # NÚCLEO SEMÁNTICO UNIVERSAL
@@ -141,8 +140,101 @@ CAMPO_LABELS = {
 }
 
 
+def parse_money(val):
+    if not val:
+        return 0.0
+    try:
+        clean = str(val).replace('$', '').replace(',', '').strip()
+        return float(clean) if clean else 0.0
+    except Exception:
+        return 0.0
+
+
+def calcular_hash_contenido(filas_matriz):
+    """Genera SHA-256 del contenido del archivo para detectar importaciones duplicadas."""
+    contenido = json.dumps(filas_matriz, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(contenido.encode('utf-8')).hexdigest()
+
+
+def inferir_granularidad_costos(filas_datos, mapeo_usuario):
+    """
+    Analiza las muestras para inferir si 'costo_total' representa costo unitario final o costo total del lote.
+    """
+    coincidencias_unitario = 0
+    coincidencias_lote = 0
+    total_evaluados = 0
+
+    col_origen = next((col for col, campo in mapeo_usuario.items() if campo == 'costo_unitario_origen'), None)
+    col_tasa = next((col for col, campo in mapeo_usuario.items() if campo == 'tasa_cambio'), None)
+    col_local = next((col for col, campo in mapeo_usuario.items() if campo == 'costo_unitario_local'), None)
+    col_envio = next((col for col, campo in mapeo_usuario.items() if campo == 'costo_envio'), None)
+    col_total = next((col for col, campo in mapeo_usuario.items() if campo == 'costo_total'), None)
+    col_cant = next((col for col, campo in mapeo_usuario.items() if campo == 'cantidad'), None)
+
+    for r in filas_datos[:30]:
+        total = parse_money(r.get(col_total)) if col_total else 0.0
+        local = parse_money(r.get(col_local)) if col_local else 0.0
+        envio = parse_money(r.get(col_envio)) if col_envio else 0.0
+        cant = parse_money(r.get(col_cant)) if col_cant else 1.0
+        if cant <= 0: cant = 1.0
+
+        if not total or total == 0:
+            continue
+        total_evaluados += 1
+
+        # Test 1: ¿local + envío ≈ total? → total es unitario final
+        if local > 0 and abs((local + envio) - total) <= 2.0:
+            coincidencias_unitario += 1
+        # Test 2: ¿total / cantidad ≈ local? → total es por lote completo
+        elif cant > 1 and local > 0 and abs((total / cant) - local) <= 2.0:
+            coincidencias_lote += 1
+
+    if total_evaluados == 0:
+        return "POR_UNIDAD", ["No se detectaron campos de costo total compitiendo; se asume costo por unidad."]
+
+    ratio_unitario = coincidencias_unitario / total_evaluados
+    ratio_lote = coincidencias_lote / total_evaluados
+
+    if ratio_unitario >= 0.7:
+        return "POR_UNIDAD", [
+            f"En {coincidencias_unitario}/{total_evaluados} filas analizadas: costo local + envío ≈ costo total.",
+            "Se interpreta que 'Costo Total' representa el costo unitario final (puesto en destino)."
+        ]
+    elif ratio_lote >= 0.7:
+        return "POR_LOTE", [
+            f"En {coincidencias_lote}/{total_evaluados} filas analizadas: costo total / cantidad ≈ costo local.",
+            "Se interpreta que 'Costo Total' representa el costo del lote completo."
+        ]
+    else:
+        return "AMBIGUO", [
+            f"Evaluación de costos: {coincidencias_unitario} filas sugieren costo unitario, {coincidencias_lote} sugieren lote.",
+            "Se recomienda confirmar si el Costo Total es por unidad o por pedido/lote."
+        ]
+
+
+def determinar_tipo_fila(mapped_data):
+    """
+    Determina qué tipo de operación representa una fila:
+    COMPRA_Y_VENTA | SOLO_COMPRA | SOLO_VENTA | REGISTRO_HISTORICO
+    """
+    tiene_costos = any(mapped_data.get(c) for c in [
+        'costo_unitario_origen', 'costo_unitario_local', 'costo_total'
+    ])
+    tiene_precio_venta = bool(mapped_data.get('precio_venta'))
+    tiene_cliente = bool(mapped_data.get('cliente_nombre'))
+
+    if tiene_costos and (tiene_precio_venta or tiene_cliente):
+        return "COMPRA_Y_VENTA"
+    elif tiene_costos and not tiene_precio_venta:
+        return "SOLO_COMPRA"
+    elif tiene_precio_venta and not tiene_costos:
+        return "SOLO_VENTA"
+    else:
+        return "REGISTRO_HISTORICO"
+
+
 # ══════════════════════════════════════════════════════════════════
-# ETAPA 1: CARGA Y STAGING
+# ETAPA 1: CARGA Y STAGING CON DETECCIÓN DE DUPLICADOS Y FILTRADO
 # ══════════════════════════════════════════════════════════════════
 
 def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
@@ -165,24 +257,61 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
 
     filas_datos = filas_matriz[1:]
 
-    muestras = []
-    for idx, row in enumerate(filas_datos[:5]):
-        dict_row = {}
-        for orig_idx, h in headers_info:
-            dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
-        muestras.append(dict_row)
-
     params_staging = []
+    muestras = []
+    fila_num_real = 0
+
     for idx, row in enumerate(filas_datos):
         dict_row = {}
+        tiene_datos = False
         for orig_idx, h in headers_info:
-            dict_row[h] = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
+            val = str(row[orig_idx]).strip() if orig_idx < len(row) and row[orig_idx] is not None else ""
+            if val.lower() in ("none", "nan", ""):
+                val = ""
+            dict_row[h] = val
+            if val:
+                tiene_datos = True
+
+        # Filtrar filas completamente vacías
+        if not tiene_datos:
+            continue
+
+        # Filtrar filas que son resúmenes/totales al final del Excel
+        primer_val = (dict_row.get(headers[0]) or "").upper().strip()
+        if primer_val in ("TOTAL", "SUBTOTAL", "GRAN TOTAL", "SUMA", "TOTALES", "PROMEDIO"):
+            continue
+
+        fila_num_real += 1
+
+        if len(muestras) < 5:
+            muestras.append(dict_row)
 
         params_staging.append((
-            negocio_id, batch_id, idx + 1,
+            negocio_id, batch_id, fila_num_real,
             json.dumps(dict_row, ensure_ascii=False),
             fecha_creacion
         ))
+
+    if not params_staging:
+        return False, "No se encontraron filas con datos válidos en el archivo", None
+
+    # Calcular hash basado en las filas útiles filtradas (coincide exactamente con el hash de procesar)
+    filas_matriz_utiles = [json.loads(p[3]) for p in params_staging]
+    hash_archivo = calcular_hash_contenido(filas_matriz_utiles)
+
+    # Verificar si este archivo ya fue importado anteriormente
+    imp_previa = ejecutar_query(
+        "SELECT undo_token, fecha, total_registros, estado FROM auditoria_importaciones WHERE negocio_id=? AND hash_archivo=? ORDER BY id DESC LIMIT 1",
+        (negocio_id, hash_archivo), fetch=True
+    )
+    importacion_previa = None
+    if imp_previa and len(imp_previa) > 0 and len(imp_previa[0]) >= 4:
+        importacion_previa = {
+            "undo_token": imp_previa[0][0],
+            "fecha": imp_previa[0][1],
+            "total_registros": imp_previa[0][2],
+            "estado": imp_previa[0][3]
+        }
 
     sql_insert = """INSERT INTO importaciones_staging 
                     (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion)
@@ -193,8 +322,10 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
         "batch_id": batch_id,
         "nombre_archivo": nombre_archivo,
         "headers": headers,
-        "total_registros": len(filas_datos),
-        "muestras": muestras
+        "total_registros": len(params_staging),
+        "muestras": muestras,
+        "hash_archivo": hash_archivo,
+        "importacion_previa": importacion_previa
     }
     return True, "Archivo cargado en staging con éxito", res_info
 
@@ -303,8 +434,8 @@ def proponer_mapeo_heuristico(headers, negocio_id, muestras=None):
                                    "disponible", "agotado", "reservado", "true", "false", "yes"}
                 tiene_patron_estado = any(v in estado_keywords for v in vals_unicos)
                 es_estado = es_textual and len(vals_unicos) <= 2 and tiene_patron_estado
-                # Alternativa: estados cortos sin match de keywords, pero solo si son <= 2 valores y muy cortos
-                if not es_estado and es_textual and len(vals_unicos) <= 2 and avg_len <= 12:
+                # Alternativa: estados binarios muy cortos (ej: "ok", "a", "b"), pero solo con 5+ muestras y longitud promedio <= 5
+                if not es_estado and es_textual and len(val_muestras) >= 5 and len(vals_unicos) <= 2 and avg_len <= 5:
                     es_estado = True
 
                 no_hay_producto_todavia = 'nombre_producto' not in destinos_usados
@@ -537,14 +668,134 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
 
 
 # ══════════════════════════════════════════════════════════════════
-# ETAPA 4: PROCESAMIENTO APROBADO CON MULTI-ATRIBUTOS
+# ETAPA 4: SIMULACIÓN DE IMPORTACIÓN PRE-CONFIRMACIÓN
 # ══════════════════════════════════════════════════════════════════
 
-def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None):
+def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD"):
     """
-    Confirmación transaccional multi-módulo.
-    Soporta múltiples columnas asignadas a 'atributo' y 'variante'.
-    Cada columna conserva su encabezado como nombre_atributo en producto_atributos.
+    Calcula exactamente el impacto de la importación antes de ejecutar la transacción atómica.
+    """
+    registros_staging = ejecutar_query(
+        "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
+        (batch_id, negocio_id), fetch=True
+    ) or []
+
+    if not registros_staging:
+        return False, "No hay datos en staging para simular", None
+
+    productos_procesados = set()
+    productos_nuevos = set()
+    clientes_nuevos = set()
+    lotes_con_costo = 0
+    lotes_sin_costo = 0
+    ventas_con_costo = 0
+    ventas_sin_costo = 0
+
+    total_inversion = 0.0
+    total_ingresos = 0.0
+    total_cartera = 0.0
+    total_abonos = 0.0
+
+    prods_exist = ejecutar_query("SELECT LOWER(nombre) FROM productos WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+    prods_exist_set = {p[0] for p in prods_exist if p and p[0]}
+
+    clis_exist = ejecutar_query("SELECT LOWER(nombre) FROM clientes WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+    clis_exist_set = {c[0] for c in clis_exist if c and c[0]}
+
+    tipos_filas_cnt = {"COMPRA_Y_VENTA": 0, "SOLO_COMPRA": 0, "SOLO_VENTA": 0, "REGISTRO_HISTORICO": 0}
+
+    for fila_num, raw_json in registros_staging:
+        raw_row = json.loads(raw_json)
+        mapped = {campo: raw_row.get(col, "").strip() for col, campo in mapeo_usuario.items() if campo and campo != "IGNORAR"}
+
+        nombre_prod = (mapped.get('nombre_producto') or '').strip()
+        if not nombre_prod:
+            continue
+
+        tipo_fila = determinar_tipo_fila(mapped)
+        tipos_filas_cnt[tipo_fila] = tipos_filas_cnt.get(tipo_fila, 0) + 1
+
+        key_p = nombre_prod.lower()
+        productos_procesados.add(key_p)
+        if key_p not in prods_exist_set:
+            productos_nuevos.add(key_p)
+
+        cli_nombre = (mapped.get('cliente_nombre') or '').strip()
+        if cli_nombre and cli_nombre.lower() not in clis_exist_set:
+            clientes_nuevos.add(cli_nombre.lower())
+
+        cant = parse_money(mapped.get('cantidad')) or 1.0
+        precio_v = parse_money(mapped.get('precio_venta'))
+        costo_origen = parse_money(mapped.get('costo_unitario_origen'))
+        tasa_cambio = parse_money(mapped.get('tasa_cambio'))
+        costo_local = parse_money(mapped.get('costo_unitario_local'))
+        costo_envio = parse_money(mapped.get('costo_envio'))
+        costo_total_imp = parse_money(mapped.get('costo_total'))
+        deuda_val = parse_money(mapped.get('saldo_pendiente'))
+        abono_val = parse_money(mapped.get('abono_monto'))
+
+        # Calcular costo unitario de adquisición
+        if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
+            costo_adq = costo_total_imp / cant
+        elif costo_total_imp > 0:
+            costo_adq = costo_total_imp
+        elif costo_local > 0:
+            costo_adq = costo_local + costo_envio
+        elif costo_origen > 0 and tasa_cambio > 0:
+            costo_adq = (costo_origen * tasa_cambio) + costo_envio
+        else:
+            costo_adq = 0.0
+
+        if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
+            if costo_adq > 0:
+                lotes_con_costo += 1
+                total_inversion += (costo_adq * cant)
+            else:
+                lotes_sin_costo += 1
+
+        if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
+            total_ingresos += (precio_v * cant)
+            total_cartera += deuda_val
+            total_abonos += abono_val
+
+            if costo_adq > 0:
+                ventas_con_costo += 1
+            else:
+                ventas_sin_costo += 1
+
+    utilidad_estimada = total_ingresos - total_inversion
+
+    return True, "Simulación generada", {
+        "batch_id": batch_id,
+        "total_filas": len(registros_staging),
+        "productos_totales": len(productos_procesados),
+        "productos_nuevos": len(productos_nuevos),
+        "clientes_nuevos": len(clientes_nuevos),
+        "lotes_a_crear": lotes_con_costo + lotes_sin_costo,
+        "lotes_con_costo": lotes_con_costo,
+        "lotes_sin_costo": lotes_sin_costo,
+        "ventas_a_crear": ventas_con_costo + ventas_sin_costo,
+        "ventas_con_costo": ventas_con_costo,
+        "ventas_sin_costo": ventas_sin_costo,
+        "total_inversion": total_inversion,
+        "total_ingresos": total_ingresos,
+        "utilidad_estimada": utilidad_estimada,
+        "margen_estimado_pct": (utilidad_estimada / total_ingresos * 100.0) if total_ingresos > 0 else 0.0,
+        "total_cartera": total_cartera,
+        "total_abonos": total_abonos,
+        "desglose_operaciones": tipos_filas_cnt
+    }
+
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 5: PROCESAMIENTO APROBADO CON TRANSACCIÓN ATÓMICA COMPLETA
+# ══════════════════════════════════════════════════════════════════
+
+def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD"):
+    """
+    Confirmación transaccional atómica multi-módulo (BEGIN ... COMMIT/ROLLBACK).
+    Si cualquier paso falla, se ejecuta ROLLBACK automático y no persiste ningún registro.
+    Soporta trazabilidad mediante importacion_id (undo_token) en todas las tablas.
     """
     registros_staging = ejecutar_query(
         "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
@@ -557,134 +808,358 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
     undo_token = f"UNDO-{uuid.uuid4().hex[:12].upper()}"
     fecha_hoy = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    creados_info = {"productos": [], "ventas": [], "clientes": [], "abonos": [], "lotes": []}
+    # Recuperar hash de archivo si fue guardado en autorizaciones o calcularlo desde staging
+    hash_archivo = None
+    if autorizaciones and isinstance(autorizaciones, dict):
+        hash_archivo = autorizaciones.get('hash_archivo')
+
+    if not hash_archivo and registros_staging:
+        filas_matriz_staging = [json.loads(r[1]) for r in registros_staging if r and r[1]]
+        hash_archivo = calcular_hash_contenido(filas_matriz_staging)
+
+    creados_info = {
+        "productos": [], "atributos": [], "inventario": [],
+        "compras": [], "lotes": [], "ventas": [],
+        "clientes": [], "abonos": [], "movimientos": []
+    }
     procesados = 0
 
-    for fila_num, raw_json in registros_staging:
-        raw_row = json.loads(raw_json)
-        mapped = {}
-        for col_excel, campo_target in mapeo_usuario.items():
-            if campo_target and campo_target != "IGNORAR":
-                mapped[campo_target] = raw_row.get(col_excel, "").strip()
+    try:
+        with transaccion() as (cursor, ph, is_pg):
+            productos_cache = {}   # key_lower → pid
+            clientes_cache = {}    # key_lower → cli_id
+            inventario_cache = {}  # key_lower → inv_id
 
-        nombre_prod = (mapped.get('nombre_producto') or '').strip()
+            for fila_num, raw_json in registros_staging:
+                raw_row = json.loads(raw_json)
+                mapped = {campo: raw_row.get(col, "").strip() for col, campo in mapeo_usuario.items() if campo and campo != "IGNORAR"}
 
-        if not nombre_prod:
-            continue
+                nombre_prod = (mapped.get('nombre_producto') or '').strip()
+                if not nombre_prod:
+                    continue
 
-        try:
-            precio_v = float(str(mapped.get('precio_venta', 0)).replace('$', '').replace(',', '').strip())
-        except Exception:
-            precio_v = 0.0
+                tipo_fila = determinar_tipo_fila(mapped)
 
-        try:
-            costo_local = float(str(mapped.get('costo_unitario_local', 0)).replace('$', '').replace(',', '').strip())
-        except Exception:
-            costo_local = 0.0
+                cant = parse_money(mapped.get('cantidad')) or 1.0
+                precio_v = parse_money(mapped.get('precio_venta'))
+                costo_origen = parse_money(mapped.get('costo_unitario_origen'))
+                tasa_cambio = parse_money(mapped.get('tasa_cambio'))
+                costo_local = parse_money(mapped.get('costo_unitario_local'))
+                costo_envio = parse_money(mapped.get('costo_envio'))
+                costo_total_imp = parse_money(mapped.get('costo_total'))
+                cli_nombre = (mapped.get('cliente_nombre') or '').strip()
+                deuda_val = parse_money(mapped.get('saldo_pendiente'))
+                abono_val = parse_money(mapped.get('abono_monto'))
+                fecha_v = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
+                if len(fecha_v) == 10:
+                    fecha_v = f"{fecha_v} 12:00:00"
 
-        # 1. PRODUCTO (nombre limpio)
-        p_res = ejecutar_query(
-            "SELECT id FROM productos WHERE LOWER(nombre)=LOWER(?) AND negocio_id=?",
-            (nombre_prod, negocio_id), fetch=True
-        )
-        if p_res and len(p_res) > 0 and len(p_res[0]) > 0:
-            pid = p_res[0][0]
-            if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
-                ejecutar_query("UPDATE productos SET precio=? WHERE id=? AND negocio_id=?", (precio_v, pid, negocio_id))
-        else:
-            categoria = (mapped.get('categoria') or '').strip()
-            subcategoria = (mapped.get('subcategoria') or '').strip()
-            ejecutar_query(
-                "INSERT INTO productos (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria) VALUES (?, ?, ?, 'TRANSFORMADO', ?, ?)",
-                (negocio_id, nombre_prod, precio_v, categoria or None, subcategoria or None)
-            )
-            pid_r = ejecutar_query(
-                "SELECT id FROM productos WHERE nombre=? AND negocio_id=? ORDER BY id DESC LIMIT 1",
-                (nombre_prod, negocio_id), fetch=True
-            )
-            pid = pid_r[0][0] if (pid_r and len(pid_r) > 0 and len(pid_r[0]) > 0) else 1
-            creados_info["productos"].append(pid)
+                # Calcular costo de adquisición unitario
+                if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
+                    costo_adq = costo_total_imp / cant
+                elif costo_total_imp > 0:
+                    costo_adq = costo_total_imp
+                elif costo_local > 0:
+                    costo_adq = costo_local + costo_envio
+                elif costo_origen > 0 and tasa_cambio > 0:
+                    costo_adq = (costo_origen * tasa_cambio) + costo_envio
+                else:
+                    costo_adq = 0.0
 
-        # 2. ATRIBUTOS Y VARIANTES MULTI-COLUMNA EN TABLA SEPARADA
-        for col_excel, campo_target in mapeo_usuario.items():
-            if campo_target in ("atributo", "variante"):
-                val = raw_row.get(col_excel, "").strip()
-                if val:
-                    ejecutar_query(
-                        "INSERT INTO producto_atributos (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo) VALUES (?, ?, ?, ?, ?)",
-                        (negocio_id, pid, col_excel, val, campo_target.upper())
+                # ── 1. PRODUCTO (tipo_producto = 'COMERCIALIZADO') ──
+                key_p = nombre_prod.lower()
+                if key_p in productos_cache:
+                    pid = productos_cache[key_p]
+                else:
+                    cursor.execute(
+                        f"SELECT id FROM productos WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
+                        (nombre_prod, negocio_id)
                     )
+                    exist_p = cursor.fetchone()
+                    if exist_p:
+                        pid = exist_p[0]
+                        if autorizaciones and autorizaciones.get('actualizar_precios') and precio_v > 0:
+                            cursor.execute(
+                                f"UPDATE productos SET precio={ph} WHERE id={ph} AND negocio_id={ph}",
+                                (precio_v, pid, negocio_id)
+                            )
+                    else:
+                        categoria = (mapped.get('categoria') or '').strip() or None
+                        subcategoria = (mapped.get('subcategoria') or '').strip() or None
+                        pid = insertar_con_id(cursor,
+                            f"""INSERT INTO productos 
+                                (negocio_id, nombre, precio, tipo_producto, categoria, subcategoria, importacion_id)
+                                VALUES ({ph}, {ph}, {ph}, 'COMERCIALIZADO', {ph}, {ph}, {ph})""",
+                            (negocio_id, nombre_prod, precio_v, categoria, subcategoria, undo_token),
+                            ph, is_pg)
+                        creados_info["productos"].append(pid)
+                    productos_cache[key_p] = pid
 
-        # 3. CARTERA Y CLIENTE
-        cli_nombre = (mapped.get('cliente_nombre') or '').strip()
-        deuda_val = float(str(mapped.get('saldo_pendiente', 0)).replace('$', '').replace(',', '').strip() or 0)
-        abono_val = float(str(mapped.get('abono_monto', 0)).replace('$', '').replace(',', '').strip() or 0)
+                # ── 2. ATRIBUTOS Y VARIANTES EN PRODUCTO_ATRIBUTOS ──
+                for col_excel, campo_target in mapeo_usuario.items():
+                    if campo_target in ("atributo", "variante"):
+                        val = raw_row.get(col_excel, "").strip()
+                        if val:
+                            attr_id = insertar_con_id(cursor,
+                                f"""INSERT INTO producto_atributos 
+                                    (negocio_id, producto_id, nombre_atributo, valor_atributo, tipo, importacion_id)
+                                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                                (negocio_id, pid, col_excel, val, campo_target.upper(), undo_token),
+                                ph, is_pg)
+                            creados_info["atributos"].append(attr_id)
 
-        if cli_nombre:
-            cartera_service.crear_o_actualizar_cliente(cli_nombre, negocio_id)
-            creados_info["clientes"].append(cli_nombre)
+                # ── 3. INVENTARIO + PRODUCTO_INSUMO + COMPRAS + LOTES ──
+                inv_id = None
+                lote_id = None
 
-        # 4. REGISTRO DE VENTA / VENTA A CRÉDITO
-        cant = float(str(mapped.get('cantidad', 1)).strip() or 1.0)
-        metodo = "CRÉDITO" if deuda_val > 0 else "Efectivo"
-        fecha_v = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
+                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
+                    if key_p in inventario_cache:
+                        inv_id = inventario_cache[key_p]
+                        # Incrementar stock
+                        cursor.execute(
+                            f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
+                            (cant, inv_id, negocio_id)
+                        )
+                    else:
+                        cursor.execute(
+                            f"SELECT id FROM inventario WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
+                            (nombre_prod, negocio_id)
+                        )
+                        exist_inv = cursor.fetchone()
+                        if exist_inv:
+                            inv_id = exist_inv[0]
+                            cursor.execute(
+                                f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
+                                (cant, inv_id, negocio_id)
+                            )
+                        else:
+                            codigo_inv = (mapped.get('codigo_sku') or '').strip() or None
+                            inv_id = insertar_con_id(cursor,
+                                f"""INSERT INTO inventario 
+                                    (negocio_id, nombre, stock_actual, codigo, costo_unitario_base, importacion_id)
+                                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                                (negocio_id, nombre_prod, cant, codigo_inv, costo_adq, undo_token),
+                                ph, is_pg)
+                            creados_info["inventario"].append(inv_id)
+                        inventario_cache[key_p] = inv_id
 
-        ok_v, res_v = ventas_service.registrar_venta(pid, cant, metodo, usuario_id, negocio_id, fecha_custom=fecha_v)
-        if ok_v:
-            procesados += 1
-            v_res = ejecutar_query("SELECT id FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (negocio_id,), fetch=True)
-            if v_res and len(v_res) > 0 and len(v_res[0]) > 0:
-                vid = v_res[0][0]
-                creados_info["ventas"].append(vid)
-                if cli_nombre or deuda_val > 0:
-                    ejecutar_query(
-                        "UPDATE ventas SET cliente_nombre=?, saldo_pendiente=? WHERE id=? AND negocio_id=?",
-                        (cli_nombre, deuda_val, vid, negocio_id)
+                    # ── Enlace Producto ↔ Inventario via producto_insumo (tipo_relacion='PRODUCTO_DIRECTO') ──
+                    cursor.execute(
+                        f"SELECT id FROM producto_insumo WHERE producto_id={ph} AND insumo_id={ph} AND negocio_id={ph}",
+                        (pid, inv_id, negocio_id)
                     )
-                if abono_val > 0:
-                    cartera_service.registrar_abono(vid, abono_val, "Efectivo (Importación)", usuario_id, negocio_id, observacion="Abono cargado por Importador Inteligente")
-                    creados_info["abonos"].append(vid)
+                    if not cursor.fetchone():
+                        insertar_con_id(cursor,
+                            f"""INSERT INTO producto_insumo 
+                                (negocio_id, producto_id, insumo_id, cantidad_usada, tipo_relacion)
+                                VALUES ({ph}, {ph}, {ph}, 1.0, 'PRODUCTO_DIRECTO')""",
+                            (negocio_id, pid, inv_id),
+                            ph, is_pg)
 
-    # Memoria de mapeo
-    ejecutar_query(
-        "INSERT INTO mapeos_importacion (negocio_id, nombre_mapeo, estructura_columnas_json, fecha_creacion) VALUES (?, 'Mapeo Aprobado Tenant', ?, ?)",
-        (negocio_id, json.dumps(mapeo_usuario, ensure_ascii=False), fecha_hoy)
-    )
+                    # ── Compra y Lote de adquisición ──
+                    codigo_lote = f"IMP-{undo_token[-6:]}-F{fila_num}"
+                    costo_total_lote = costo_adq * cant
 
-    # Auditoría
-    ejecutar_query(
-        """INSERT INTO auditoria_importaciones 
-           (negocio_id, usuario_id, fecha, undo_token, nombre_archivo, total_registros, creados_json, estado)
-           VALUES (?, ?, ?, ?, 'Importación Excel Empresarial', ?, ?, 'COMPLETADO')""",
-        (negocio_id, usuario_id, fecha_hoy, undo_token, procesados, json.dumps(creados_info, ensure_ascii=False))
-    )
+                    compra_id = insertar_con_id(cursor,
+                        f"""INSERT INTO compras_entradas 
+                            (negocio_id, fecha_compra, proveedor, insumo_id, codigo_lote, 
+                             cantidad_comprada, costo_unitario_compra, costo_total_compra, importacion_id, usuario_id)
+                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                        (negocio_id, fecha_v, cli_nombre or "Proveedor Importación", inv_id, codigo_lote,
+                         cant, costo_adq, costo_total_lote, undo_token, usuario_id),
+                        ph, is_pg)
+                    creados_info["compras"].append(compra_id)
 
-    return True, f"¡Importación exitosa! Se procesaron {procesados} registros.", {"undo_token": undo_token, "resumen": creados_info}
+                    lote_id = insertar_con_id(cursor,
+                        f"""INSERT INTO lotes_inventario 
+                            (negocio_id, compra_id, insumo_id, codigo_lote, fecha_compra, 
+                             cantidad_inicial, cantidad_disponible, costo_unitario, proveedor, estado, importacion_id)
+                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 'ACTIVO', {ph})""",
+                        (negocio_id, compra_id, inv_id, codigo_lote, fecha_v[:10],
+                         cant, cant, costo_adq, cli_nombre or "Proveedor Importación", undo_token),
+                        ph, is_pg)
+                    creados_info["lotes"].append(lote_id)
+
+                    # Movimiento de entrada del lote
+                    mov_e_id = insertar_con_id(cursor,
+                        f"""INSERT INTO movimientos_lote 
+                            (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, usuario_id)
+                            VALUES ({ph}, {ph}, {ph}, 'ENTRADA', {ph}, {ph}, {ph}, {ph}, {ph})""",
+                        (negocio_id, lote_id, fecha_v, cant, costo_adq, costo_total_lote, f"Importación {undo_token}", usuario_id),
+                        ph, is_pg)
+                    creados_info["movimientos"].append(mov_e_id)
+
+                # ── 4. CLIENTE ──
+                cli_id = None
+                if cli_nombre:
+                    key_c = cli_nombre.lower()
+                    if key_c in clientes_cache:
+                        cli_id = clientes_cache[key_c]
+                    else:
+                        cursor.execute(
+                            f"SELECT id FROM clientes WHERE LOWER(nombre)=LOWER({ph}) AND negocio_id={ph}",
+                            (cli_nombre, negocio_id)
+                        )
+                        exist_c = cursor.fetchone()
+                        if exist_c:
+                            cli_id = exist_c[0]
+                        else:
+                            cli_id = insertar_con_id(cursor,
+                                f"INSERT INTO clientes (negocio_id, nombre, importacion_id) VALUES ({ph}, {ph}, {ph})",
+                                (negocio_id, cli_nombre, undo_token), ph, is_pg)
+                            creados_info["clientes"].append(cli_id)
+                        clientes_cache[key_c] = cli_id
+
+                # ── 5. REGISTRO DE VENTA ──
+                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
+                    costo_venta_total = (costo_adq * cant) if tipo_fila == "COMPRA_Y_VENTA" else 0.0
+                    metodo_pago = "CRÉDITO" if deuda_val > 0 else "Efectivo"
+                    total_venta = precio_v * cant
+
+                    vid = insertar_con_id(cursor,
+                        f"""INSERT INTO ventas 
+                            (negocio_id, fecha, producto_id, cantidad, total, metodo_pago, 
+                             costo_historico_total, precio_historico_unitario, usuario_id,
+                             cliente_nombre, cliente_id, saldo_pendiente, importacion_id)
+                            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                        (negocio_id, fecha_v, pid, cant, total_venta, metodo_pago,
+                         costo_venta_total, precio_v, usuario_id,
+                         cli_nombre or None, cli_id, deuda_val, undo_token),
+                        ph, is_pg)
+                    creados_info["ventas"].append(vid)
+                    procesados += 1
+
+                    # Si fue COMPRA_Y_VENTA, la venta consume la existencia recién ingresada
+                    if tipo_fila == "COMPRA_Y_VENTA" and inv_id and lote_id:
+                        cursor.execute(
+                            f"UPDATE inventario SET stock_actual = stock_actual - {ph} WHERE id={ph} AND negocio_id={ph}",
+                            (cant, inv_id, negocio_id)
+                        )
+                        cursor.execute(
+                            f"""UPDATE lotes_inventario 
+                                SET cantidad_disponible = cantidad_disponible - {ph},
+                                    estado = CASE WHEN (cantidad_disponible - {ph}) <= 0.0001 THEN 'AGOTADO' ELSE 'ACTIVO' END
+                                WHERE id={ph} AND negocio_id={ph}""",
+                            (cant, cant, lote_id, negocio_id)
+                        )
+
+                        mov_s_id = insertar_con_id(cursor,
+                            f"""INSERT INTO movimientos_lote 
+                                (negocio_id, lote_id, fecha, tipo, cantidad, costo_unitario_lote, costo_subtotal, referencia, venta_id, usuario_id)
+                                VALUES ({ph}, {ph}, {ph}, 'SALIDA_VENTA', {ph}, {ph}, {ph}, {ph}, {ph}, {ph})""",
+                            (negocio_id, lote_id, fecha_v, cant, costo_adq, costo_venta_total, f"Venta #{vid} (Importación {undo_token})", vid, usuario_id),
+                            ph, is_pg)
+                        creados_info["movimientos"].append(mov_s_id)
+
+                    # Abono inicial si aplica
+                    if abono_val > 0 and vid:
+                        abono_id = insertar_con_id(cursor,
+                            f"""INSERT INTO abonos_cartera 
+                                (negocio_id, venta_id, fecha, monto, metodo_pago, usuario_id, observacion)
+                                VALUES ({ph}, {ph}, {ph}, {ph}, 'Efectivo', {ph}, 'Abono cargado por Importador Inteligente')""",
+                            (negocio_id, vid, fecha_v, abono_val, usuario_id),
+                            ph, is_pg)
+                        creados_info["abonos"].append(abono_id)
+
+            # ── 6. MEMORIA DE MAPEO ──
+            insertar_con_id(cursor,
+                f"INSERT INTO mapeos_importacion (negocio_id, nombre_mapeo, estructura_columnas_json, fecha_creacion) VALUES ({ph}, 'Mapeo Aprobado Tenant', {ph}, {ph})",
+                (negocio_id, json.dumps(mapeo_usuario, ensure_ascii=False), fecha_hoy),
+                ph, is_pg)
+
+            # ── 7. AUDITORÍA CON UNDO TOKEN Y HASH ARCHIVO ──
+            insertar_con_id(cursor,
+                f"""INSERT INTO auditoria_importaciones 
+                    (negocio_id, usuario_id, fecha, undo_token, nombre_archivo, 
+                     total_registros, creados_json, hash_archivo, estado)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, 'Importación Excel Empresarial', {ph}, {ph}, {ph}, 'COMPLETADO')""",
+                (negocio_id, usuario_id, fecha_hoy, undo_token, procesados,
+                 json.dumps(creados_info, ensure_ascii=False), hash_archivo),
+                ph, is_pg)
+
+        # COMMIT AUTOMÁTICO AL SALIR DEL BLOQUE CONTEXTUAL
+        print(f"[IMPORTADOR ÉXITO ATÓMICO] Transacción atómica ejecutada con éxito. undo_token={undo_token}")
+        return True, f"¡Importación exitosa! Se procesaron {procesados} registros en una única transacción atómica.", {
+            "undo_token": undo_token,
+            "procesados": procesados,
+            "resumen": creados_info
+        }
+
+    except Exception as e_trans:
+        print(f"[IMPORTADOR ERROR ATÓMICO - ROLLBACK EJECUTADO] {e_trans}")
+        return False, f"Error en el procesamiento (ROLLBACK automático ejecutado, 0 registros creados): {str(e_trans)}", None
 
 
 # ══════════════════════════════════════════════════════════════════
-# ETAPA 5: REVERSIÓN ASISTIDA
+# ETAPA 6: REVERSIÓN ASISTIDA E INTELIGENTE
 # ══════════════════════════════════════════════════════════════════
 
 def revertir_importacion(undo_token, negocio_id, usuario_id):
+    """
+    Reversión inteligente:
+    1. Si no hay operaciones posteriores → Reversión completa (elimina todos los registros de la importación).
+    2. Si existen operaciones posteriores de esos productos → Reversión asistida (elimina ventas/lotes de la importación, preserva productos/clientes).
+    """
     audit = ejecutar_query(
         "SELECT id, creados_json, estado FROM auditoria_importaciones WHERE undo_token=? AND negocio_id=?",
         (undo_token, negocio_id), fetch=True
     )
     if not audit or len(audit) == 0 or len(audit[0]) < 3:
-        return False, "Token de reversión no encontrado o ya fue revertido"
+        return False, "Token de reversión no encontrado o ya fue revertido", None
 
     a_id, creados_json, estado = audit[0]
-
-    if estado == 'REVERTIDO':
-        return False, "Esta importación ya había sido revertida previamente"
+    if estado in ('REVERTIDO', 'REVERTIDO_PARCIAL'):
+        return False, f"Esta importación ya fue revertida anteriormente (estado: {estado})", None
 
     creados = json.loads(creados_json) if creados_json else {}
-    ventas_creadas = creados.get('ventas', [])
+    prods_creados = creados.get('productos', [])
 
-    for vid in ventas_creadas:
-        ventas_service.eliminar_venta(vid, negocio_id, usuario_id)
+    # Comprobar si existen ventas posteriores de estos productos que NO sean de esta importación
+    tiene_ops_posteriores = False
+    if prods_creados:
+        ph_list = ", ".join(["?"] * len(prods_creados))
+        params_check = [negocio_id, undo_token] + prods_creados
+        query_check = f"SELECT COUNT(*) FROM ventas WHERE negocio_id=? AND (importacion_id IS NULL OR importacion_id != ?) AND producto_id IN ({ph_list})"
+        res_ops = ejecutar_query(query_check, params_check, fetch=True)
+        if res_ops and res_ops[0][0] > 0:
+            tiene_ops_posteriores = True
 
-    ejecutar_query("UPDATE auditoria_importaciones SET estado='REVERTIDO' WHERE id=?", (a_id,))
+    try:
+        with transaccion() as (cursor, ph, is_pg):
+            # Eliminar abonos de la importación
+            cursor.execute(
+                f"DELETE FROM abonos_cartera WHERE venta_id IN (SELECT id FROM ventas WHERE importacion_id={ph} AND negocio_id={ph}) AND negocio_id={ph}",
+                (undo_token, negocio_id, negocio_id)
+            )
+            # Eliminar movimientos de lote de la importación
+            cursor.execute(
+                f"DELETE FROM movimientos_lote WHERE (referencia LIKE {ph} OR venta_id IN (SELECT id FROM ventas WHERE importacion_id={ph})) AND negocio_id={ph}",
+                (f"%{undo_token}%", undo_token, negocio_id)
+            )
+            # Eliminar ventas de la importación
+            cursor.execute(f"DELETE FROM ventas WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+            # Eliminar lotes de la importación
+            cursor.execute(f"DELETE FROM lotes_inventario WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+            # Eliminar compras de la importación
+            cursor.execute(f"DELETE FROM compras_entradas WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+            # Eliminar atributos de la importación
+            cursor.execute(f"DELETE FROM producto_atributos WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
 
-    return True, f"Importación {undo_token} revertida exitosamente. Se restituyó la información."
+            if not tiene_ops_posteriores:
+                # Reversión COMPLETA: eliminar también enlaces, inventario y productos creados
+                cursor.execute(f"DELETE FROM producto_insumo WHERE producto_id IN (SELECT id FROM productos WHERE importacion_id={ph}) AND negocio_id={ph}", (undo_token, negocio_id))
+                cursor.execute(f"DELETE FROM inventario WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+                cursor.execute(f"DELETE FROM productos WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+                cursor.execute(f"DELETE FROM clientes WHERE importacion_id={ph} AND negocio_id={ph}", (undo_token, negocio_id))
+                cursor.execute(f"UPDATE auditoria_importaciones SET estado='REVERTIDO' WHERE id={ph}", (a_id,))
+                msg = f"Importación {undo_token} revertida completamente. Se eliminaron todos los registros generados."
+            else:
+                # Reversión ASISTIDA: conservar productos/clientes que tienen ventas manuales posteriores
+                cursor.execute(f"UPDATE auditoria_importaciones SET estado='REVERTIDO_PARCIAL' WHERE id={ph}", (a_id,))
+                msg = f"Importación {undo_token} revertida (asistida). Se eliminaron las ventas y lotes de la importación, pero se conservaron los productos y clientes por tener operaciones posteriores."
+
+        return True, msg, {"undo_token": undo_token, "modo": "COMPLETO" if not tiene_ops_posteriores else "PARCIAL"}
+
+    except Exception as e_rev:
+        return False, f"Error al revertir la importación: {str(e_rev)}", None
+

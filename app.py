@@ -1450,6 +1450,22 @@ def api_importador_prevalidar():
         ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
 
         if ok:
+            # Obtener datos de staging para análisis de granularidad de costos y simulación
+            registros = ejecutar_query(
+                "SELECT datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=?",
+                (batch_id, nid), fetch=True
+            ) or []
+            filas_datos = [json.loads(r[0]) for r in registros if r and r[0]]
+
+            gran_costo, gran_motivos = importador_service.inferir_granularidad_costos(filas_datos, mapeo_usuario)
+            ok_sim, msg_sim, simulacion = importador_service.simular_importacion(batch_id, nid, mapeo_usuario, gran_costo)
+
+            resumen["granularidad_costos"] = {
+                "tipo_inferido": gran_costo,
+                "motivos": gran_motivos
+            }
+            resumen["simulacion"] = simulacion if ok_sim else None
+
             print(f"[PREVALIDAR] Completado: registros={resumen.get('total_registros', 0)}, tiempo={resumen.get('tiempo_ms', '?')}ms")
             return jsonify({"ok": True, "message": msg, "resumen": resumen})
 
@@ -1476,11 +1492,14 @@ def api_importador_procesar():
     batch_id = d.get('batch_id')
     mapeo_usuario = d.get('mapeo_usuario', {})
     autorizaciones = d.get('autorizaciones', {})
+    granularidad_costos = d.get('granularidad_costos', 'POR_UNIDAD')
 
     if not batch_id or not mapeo_usuario:
         return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
 
-    ok, msg, result = importador_service.procesar_importacion_aprobada(batch_id, nid, uid, mapeo_usuario, autorizaciones)
+    ok, msg, result = importador_service.procesar_importacion_aprobada(
+        batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos
+    )
     if ok:
         return jsonify({"message": msg, "data": result})
     return jsonify({"error": msg}), 400
@@ -1502,9 +1521,9 @@ def api_importador_historial():
 def api_importador_deshacer(undo_token):
     nid = session['negocio_id']
     uid = session['user_id']
-    ok, msg = importador_service.revertir_importacion(undo_token, nid, uid)
+    ok, msg, data = importador_service.revertir_importacion(undo_token, nid, uid)
     if ok:
-        return jsonify({"message": msg})
+        return jsonify({"message": msg, "data": data})
     return jsonify({"error": msg}), 400
 
 @app.route('/api/costos-variables', methods=['GET', 'POST'])

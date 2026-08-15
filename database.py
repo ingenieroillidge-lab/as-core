@@ -2,7 +2,12 @@ import os
 import sqlite3
 import json
 from datetime import datetime, timedelta
-from werkzeug.security import generate_password_hash, check_password_hash
+from contextlib import contextmanager
+try:
+    from werkzeug.security import generate_password_hash, check_password_hash
+except ImportError:
+    generate_password_hash = None
+    check_password_hash = None
 
 try:
     import psycopg2
@@ -35,7 +40,7 @@ def init_db():
             f"CREATE TABLE IF NOT EXISTS ventas (id {id_t}, negocio_id INTEGER, fecha TEXT, total REAL, producto_id INTEGER, cantidad REAL, metodo_pago TEXT, costo_historico_total REAL, precio_historico_unitario REAL, usuario_id INTEGER)",
             f"CREATE TABLE IF NOT EXISTS logs_conversion (id {id_t}, negocio_id INTEGER, feature TEXT, fecha TEXT, usuario_id INTEGER)",
             f"CREATE TABLE IF NOT EXISTS costos_fijos (id {id_t}, negocio_id INTEGER, concepto TEXT, valor REAL, mes TEXT)",
-            f"CREATE TABLE IF NOT EXISTS producto_insumo (id {id_t}, negocio_id INTEGER, producto_id INTEGER, insumo_id INTEGER, cantidad_usada REAL)",
+            f"CREATE TABLE IF NOT EXISTS producto_insumo (id {id_t}, negocio_id INTEGER, producto_id INTEGER, insumo_id INTEGER, cantidad_usada REAL, tipo_relacion TEXT DEFAULT 'INSUMO')",
             f"CREATE TABLE IF NOT EXISTS movimientos_inventario (id {id_t}, negocio_id INTEGER, fecha TEXT, insumo_id INTEGER, tipo TEXT, cantidad REAL, referencia TEXT, usuario_id INTEGER)",
             f"CREATE TABLE IF NOT EXISTS configuracion_negocio (id {id_t}, negocio_id INTEGER, nombre_comercial TEXT, tipo_operacion TEXT DEFAULT 'HÍBRIDO', sheet_url_ventas TEXT, color_acento TEXT DEFAULT '#38bdf8', maneja_cartera INTEGER DEFAULT 0)",
             f"CREATE TABLE IF NOT EXISTS abonos_cartera (id {id_t}, negocio_id INTEGER, venta_id INTEGER, fecha TEXT, monto REAL, metodo_pago TEXT, usuario_id INTEGER, observacion TEXT)",
@@ -128,6 +133,7 @@ def init_db():
         agregar_columna('ventas', 'fecha_limite_pago', 'TEXT')
         agregar_columna('ventas', 'observacion', 'TEXT')
         agregar_columna('ventas', 'cliente_id', 'INTEGER')
+        agregar_columna('ventas', 'importacion_id', 'TEXT')
 
         agregar_columna('configuracion_negocio', 'nombre_comercial', 'TEXT')
         agregar_columna('configuracion_negocio', 'color_acento', 'TEXT DEFAULT \'#38bdf8\'')
@@ -135,6 +141,15 @@ def init_db():
         agregar_columna('configuracion_negocio', 'maneja_lotes', 'INTEGER DEFAULT 0')
         agregar_columna('configuracion_negocio', 'metodo_salida_lotes', "TEXT DEFAULT 'FEFO'")
         agregar_columna('configuracion_negocio', 'bloquear_lotes_vencidos', "TEXT DEFAULT 'SI'")
+
+        agregar_columna('producto_insumo', 'tipo_relacion', "TEXT DEFAULT 'INSUMO'")
+        agregar_columna('productos', 'importacion_id', 'TEXT')
+        agregar_columna('inventario', 'importacion_id', 'TEXT')
+        agregar_columna('lotes_inventario', 'importacion_id', 'TEXT')
+        agregar_columna('compras_entradas', 'importacion_id', 'TEXT')
+        agregar_columna('producto_atributos', 'importacion_id', 'TEXT')
+        agregar_columna('clientes', 'importacion_id', 'TEXT')
+        agregar_columna('auditoria_importaciones', 'hash_archivo', 'TEXT')
 
         tablas_con_negocio = ['usuarios', 'productos', 'inventario', 'ventas', 'logs_conversion', 'costos_fijos', 'producto_insumo', 'movimientos_inventario', 'configuracion_negocio', 'abonos_cartera', 'tickets_soporte', 'clientes', 'compras_entradas', 'lotes_inventario', 'movimientos_lote', 'informes_guardados', 'suscripciones', 'pagos_wompi', 'notificaciones']
         for t in tablas_con_negocio:
@@ -245,5 +260,56 @@ def ejecutar_query_many(query, params_list):
             except Exception:
                 pass
         return False
+
+
+@contextmanager
+def transaccion():
+    """
+    Context manager para transacciones atómicas.
+    Uso:
+        with transaccion() as (cursor, ph, is_pg):
+            cursor.execute(f"INSERT INTO x (...) VALUES ({ph},{ph}) RETURNING id", (a, b))
+            new_id = cursor.fetchone()[0]
+    COMMIT automático al salir sin error.
+    ROLLBACK automático ante excepción.
+    """
+    db_url = os.environ.get("DATABASE_URL")
+    is_pg = bool(db_url and POSTGRES_AVAILABLE)
+    ph = "%s" if is_pg else "?"
+
+    if is_pg:
+        conn_str = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+        conn = psycopg2.connect(conn_str)
+    else:
+        conn = sqlite3.connect("as_platform.db")
+
+    cursor = conn.cursor()
+    try:
+        yield cursor, ph, is_pg
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def insertar_con_id(cursor, sql, params, ph, is_pg):
+    """
+    Ejecuta INSERT y retorna el ID generado.
+    En PostgreSQL usa RETURNING id.
+    En SQLite usa cursor.lastrowid.
+    """
+    if is_pg:
+        if "RETURNING id" not in sql.upper():
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+        sql = sql.replace("?", "%s")
+        cursor.execute(sql, params)
+        return cursor.fetchone()[0]
+    else:
+        cursor.execute(sql, params)
+        return cursor.lastrowid
+
 
 crear_tablas = init_db
