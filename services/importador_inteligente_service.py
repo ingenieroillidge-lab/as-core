@@ -247,26 +247,40 @@ def inferir_granularidad_costos(filas_datos, mapeo_usuario):
         ]
 
 
+CONCEPTOS_ESTADO_MAP = {
+    "STOCK": ["STOCK", "DISPONIBLE", "EN STOCK", "INVENTARIO", "ALMACEN"],
+    "VENDIDA": ["VENDIDA", "VENDIDO", "VENTA", "PAGADO", "PAGADA", "CONTADO"],
+    "DEBE": ["DEBE", "DEUDA", "CARTERA", "CREDITO", "CRÉDITO", "PENDIENTE", "POR COBRAR"],
+    "PERDIDA": ["PERDIDA", "PÉRDIDA", "DAÑADO", "DAÑADA", "MERMA", "ROBO", "DESCARTE"]
+}
+
+def normalizar_concepto_estado(val_raw):
+    if not val_raw:
+        return None
+    val_clean = str(val_raw).strip().upper()
+    for concepto, sinonimos in CONCEPTOS_ESTADO_MAP.items():
+        if val_clean in sinonimos:
+            return concepto
+    return "AMBIGUO"
+
 def determinar_tipo_fila(mapped_data):
     """
     Determina qué tipo de operación representa una fila considerando 'estado_origen':
-    - STOCK / EN_STOCK / DISPONIBLE -> SOLO_COMPRA (Crear lote/inventario disponible, NO crear venta)
-    - PERDIDA / PÉRDIDA / DAÑADO / MERMA -> PERDIDA (Crear lote + Salida por Pérdida, NO crear venta)
-    - DEBE / CARTERA / CRÉDITO -> COMPRA_Y_VENTA (Crear lote + Venta a Crédito + Salida por venta)
-    - VENDIDA / VENDIDADA / PAGADO -> COMPRA_Y_VENTA (Crear lote + Venta al Contado + Salida por venta)
+    - STOCK -> SOLO_COMPRA (Crear lote/inventario disponible, NO crear venta)
+    - PERDIDA -> PERDIDA (Crear lote + Salida por Pérdida, NO crear venta)
+    - DEBE / VENDIDA -> COMPRA_Y_VENTA (Crear lote + Venta + Salida por venta)
     """
-    raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip().upper()
+    raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip()
+    concepto = normalizar_concepto_estado(raw_est)
 
-    if raw_est in ('STOCK', 'EN_STOCK', 'INVENTARIO', 'DISPONIBLE'):
+    if concepto == "STOCK":
         return "SOLO_COMPRA"
-    elif raw_est in ('PERDIDA', 'PÉRDIDA', 'DAÑADO', 'DAÑADA', 'ROBO', 'MERMA'):
+    elif concepto == "PERDIDA":
         return "PERDIDA"
-    elif raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
-        return "COMPRA_Y_VENTA"
-    elif raw_est in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
+    elif concepto in ("DEBE", "VENDIDA"):
         return "COMPRA_Y_VENTA"
 
-    # Fallback si no hay columna Estado explícita:
+    # Fallback estructural si no hay columna de Estado o si es AMBIGUO:
     tiene_costos = any(mapped_data.get(c) for c in [
         'costo_unitario_origen', 'costo_unitario_local', 'costo_total'
     ])
@@ -634,13 +648,21 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             except Exception:
                 pass
 
-        # ── Discrepancia de Cartera Fila por Fila (Excel vs AS) ──
-        estado_raw = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip().upper()
+        # ── Evaluación de Estado y Discrepancia de Cartera (Excel vs AS) ──
+        raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip()
+        concepto_est = normalizar_concepto_estado(raw_est)
+
+        if raw_est and concepto_est == "AMBIGUO":
+            advs.append(
+                f"⚠️ Estado no reconocido en Fila #{fila_num}: '{raw_est}'. "
+                f"AS no intentará adivinar; se utilizará deducción estructural a menos que el usuario lo ajuste."
+            )
+
         precio_v = parse_money(mapped_data.get('precio_venta'))
         abono_val = parse_money(mapped_data.get('abono_monto'))
         deuda_excel = parse_money(mapped_data.get('saldo_pendiente'))
 
-        if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+        if concepto_est == "DEBE":
             total_v_row = precio_v * cant_val
             saldo_calc_as = max(0.0, total_v_row - abono_val)
             if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
@@ -793,13 +815,14 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             continue
 
         tipo_fila = determinar_tipo_fila(mapped)
-        raw_est = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
+        raw_est = (mapped.get('estado_origen') or mapped.get('estado') or '').strip()
+        concepto_est = normalizar_concepto_estado(raw_est)
 
-        if raw_est in ('STOCK', 'EN_STOCK', 'INVENTARIO', 'DISPONIBLE'):
+        if concepto_est == "STOCK":
             cnt_stock += 1
-        elif raw_est in ('PERDIDA', 'PÉRDIDA', 'DAÑADO', 'DAÑADA', 'ROBO', 'MERMA'):
+        elif concepto_est == "PERDIDA":
             cnt_perdida += 1
-        elif raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+        elif concepto_est == "DEBE":
             cnt_debe += 1
         else:
             cnt_vendida += 1
@@ -1108,18 +1131,15 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
-                # Conciliación real de cartera: Total Venta - Abonos = Saldo
+                concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
-                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
-                    # Estado explícito de deuda: Saldo = Total Venta - Abonos
+                if concepto_est == "DEBE":
                     saldo_calc = max(0.0, total_v_row - abono_val)
                     metodo_pago = "CRÉDITO"
                 elif deuda_val > 0:
-                    # Columna explícita de saldo pendiente del Excel
                     saldo_calc = deuda_val
                     metodo_pago = "CRÉDITO"
-                elif estado_raw in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
-                    # Pagado completamente
+                elif concepto_est == "VENDIDA":
                     saldo_calc = 0.0
                     metodo_pago = "Efectivo"
                 else:
@@ -1596,18 +1616,15 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
-                # Conciliación real de cartera: Total Venta - Abonos = Saldo
+                concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
-                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
-                    # Estado explícito de deuda: Saldo = Total Venta - Abonos
+                if concepto_est == "DEBE":
                     saldo_calc = max(0.0, total_v_row - abono_val)
                     metodo_pago = "CRÉDITO"
                 elif deuda_val > 0:
-                    # Columna explícita de saldo pendiente del Excel
                     saldo_calc = deuda_val
                     metodo_pago = "CRÉDITO"
-                elif estado_raw in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
-                    # Pagado completamente
+                elif concepto_est == "VENDIDA":
                     saldo_calc = 0.0
                     metodo_pago = "Efectivo"
                 else:
