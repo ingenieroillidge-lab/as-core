@@ -63,7 +63,30 @@ SEMANTIC_CORE = {
     # ── Cliente y cartera ──
     "cliente_nombre": [
         "CLIENTE", "CLIENTES", "CUSTOMER", "COMPRADOR", "NOMBRE CLIENTE",
-        "DESTINATARIO", "RAZON SOCIAL"
+        "DESTINATARIO", "RAZON SOCIAL", "NOMBRE DEL CLIENTE",
+        "NOMBRE COMPRADOR", "BUYER", "ADQUIRIENTE"
+    ],
+    "cliente_documento": [
+        "CEDULA", "CC", "NIT", "RUT", "DOCUMENTO", "DNI", "CI",
+        "NUMERO DOCUMENTO", "IDENTIFICACION", "ID CLIENTE", "DOC"
+    ],
+    "cliente_telefono": [
+        "TELEFONO", "TEL", "CELULAR", "MOVIL", "PHONE", "MOBILE",
+        "NUMERO CELULAR", "NUMERO TELEFONO", "CEL"
+    ],
+    "cliente_whatsapp": [
+        "WHATSAPP", "WA", "NUMERO WHATSAPP", "WHATS"
+    ],
+    "cliente_email": [
+        "EMAIL", "CORREO", "CORREO ELECTRONICO", "E-MAIL", "MAIL"
+    ],
+    "cliente_direccion": [
+        "DIRECCION", "DOMICILIO", "CIUDAD", "MUNICIPIO", "BARRIO",
+        "ADDRESS", "LOCALIDAD", "ZONA", "UBICACION"
+    ],
+    "cliente_tipo": [
+        "TIPO CLIENTE", "SEGMENTO", "CANAL", "TIPO DE CLIENTE",
+        "CLASIFICACION CLIENTE", "CATEGORIA CLIENTE"
     ],
     "saldo_pendiente": [
         "DEUDAS POR COBRAR", "DEUDAS", "CARTERA", "SALDO PENDIENTE",
@@ -98,7 +121,9 @@ SEMANTIC_CORE = {
 
 SINGLETON_FIELDS = {
     "nombre_producto", "codigo_sku", "precio_venta", 
-    "cliente_nombre", "saldo_pendiente", "abono_monto", 
+    "cliente_nombre", "cliente_documento", "cliente_telefono", "cliente_whatsapp",
+    "cliente_email", "cliente_direccion", "cliente_tipo",
+    "saldo_pendiente", "abono_monto", 
     "fecha_operacion", "fecha_recepcion"
 }
 
@@ -135,6 +160,12 @@ CAMPO_LABELS = {
     "precio_venta": "🏷️ Precio de venta",
     "cantidad": "🔢 Cantidad / Unidades",
     "cliente_nombre": "👤 Cliente",
+    "cliente_documento": "🪪 Documento / Cédula / NIT",
+    "cliente_telefono": "📱 Teléfono / Celular",
+    "cliente_whatsapp": "💬 WhatsApp",
+    "cliente_email": "📧 Email / Correo",
+    "cliente_direccion": "📍 Dirección / Ciudad",
+    "cliente_tipo": "🏷️ Tipo / Segmento de cliente",
     "saldo_pendiente": "💳 Cuenta por cobrar / Deuda",
     "abono_monto": "💵 Pago / Abono recibido",
     "fecha_operacion": "📅 Fecha de operación",
@@ -959,17 +990,35 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if cli_nombre:
                     key_c = cli_nombre.lower()
                     if key_c not in clientes_cache and key_c not in nuevos_clientes_dict:
-                        nuevos_clientes_dict[key_c] = (negocio_id, cli_nombre, undo_token)
+                        cli_doc = (mapped.get('cliente_documento') or '').strip()
+                        cli_tel = (mapped.get('cliente_telefono') or '').strip()
+                        cli_wa = (mapped.get('cliente_whatsapp') or '').strip()
+                        cli_email = (mapped.get('cliente_email') or '').strip()
+                        cli_dir = (mapped.get('cliente_direccion') or '').strip()
+                        cli_tipo = (mapped.get('cliente_tipo') or '').strip() or 'PERSONA'
+                        nuevos_clientes_dict[key_c] = (
+                            negocio_id, cli_nombre, cli_tipo, cli_doc, cli_tel,
+                            cli_wa or cli_tel, cli_email, cli_dir, 0.0, 15, 'ACTIVO', undo_token
+                        )
 
-                # Clave Única de Pedido/Embarque y Lote
-                pedido_key = f"{fecha_compra_raw[:10]}_{fecha_recepcion_raw[:10]}_{tasa_cambio}_{costo_envio}"
+                # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
+                pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
-                # Cálculo de saldo pendiente de cartera por fila
+                # Conciliación real de cartera: Total Venta - Abonos = Saldo
                 total_v_row = precio_v * cant
-                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
-                    saldo_calc = max(0.0, total_v_row - abono_val) if abono_val > 0 else (deuda_val if deuda_val > 0 else total_v_row)
+                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+                    # Estado explícito de deuda: Saldo = Total Venta - Abonos
+                    saldo_calc = max(0.0, total_v_row - abono_val)
                     metodo_pago = "CRÉDITO"
+                elif deuda_val > 0:
+                    # Columna explícita de saldo pendiente del Excel
+                    saldo_calc = deuda_val
+                    metodo_pago = "CRÉDITO"
+                elif estado_raw in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
+                    # Pagado completamente
+                    saldo_calc = 0.0
+                    metodo_pago = "Efectivo"
                 else:
                     saldo_calc = 0.0
                     metodo_pago = "Efectivo"
@@ -1017,7 +1066,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     creados_info["inventario"].append(inv_id_gen)
 
             if nuevos_clientes_dict:
-                cols_c = ["negocio_id", "nombre", "importacion_id"]
+                cols_c = ["negocio_id", "nombre", "tipo", "documento", "telefono", "whatsapp", "email", "direccion", "limite_credito", "dias_credito_predeterminado", "estado", "importacion_id"]
                 rows_c = list(nuevos_clientes_dict.values())
                 res_c = bulk_insert_con_returning(cursor, "clientes", cols_c, rows_c, ph, is_pg, "id, LOWER(nombre)")
                 for r in res_c:
@@ -1091,13 +1140,13 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 costo_total_compra = cant_total * ldata["costo_adq"]
 
                 batch_compras.append((
-                    negocio_id, ldata["fecha_compra"], ldata["cli_nombre"] or "Proveedor Importación",
+                    negocio_id, ldata["fecha_compra"], "",
                     ldata["inv_id"], codigo_lote, cant_total, ldata["costo_adq"], costo_total_compra, undo_token, usuario_id
                 ))
 
                 batch_lotes.append((
                     negocio_id, ldata["inv_id"], codigo_lote, ldata["fecha_recepcion"][:10],
-                    cant_total, cant_disp, ldata["costo_adq"], ldata["cli_nombre"] or "Proveedor Importación",
+                    cant_total, cant_disp, ldata["costo_adq"], "",
                     estado_lote, undo_token
                 ))
                 lotes_keys_order.append(lk)
@@ -1429,15 +1478,35 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 if cli_nombre:
                     key_c = cli_nombre.lower()
                     if key_c not in clientes_cache and key_c not in nuevos_clientes_dict:
-                        nuevos_clientes_dict[key_c] = (negocio_id, cli_nombre, undo_token)
+                        cli_doc = (mapped.get('cliente_documento') or '').strip()
+                        cli_tel = (mapped.get('cliente_telefono') or '').strip()
+                        cli_wa = (mapped.get('cliente_whatsapp') or '').strip()
+                        cli_email = (mapped.get('cliente_email') or '').strip()
+                        cli_dir = (mapped.get('cliente_direccion') or '').strip()
+                        cli_tipo = (mapped.get('cliente_tipo') or '').strip() or 'PERSONA'
+                        nuevos_clientes_dict[key_c] = (
+                            negocio_id, cli_nombre, cli_tipo, cli_doc, cli_tel,
+                            cli_wa or cli_tel, cli_email, cli_dir, 0.0, 15, 'ACTIVO', undo_token
+                        )
 
-                pedido_key = f"{fecha_compra_raw[:10]}_{fecha_recepcion_raw[:10]}_{tasa_cambio}_{costo_envio}"
+                # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
+                pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
+                # Conciliación real de cartera: Total Venta - Abonos = Saldo
                 total_v_row = precio_v * cant
-                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
-                    saldo_calc = max(0.0, total_v_row - abono_val) if abono_val > 0 else (deuda_val if deuda_val > 0 else total_v_row)
+                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+                    # Estado explícito de deuda: Saldo = Total Venta - Abonos
+                    saldo_calc = max(0.0, total_v_row - abono_val)
                     metodo_pago = "CRÉDITO"
+                elif deuda_val > 0:
+                    # Columna explícita de saldo pendiente del Excel
+                    saldo_calc = deuda_val
+                    metodo_pago = "CRÉDITO"
+                elif estado_raw in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
+                    # Pagado completamente
+                    saldo_calc = 0.0
+                    metodo_pago = "Efectivo"
                 else:
                     saldo_calc = 0.0
                     metodo_pago = "Efectivo"
@@ -1469,7 +1538,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     creados_info["inventario"].append(r[0])
 
             if nuevos_clientes_dict:
-                cols_c = ["negocio_id", "nombre", "importacion_id"]
+                cols_c = ["negocio_id", "nombre", "tipo", "documento", "telefono", "whatsapp", "email", "direccion", "limite_credito", "dias_credito_predeterminado", "estado", "importacion_id"]
                 rows_c = list(nuevos_clientes_dict.values())
                 res_c = bulk_insert_con_returning(cursor, "clientes", cols_c, rows_c, ph, is_pg, "id, LOWER(nombre)")
                 for r in res_c:
@@ -1537,12 +1606,12 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 costo_total_compra = cant_total * ldata["costo_adq"]
 
                 batch_compras.append((
-                    negocio_id, ldata["fecha_compra"], ldata["cli_nombre"] or "Proveedor Importación",
+                    negocio_id, ldata["fecha_compra"], "",
                     ldata["inv_id"], codigo_lote, cant_total, ldata["costo_adq"], costo_total_compra, undo_token, usuario_id
                 ))
                 batch_lotes.append((
                     negocio_id, ldata["inv_id"], codigo_lote, ldata["fecha_recepcion"][:10],
-                    cant_total, cant_disp, ldata["costo_adq"], ldata["cli_nombre"] or "Proveedor Importación",
+                    cant_total, cant_disp, ldata["costo_adq"], "",
                     estado_lote, undo_token
                 ))
                 lotes_keys_order.append(lk)

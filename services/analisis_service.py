@@ -276,6 +276,27 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
     # ──────────────────────────────────────────────────────────────────
     texto_alcance = f"Analizando {ventas_count} ventas de {tot_ventas_universo} totales | {len(prod_ids_filtrados)} productos | {len(lista_lotes)} lotes"
 
+    # ──────────────────────────────────────────────────────────────────
+    # 6. CARTERA POR CLIENTE (consolidado de deudores)
+    # ──────────────────────────────────────────────────────────────────
+    sql_cartera_cli = """
+        SELECT v.cliente_nombre, COUNT(*) as ops, SUM(v.total) as compras,
+               SUM(v.total - v.saldo_pendiente) as abonado, SUM(v.saldo_pendiente) as saldo
+        FROM ventas v
+        WHERE v.negocio_id=? AND v.cliente_nombre IS NOT NULL AND v.cliente_nombre != ''
+        GROUP BY v.cliente_nombre
+        HAVING SUM(v.saldo_pendiente) > 0.01
+        ORDER BY saldo DESC
+    """
+    cartera_cli_rows = ejecutar_query(sql_cartera_cli, (negocio_id,), fetch=True) or []
+    cartera_por_cliente = [{
+        "cliente": r[0] or "Cliente General",
+        "operaciones": r[1] or 0,
+        "total_compras": r[2] or 0.0,
+        "total_abonos": r[3] or 0.0,
+        "saldo_pendiente": r[4] or 0.0
+    } for r in cartera_cli_rows]
+
     return {
         "ok": True,
         "kpis": {
@@ -299,6 +320,7 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
         },
         "rentabilidad_productos": lista_rentabilidad_productos[:50],
         "lotes": lista_lotes,
+        "cartera_por_cliente": cartera_por_cliente,
         "ventas_recientes": [{
             "id": r[0],
             "fecha": r[1],
@@ -311,3 +333,4 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
             "producto": r[10] or 'Producto'
         } for r in filas_ventas[:30]]
     }
+

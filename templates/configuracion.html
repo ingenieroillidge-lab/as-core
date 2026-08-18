@@ -14,6 +14,9 @@
         .config-section { display: none; }
         .config-section.active { display: block; animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spinRing { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulseBrain { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: 0.8; } }
+        @keyframes shimmerLine { 0% { left: -50%; } 100% { left: 100%; } }
         .grid-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
     </style>
 </head>
@@ -243,6 +246,29 @@
                 <p style="color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem;">
                     Carga tus archivos reales de Excel o CSV sin adaptar su estructura. El sistema analizará la información, identificará posibles relaciones con AS Platform y te permitirá revisar y aprobar la interpretación antes de incorporarla.
                 </p>
+
+                <!-- OVERLAY DE CARGA Y PROCESAMIENTO (VALIDADOR & HEURÍSTICO) -->
+                <div id="wiz-loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(12px); z-index: 9999; justify-content: center; align-items: center; animation: fadeIn 0.25s ease-out;">
+                    <div style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 20px; padding: 2.5rem 3rem; text-align: center; max-width: 460px; width: 90%; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.25);">
+                        
+                        <div style="position: relative; width: 88px; height: 88px; margin: 0 auto 1.5rem;">
+                            <div style="position: absolute; inset: 0; border-radius: 50%; border: 4px solid transparent; border-top-color: #38bdf8; border-right-color: #34d399; animation: spinRing 1s linear infinite; filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));"></div>
+                            <div style="position: absolute; inset: 8px; border-radius: 50%; border: 3px solid transparent; border-bottom-color: #8b5cf6; animation: spinRing 1.5s linear infinite reverse;"></div>
+                            <div style="position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 2.4rem; animation: pulseBrain 1.8s ease-in-out infinite;">🧠</div>
+                        </div>
+
+                        <h3 id="loading-overlay-title" style="color: #f8fafc; margin-bottom: 0.5rem; font-size: 1.25rem; font-weight: 800;">
+                            Analizando Archivo con IA...
+                        </h3>
+                        <p id="loading-overlay-desc" style="color: #94a3b8; font-size: 0.85rem; line-height: 1.5; margin-bottom: 1.5rem;">
+                            Inspeccionando datos, clasificando semántica de columnas y detectando moneda...
+                        </p>
+
+                        <div style="height: 4px; width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 99px; overflow: hidden; position: relative;">
+                            <div style="position: absolute; height: 100%; width: 50%; background: linear-gradient(90deg, transparent, #38bdf8, #34d399, transparent); animation: shimmerLine 1.5s infinite;"></div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- PASO 1: CARGA DE ARCHIVO -->
                 <div id="wiz-paso1" style="display: block;">
@@ -968,18 +994,41 @@
 
         let currentGranularidadCostos = 'POR_UNIDAD';
 
+        function showImportLoading(title, desc) {
+            const overlay = document.getElementById('wiz-loading-overlay');
+            if (overlay) {
+                document.getElementById('loading-overlay-title').textContent = title || 'Analizando Archivo...';
+                document.getElementById('loading-overlay-desc').textContent = desc || 'Procesando datos con el motor validador heurístico...';
+                overlay.style.display = 'flex';
+            }
+        }
+
+        function hideImportLoading() {
+            const overlay = document.getElementById('wiz-loading-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
         async function onFileSelected(input) {
             if (!input.files || input.files.length === 0) return;
             const file = input.files[0];
             const formData = new FormData();
             formData.append('file', file);
 
+            showImportLoading(
+                '🧠 Analizando Archivo con IA y Motor Heurístico...',
+                'Evaluando campos de clientes, multimoneda, atributos e inventario en segundo plano...'
+            );
+
             try {
                 const res = await fetch('/api/importador/cargar', { method: 'POST', body: formData });
                 let data = {};
                 try { data = await res.json(); } catch(e_json) { data = { error: `Error HTTP ${res.status} del servidor.` }; }
 
-                if (!res.ok) { alert(`❌ Error: ${data.error || 'No se pudo cargar el archivo.'}`); return; }
+                if (!res.ok) {
+                    hideImportLoading();
+                    alert(`❌ Error: ${data.error || 'No se pudo cargar el archivo.'}`);
+                    return;
+                }
 
                 currentBatchId = data.info.batch_id;
                 currentPropuestaMapeo = data.propuesta_mapeo || [];
@@ -1002,9 +1051,11 @@
                 }
 
                 renderMapeoTabla();
+                hideImportLoading();
                 document.getElementById('wiz-paso1').style.display = 'none';
                 document.getElementById('wiz-paso2').style.display = 'block';
             } catch(e) {
+                hideImportLoading();
                 alert("Error de conexión al cargar el archivo: " + e.message);
             }
         }
@@ -1120,6 +1171,10 @@
 
         async function prevalidarImportacion() {
             const mapeo = getUserMapping();
+            showImportLoading(
+                '🔍 Pre-validando y Conciliando Datos...',
+                'Calculando simulación de impacto en inventario, compras, cartera por cliente y margen...'
+            );
             try {
                 const res = await fetch('/api/importador/prevalidar', {
                     method: 'POST',
@@ -1129,7 +1184,11 @@
                 let data = {};
                 try { data = await res.json(); } catch(e_json) { data = { error: `Error HTTP ${res.status} del servidor.` }; }
 
-                if (!res.ok) { alert(`❌ Error: ${data.error || 'No se pudo completar la prevalidación.'}`); return; }
+                if (!res.ok) {
+                    hideImportLoading();
+                    alert(`❌ Error: ${data.error || 'No se pudo completar la prevalidación.'}`);
+                    return;
+                }
 
                 const r = data.resumen;
                 document.getElementById('semaforo-cards').innerHTML = `
@@ -1196,9 +1255,13 @@
                     document.getElementById('diff-detector-container').style.display = 'none';
                 }
 
+                hideImportLoading();
                 document.getElementById('wiz-paso2').style.display = 'none';
                 document.getElementById('wiz-paso3').style.display = 'block';
-            } catch(e) { alert("Error de conexión durante la pre-validación: " + e.message); }
+            } catch(e) {
+                hideImportLoading();
+                alert("Error de conexión durante la pre-validación: " + e.message);
+            }
         }
 
         let importStartTime = 0;
