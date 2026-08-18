@@ -662,16 +662,25 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         abono_val = parse_money(mapped_data.get('abono_monto'))
         deuda_excel = parse_money(mapped_data.get('saldo_pendiente'))
         total_v_row = precio_v * cant_val
+        tiene_col_abono = 'abono_monto' in mapped_data
 
-        # Abono efectivo percibido
-        if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_excel == 0.0:
+        # Regla 4 del Contrato Semántico: Abonos
+        if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_excel == 0.0:
+            # Fallback: No existe columna de abonos y el estado es VENDIDA -> asume pago completo
             abono_efectivo = total_v_row
         else:
+            # Columna existe (o se reporta explícitamente): usar el valor real tippado (incluso 0.0 si está vacía)
             abono_efectivo = abono_val
 
+        # Regla 5: Cartera y Alerta de Sobreabono
         saldo_calc_as = max(0.0, total_v_row - abono_efectivo)
+        if abono_efectivo > total_v_row and total_v_row > 0:
+            excedente = abono_efectivo - total_v_row
+            advs.append(
+                f"⚠️ SOBREABONO (Fila #{fila_num}): Se reporta un pago de ${abono_efectivo:,.0f} mayor al total de la venta (${total_v_row:,.0f}). Excedente de ${excedente:,.0f} registrado para auditoría."
+            )
 
-        # Advertencia de Inconsistencia de Origen (Estado contradice los flujos de dinero)
+        # Regla 7: Contradicciones (Estado de Origen vs Realidad Financiera)
         if concepto_est == "VENDIDA" and saldo_calc_as > 0.01:
             advs.append(
                 f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
@@ -681,10 +690,10 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         elif concepto_est == "DEBE" and saldo_calc_as <= 0.01 and total_v_row > 0:
             advs.append(
                 f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
-                f"pero se reportan pagos por el 100% de la venta (${total_v_row:,.0f}). AS lo clasifica financieramente como PAGADO."
+                f"pero los pagos cubren el 100% de la venta (${total_v_row:,.0f}). AS lo clasifica financieramente como PAGADO."
             )
 
-        # Discrepancia con la columna explícita de deuda reportada en el Excel
+        # Regla 6: Deuda del Excel vs Saldo AS
         if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
             diferencias_detectadas.append({
                 "fila": fila_num,
