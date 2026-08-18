@@ -3,97 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Cartera y Cuentas por Cobrar — Antigravity</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <title>Gestión de Cartera y Cuentas por Cobrar — AS Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
         .kpi-cartera-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
         .kpi-card {
-            background: rgba(255, 255, 255, 0.02);
+            background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 14px;
             padding: 1.25rem;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.3);
         }
         .kpi-card h4 {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
         .kpi-card .val {
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 800;
             font-family: 'Outfit', sans-serif;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
         }
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.75);
+            background: rgba(15, 23, 42, 0.85);
             display: none;
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(10px);
         }
         .modal-content {
-            background: #18181b;
-            border: 1px solid #333;
-            border-radius: 16px;
+            background: #1e293b;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 18px;
             width: 90%;
-            max-width: 500px;
-            padding: 1.5rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            max-width: 520px;
+            padding: 1.75rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
         }
         .badge-status {
             font-size: 0.75rem;
             font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 6px;
+            padding: 3px 10px;
+            border-radius: 12px;
             display: inline-block;
         }
         .badge-vencido { background: rgba(251, 113, 133, 0.15); color: #fb7185; border: 1px solid rgba(251, 113, 133, 0.3); }
         .badge-parcial { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
         .badge-pendiente { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
         .badge-pagado { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+        
+        .table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        th {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            text-align: left;
+            padding: 12px 14px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--border-color);
+        }
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+        }
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .escalon-item {
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .escalon-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
     </style>
 </head>
 <body>
-    <header class="navbar">
-        <div class="logo">
-            <h2>Antigravity <span>AS</span></h2>
-        </div>
-        <nav class="nav-links">
-            <a href="/">Dashboard</a>
-            <a href="/ventas">Ventas</a>
-            <a href="/inventario">Inventario</a>
-            <a href="/cartera" class="active" style="color: #34d399; font-weight: 700;">📑 Cartera</a>
+    <nav>
+        <div class="logo">AS PLATFORM</div>
+        <ul class="nav-links">
             {% if session.role in ['ADMIN', 'SUPER'] %}
-            <a href="/configuracion">Configuración</a>
+            <li><a href="/">Dashboard</a></li>
             {% endif %}
-            <a href="/logout" class="btn-logout">Salir</a>
-        </nav>
-    </header>
+            <li><a href="/ventas">Ventas</a></li>
+            <li><a href="/inventario">Inventario</a></li>
+            <li><a href="/cartera" class="active">Cartera</a></li>
+            {% if session.role in ['ADMIN', 'SUPER'] %}
+            <li><a href="/analisis">Análisis</a></li>
+            <li><a href="/configuracion">Configuración</a></li>
+            {% endif %}
+            <li><a href="/logout" style="color: #fb7185;">Salir</a></li>
+        </ul>
+    </nav>
 
-    <main style="max-width: 1200px; margin: 2rem auto; padding: 0 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+    <main>
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;">
             <div>
-                <h1>📑 Control de Cartera y Cuentas por Cobrar</h1>
-                <p style="color: var(--text-secondary); margin-top: 0.25rem;">
+                <h1 style="font-size: 1.8rem; font-family: 'Outfit', sans-serif;">📄 Control de Cartera y Cuentas por Cobrar</h1>
+                <p style="color: var(--text-secondary); margin-top: 0.25rem; font-size: 0.88rem;">
                     Seguimiento en tiempo real de deudores, antigüedad de saldos y recaudo trazable.
                 </p>
             </div>
-            <button onclick="loadCartera()" class="btn" style="background: rgba(56,189,248,0.1); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 0.6rem 1.2rem; border-radius: 8px;">
+            <button onclick="loadCartera()" style="background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
                 🔄 Actualizar Cartera
             </button>
         </div>
 
-        <!-- TARJETAS DE INDICADORES / KPIS -->
         <div class="kpi-cartera-grid">
             <div class="kpi-card">
                 <h4>Cartera Total Pendiente</h4>
@@ -117,74 +165,76 @@
             </div>
             <div class="kpi-card">
                 <h4>Días Promedio Cartera</h4>
-                <div class="val" id="kpi-dias" style="color: white;">0 días</div>
+                <div class="val" id="kpi-dias" style="color: #c084fc;">0 días</div>
                 <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Antigüedad media</div>
             </div>
         </div>
 
-        <!-- SECCIÓN DE 5 ESCALONES DE VENCIMIENTO Y TOP DEUDORES -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
             <div class="card">
-                <h3>🚨 Escalones de Vencimiento de Cartera</h3>
-                <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div onclick="filtrarPorEscalon('en_plazo')" style="cursor: pointer;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span style="color: #34d399;">🟢 En Plazo (> 7 días)</span><strong id="esc-en-plazo">$0</strong>
+                <h3 style="font-size: 1rem; color: #f8fafc; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                    🚨 Escalones de Vencimiento de Cartera
+                </h3>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="escalon-item" onclick="filtrarPorEscalon('en_plazo')">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span style="color: #34d399; font-weight: 600;">🟢 En Plazo (> 7 días)</span><strong id="esc-en-plazo" style="color: white;">$0</strong>
                         </div>
-                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-en-plazo" style="background: #34d399; width: 0%; height: 100%;"></div>
-                        </div>
-                    </div>
-                    <div onclick="filtrarPorEscalon('por_vencer')" style="cursor: pointer;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span style="color: #f59e0b;">🟡 Por Vencer (1 a 7 días)</span><strong id="esc-por-vencer">$0</strong>
-                        </div>
-                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-por-vencer" style="background: #f59e0b; width: 0%; height: 100%;"></div>
+                        <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-en-plazo" style="background: #34d399; width: 0%; height: 100%; transition: width 0.4s;"></div>
                         </div>
                     </div>
-                    <div onclick="filtrarPorEscalon('vencida_1_30')" style="cursor: pointer;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span style="color: #fb7185;">🔴 Vencida (1 a 30 días)</span><strong id="esc-vencida-1-30">$0</strong>
+                    <div class="escalon-item" onclick="filtrarPorEscalon('por_vencer')">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span style="color: #f59e0b; font-weight: 600;">🟡 Por Vencer (1 a 7 días)</span><strong id="esc-por-vencer" style="color: white;">$0</strong>
                         </div>
-                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-vencida-1-30" style="background: #fb7185; width: 0%; height: 100%;"></div>
-                        </div>
-                    </div>
-                    <div onclick="filtrarPorEscalon('critica_30_90')" style="cursor: pointer;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
-                            <span style="color: #ef4444;">🔴 Crítica (+30 a 90 días)</span><strong id="esc-critica-30-90">$0</strong>
-                        </div>
-                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-critica-30-90" style="background: #ef4444; width: 0%; height: 100%;"></div>
+                        <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-por-vencer" style="background: #f59e0b; width: 0%; height: 100%; transition: width 0.4s;"></div>
                         </div>
                     </div>
-                    <div onclick="filtrarPorEscalon('critica_90_mas')" style="cursor: pointer;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 2px;">
+                    <div class="escalon-item" onclick="filtrarPorEscalon('vencida_1_30')">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span style="color: #fb7185; font-weight: 600;">🔴 Vencida (1 a 30 días)</span><strong id="esc-vencida-1-30" style="color: white;">$0</strong>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-vencida-1-30" style="background: #fb7185; width: 0%; height: 100%; transition: width 0.4s;"></div>
+                        </div>
+                    </div>
+                    <div class="escalon-item" onclick="filtrarPorEscalon('critica_30_90')">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
+                            <span style="color: #ef4444; font-weight: 600;">🔴 Crítica (+30 a 90 días)</span><strong id="esc-critica-30-90" style="color: white;">$0</strong>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-critica-30-90" style="background: #ef4444; width: 0%; height: 100%; transition: width 0.4s;"></div>
+                        </div>
+                    </div>
+                    <div class="escalon-item" onclick="filtrarPorEscalon('critica_90_mas')">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
                             <span style="color: #dc2626; font-weight: 800;">🚨 Crítica (+90 días)</span><strong id="esc-critica-90-mas" style="color: #dc2626;">$0</strong>
                         </div>
-                        <div style="background: #222; height: 6px; border-radius: 3px; overflow: hidden;">
-                            <div id="bar-critica-90-mas" style="background: #dc2626; width: 0%; height: 100%;"></div>
+                        <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden;">
+                            <div id="bar-critica-90-mas" style="background: #dc2626; width: 0%; height: 100%; transition: width 0.4s;"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card">
-                <h3>🏆 Top Clientes Deudores</h3>
-                <div id="top-deudores-list" style="margin-top: 1rem;">
-                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Cargando...</div>
+                <h3 style="font-size: 1rem; color: #f8fafc; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                    🏆 Top Clientes Deudores
+                </h3>
+                <div id="top-deudores-list">
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 1.5rem;">Cargando deudores...</div>
                 </div>
             </div>
         </div>
 
-        <!-- TABLA PRINCIPAL DE CUENTAS POR COBRAR -->
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-                <h3>Cuentas por Cobrar</h3>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" id="filtro-cliente" placeholder="Buscar por cliente..." oninput="filtrarTabla()" style="padding: 6px 12px; background: #111; border: 1px solid #333; border-radius: 6px; color: white; font-size: 0.85rem;">
-                    <select id="filtro-estado" onchange="filtrarTabla()" style="padding: 6px 12px; background: #111; border: 1px solid #333; border-radius: 6px; color: white; font-size: 0.85rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+                <h3 style="font-size: 1.1rem; color: #f8fafc;">Cuentas por Cobrar</h3>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <input type="text" id="filtro-cliente" placeholder="🔍 Buscar por cliente o producto..." oninput="filtrarTabla()" style="padding: 8px 14px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.85rem; min-width: 240px;">
+                    <select id="filtro-estado" onchange="filtrarTabla()" style="padding: 8px 14px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.85rem;">
                         <option value="">Todos los Estados</option>
                         <option value="PENDIENTE">PENDIENTE</option>
                         <option value="PARCIAL">PARCIAL</option>
@@ -199,7 +249,7 @@
                         <tr>
                             <th>Fecha</th>
                             <th>Cliente / Deudor</th>
-                            <th>Producto / CONCEPTO</th>
+                            <th>Producto / Concepto</th>
                             <th>Total Venta</th>
                             <th>Abonado</th>
                             <th>Saldo Pendiente</th>
@@ -209,117 +259,112 @@
                         </tr>
                     </thead>
                     <tbody id="tabla-cuentas">
-                        <tr><td colspan="9" style="text-align: center; color: var(--text-secondary);">Cargando cuentas...</td></tr>
+                        <tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 2rem;">Cargando cuentas...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </main>
 
-    <!-- MODAL REGISTRAR ABONO -->
     <div id="modal-abono" class="modal-overlay">
         <div class="modal-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h3 style="margin: 0; color: #34d399;">💵 Registrar Abono de Cartera</h3>
-                <button onclick="cerrarModalAbono()" style="background: none; border: none; color: #999; font-size: 1.2rem; cursor: pointer;">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; color: #34d399; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    💵 Registrar Abono de Cartera
+                </h3>
+                <button onclick="cerrarModalAbono()" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">✕</button>
             </div>
             <form id="form-abono">
                 <input type="hidden" id="abono-venta-id">
-                <div style="background: #111; border: 1px solid #222; border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;">
-                    <div>Cliente: <strong id="abono-modal-cliente" style="color: white;">-</strong></div>
+                <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.85rem;">
+                    <div style="margin-bottom: 4px;">Cliente: <strong id="abono-modal-cliente" style="color: white;">-</strong></div>
                     <div>Saldo Pendiente Actual: <strong id="abono-modal-saldo" style="color: #38bdf8;">$0</strong></div>
                 </div>
 
-                <div class="form-group">
-                    <label>Monto a Abonar ($) *</label>
-                    <input type="number" id="abono-monto" min="1" step="100" required style="width: 100%; padding: 10px; background: #000; border: 1px solid #444; border-radius: 6px; color: white; font-size: 1.1rem; font-weight: 700;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;">Monto a Abonar ($) *</label>
+                    <input type="number" id="abono-monto" min="1" step="100" required style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid rgba(56,189,248,0.4); border-radius: 8px; color: white; font-size: 1.2rem; font-weight: 800;">
                 </div>
 
-                <div class="form-group" style="margin-top: 1rem;">
-                    <label>Método de Pago *</label>
-                    <select id="abono-metodo" style="width: 100%; padding: 8px; background: #000; border: 1px solid #444; border-radius: 6px; color: white;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;">Método de Pago *</label>
+                    <select id="abono-metodo" style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.85rem;">
                         <option value="Efectivo">💵 Efectivo</option>
                         <option value="Transferencia">🏦 Transferencia Bancaria</option>
                         <option value="Nequi">📱 Nequi / Daviplata</option>
                     </select>
                 </div>
 
-                <div class="form-group" style="margin-top: 1rem;">
-                    <label>Fecha de Cobro (Opcional, blanco = HOY)</label>
-                    <input type="date" id="abono-fecha" style="width: 100%; padding: 8px; background: #000; border: 1px solid #444; border-radius: 6px; color: white;">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;">Fecha de Cobro (Opcional)</label>
+                    <input type="date" id="abono-fecha" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.85rem;">
                 </div>
 
-                <div class="form-group" style="margin-top: 1rem;">
-                    <label>Observación / Referencia</label>
-                    <input type="text" id="abono-obs" placeholder="Ej: Comprobante Nequi #12345" style="width: 100%; padding: 8px; background: #000; border: 1px solid #444; border-radius: 6px; color: white;">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;">Observación / Referencia</label>
+                    <input type="text" id="abono-obs" placeholder="Ej: Comprobante Nequi #12345" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.85rem;">
                 </div>
 
-                <button type="submit" style="margin-top: 1.5rem; width: 100%; background: #34d399; color: black; font-weight: 800; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 1rem;">
-                    ✅ Confirmar Abono
-                </button>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" style="flex: 1; background: #34d399; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem;">
+                        💾 Guardar Abono
+                    </button>
+                    <button type="button" onclick="cerrarModalAbono()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 
-    <!-- MODAL HISTORIAL DE ABONOS -->
     <div id="modal-historial" class="modal-overlay">
-        <div class="modal-content" style="max-width: 600px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h3 style="margin: 0; color: #38bdf8;">📜 Trazabilidad de Abonos</h3>
-                <button onclick="cerrarModalHistorial()" style="background: none; border: none; color: #999; font-size: 1.2rem; cursor: pointer;">✕</button>
+        <div class="modal-content" style="max-width: 650px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; color: #38bdf8; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    📜 Historial de Abonos Recibidos
+                </h3>
+                <button onclick="cerrarModalHistorial()" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">✕</button>
             </div>
-            <div id="historial-content" style="max-height: 400px; overflow-y: auto;">
-                <div style="text-align: center; color: var(--text-secondary);">Cargando trazabilidad...</div>
+            <div id="historial-content" style="max-height: 350px; overflow-y: auto;">
+                <div style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">Cargando...</div>
             </div>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
-    <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
-        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
         let cuentasData = [];
 
         async function loadCartera() {
-            aplicarTemaVisual();
-            aplicarTraduccionOperativa();
+            try {
+                const resKpi = await fetch('/api/cartera/resumen');
+                const dataKpi = await resKpi.json();
 
-            // 1. Cargar KPIs Resumen
-            const resKpi = await fetch('/api/cartera/resumen');
-            const dataKpi = await resKpi.json();
-
-            if (dataKpi) {
                 document.getElementById('kpi-total').textContent = formatCOP.format(dataKpi.cartera_total || 0);
-                document.getElementById('kpi-cuentas-cnt').textContent = `${dataKpi.cuentas_activas || 0} cuentas activas`;
                 document.getElementById('kpi-vencida').textContent = formatCOP.format(dataKpi.cartera_vencida || 0);
                 document.getElementById('kpi-por-vencer').textContent = formatCOP.format(dataKpi.cartera_por_vencer || 0);
                 document.getElementById('kpi-recaudo').textContent = formatCOP.format(dataKpi.recaudo_mes || 0);
                 document.getElementById('kpi-dias').textContent = `${dataKpi.dias_promedio || 0} días`;
+                document.getElementById('kpi-cuentas-cnt').textContent = `${dataKpi.cuentas_activas || 0} cuentas activas`;
 
-                // 5 Escalones de Vencimiento
                 const esc = dataKpi.escalones || {};
                 const total = dataKpi.cartera_total || 1;
 
                 document.getElementById('esc-en-plazo').textContent = formatCOP.format(esc.en_plazo || 0);
                 document.getElementById('bar-en-plazo').style.width = `${Math.min(100, ((esc.en_plazo || 0) / total) * 100)}%`;
-
                 document.getElementById('esc-por-vencer').textContent = formatCOP.format(esc.por_vencer || 0);
                 document.getElementById('bar-por-vencer').style.width = `${Math.min(100, ((esc.por_vencer || 0) / total) * 100)}%`;
-
                 document.getElementById('esc-vencida-1-30').textContent = formatCOP.format(esc.vencida_1_30 || 0);
                 document.getElementById('bar-vencida-1-30').style.width = `${Math.min(100, ((esc.vencida_1_30 || 0) / total) * 100)}%`;
-
                 document.getElementById('esc-critica-30-90').textContent = formatCOP.format(esc.critica_30_90 || 0);
                 document.getElementById('bar-critica-30-90').style.width = `${Math.min(100, ((esc.critica_30_90 || 0) / total) * 100)}%`;
-
                 document.getElementById('esc-critica-90-mas').textContent = formatCOP.format(esc.critica_90_mas || 0);
                 document.getElementById('bar-critica-90-mas').style.width = `${Math.min(100, ((esc.critica_90_mas || 0) / total) * 100)}%`;
 
-                // Top Deudores
                 const listTop = document.getElementById('top-deudores-list');
                 if (dataKpi.top_deudores && dataKpi.top_deudores.length > 0) {
                     listTop.innerHTML = dataKpi.top_deudores.map(d => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #222;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06);">
                             <div>
                                 <strong style="color: white; font-size: 0.9rem;">${d.cliente}</strong>
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">${d.facturas} cuenta(s) activa(s)</div>
@@ -328,14 +373,15 @@
                         </div>
                     `).join('');
                 } else {
-                    listTop.innerHTML = `<div style="color: var(--text-secondary); font-size: 0.85rem;">No hay deudores registrados.</div>`;
+                    listTop.innerHTML = `<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 1rem;">No hay deudores registrados.</div>`;
                 }
-            }
 
-            // 2. Cargar Cuentas por Cobrar
-            const resCuentas = await fetch('/api/cartera/cuentas');
-            cuentasData = await resCuentas.json();
-            renderTablaCuentas(cuentasData);
+                const resCuentas = await fetch('/api/cartera/cuentas');
+                cuentasData = await resCuentas.json();
+                renderTablaCuentas(cuentasData);
+            } catch(err) {
+                console.error("Error al cargar cartera:", err);
+            }
         }
 
         function renderTablaCuentas(data) {
@@ -344,161 +390,61 @@
                 tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 2rem;">No hay cuentas por cobrar registradas.</td></tr>`;
                 return;
             }
-
-            tbody.innerHTML = data.map(c => {
-                let badgeClass = 'badge-pendiente';
-                if (c.estado === 'PAGADO') badgeClass = 'badge-pagado';
-                else if (c.estado === 'PARCIAL') badgeClass = 'badge-parcial';
-                else if (c.es_vencido) badgeClass = 'badge-vencido';
-
-                let wsButton = '';
-                if (c.saldo > 0.01 && c.whatsapp) {
-                    const wsMsg = encodeURIComponent(`Hola ${c.cliente}, le saludamos de nuestro negocio. Le recordamos amablemente su saldo pendiente por ${formatCOP.format(c.saldo)} (${c.producto}). ¡Muchas gracias por su atención!`);
-                    wsButton = `
-                        <a href="https://wa.me/${c.whatsapp.replace(/\D/g,'')}?text=${wsMsg}" target="_blank" style="background: rgba(37, 211, 102, 0.15); color: #25D366; border: 1px solid rgba(37, 211, 102, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
-                            📲 Recordar
-                        </a>
-                    `;
-                }
-
-                return `
-                    <tr>
-                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${c.fecha ? c.fecha.substring(0, 10) : '-'}</td>
-                        <td><strong style="color: white;">${c.cliente}</strong></td>
-                        <td style="font-size: 0.85rem;">${c.producto}</td>
-                        <td style="font-weight: 600;">${formatCOP.format(c.total)}</td>
-                        <td style="color: #34d399;">${formatCOP.format(c.abonado)}</td>
-                        <td style="color: ${c.saldo > 0 ? '#fb7185' : '#34d399'}; font-weight: 800;">${formatCOP.format(c.saldo)}</td>
-                        <td style="font-size: 0.8rem; color: ${c.es_vencido ? '#fb7185' : 'var(--text-secondary)'};">
-                            ${c.vencimiento} ${c.es_vencido ? '⚠️' : ''}
-                        </td>
-                        <td><span class="badge-status ${badgeClass}">${c.estado}</span></td>
-                        <td>
-                            <div style="display: flex; gap: 0.4rem; align-items: center;">
-                                ${c.saldo > 0.01 ? `
-                                    <button onclick="abrirModalAbono(${c.id}, '${c.cliente.replace(/'/g, "\\'")}', ${c.saldo})" style="background: #34d399; color: black; font-weight: 800; padding: 4px 10px; border-radius: 6px; border: none; font-size: 0.75rem; cursor: pointer;">
-                                        💵 Abonar
-                                    </button>
-                                ` : ''}
-                                ${wsButton}
-                                <button onclick="verHistorial(${c.id})" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
-                                    📜 Historial
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+            tbody.innerHTML = data.map(c => `
+                <tr>
+                    <td style="color: var(--text-secondary);">${c.fecha ? c.fecha.substring(0, 10) : '-'}</td>
+                    <td><strong>${c.cliente}</strong></td>
+                    <td>${c.producto}</td>
+                    <td style="font-weight: 600;">${formatCOP.format(c.total)}</td>
+                    <td style="color: #34d399;">${formatCOP.format(c.abonado)}</td>
+                    <td style="color: ${c.saldo > 0 ? '#fb7185' : '#34d399'}; font-weight: 800;">${formatCOP.format(c.saldo)}</td>
+                    <td style="color: ${c.es_vencido ? '#fb7185' : 'var(--text-secondary)'};">${c.vencimiento}</td>
+                    <td><span class="badge-status ${c.estado === 'PAGADO' ? 'badge-pagado' : (c.estado === 'PARCIAL' ? 'badge-parcial' : 'badge-pendiente')}">${c.estado}</span></td>
+                    <td>
+                        ${c.saldo > 0.01 ? `<button onclick="abrirModalAbono(${c.id}, '${c.cliente.replace(/'/g, "\\'")}', ${c.saldo})" style="background: #34d399; color: black; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.75rem;">Abonar</button>` : ''}
+                        <button onclick="verHistorial(${c.id})" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Historial</button>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         function filtrarTabla() {
             const cli = document.getElementById('filtro-cliente').value.toLowerCase();
             const est = document.getElementById('filtro-estado').value;
-
-            const filtradas = cuentasData.filter(c => {
-                const matchCli = c.cliente.toLowerCase().includes(cli) || c.producto.toLowerCase().includes(cli);
-                const matchEst = !est || c.estado === est;
-                return matchCli && matchEst;
-            });
-            renderTablaCuentas(filtradas);
+            renderTablaCuentas(cuentasData.filter(c => (c.cliente.toLowerCase().includes(cli) || c.producto.toLowerCase().includes(cli)) && (!est || c.estado === est)));
         }
 
-        function filtrarPorEscalon(key) {
-            const hoy = new Date();
-            const filtradas = cuentasData.filter(c => {
-                if (c.saldo <= 0.01) return false;
-                if (!c.vencimiento || c.vencimiento === 'Sin fecha') return key === 'en_plazo';
-                const fVence = new Date(c.vencimiento);
-                const diffDays = Math.ceil((fVence - hoy) / (1000 * 60 * 60 * 24));
-
-                if (key === 'en_plazo') return diffDays > 7;
-                if (key === 'por_vencer') return diffDays >= 0 && diffDays <= 7;
-
-                const diasVencido = Math.abs(diffDays);
-                if (key === 'vencida_1_30') return diffDays < 0 && diasVencido <= 30;
-                if (key === 'critica_30_90') return diffDays < 0 && diasVencido > 30 && diasVencido <= 90;
-                if (key === 'critica_90_mas') return diffDays < 0 && diasVencido > 90;
-                return true;
-            });
-            renderTablaCuentas(filtradas);
-        }
-
-        // MODAL ABONO
-        function abrirModalAbono(ventaId, cliente, saldo) {
-            document.getElementById('abono-venta-id').value = ventaId;
+        function abrirModalAbono(id, cliente, saldo) {
+            document.getElementById('abono-venta-id').value = id;
             document.getElementById('abono-modal-cliente').textContent = cliente;
             document.getElementById('abono-modal-saldo').textContent = formatCOP.format(saldo);
-            document.getElementById('abono-monto').value = saldo;
             document.getElementById('modal-abono').style.display = 'flex';
         }
         function cerrarModalAbono() { document.getElementById('modal-abono').style.display = 'none'; }
 
         document.getElementById('form-abono').onsubmit = async (e) => {
             e.preventDefault();
-            const venta_id = document.getElementById('abono-venta-id').value;
-            const monto = document.getElementById('abono-monto').value;
-            const metodo_pago = document.getElementById('abono-metodo').value;
-            const fecha = document.getElementById('abono-fecha').value;
-            const observacion = document.getElementById('abono-obs').value;
-
             const res = await fetch('/api/cartera/abono', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ venta_id, monto, metodo_pago, fecha, observacion })
+                body: JSON.stringify({ venta_id: document.getElementById('abono-venta-id').value, monto: document.getElementById('abono-monto').value, metodo_pago: document.getElementById('abono-metodo').value, fecha: document.getElementById('abono-fecha').value, observacion: document.getElementById('abono-obs').value })
             });
-
-            const data = await res.json();
-            if (res.ok) {
-                alert('¡Abono registrado con éxito!');
-                cerrarModalAbono();
-                loadCartera();
-            } else {
-                alert('Error: ' + data.error);
-            }
+            if (res.ok) { alert('¡Abono registrado!'); cerrarModalAbono(); loadCartera(); } else { alert('Error al registrar abono.'); }
         };
 
-        // MODAL HISTORIAL
         async function verHistorial(ventaId) {
-            const modal = document.getElementById('modal-historial');
             const container = document.getElementById('historial-content');
-            modal.style.display = 'flex';
-            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary);">Cargando...</div>';
-
+            document.getElementById('modal-historial').style.display = 'flex';
+            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">Cargando...</div>';
             const res = await fetch(`/api/cartera/abonos/${ventaId}`);
             const abonos = await res.json();
-
-            if (!abonos || abonos.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 1rem;">No hay abonos registrados para esta venta.</div>';
-                return;
-            }
-
-            container.innerHTML = `
+            container.innerHTML = abonos.length ? `
                 <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid #333; text-align: left; color: var(--text-secondary);">
-                            <th style="padding: 8px;">Fecha</th>
-                            <th style="padding: 8px;">Monto</th>
-                            <th style="padding: 8px;">Método</th>
-                            <th style="padding: 8px;">Registrado Por</th>
-                            <th style="padding: 8px;">Nota</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${abonos.map(a => `
-                            <tr style="border-bottom: 1px solid #222;">
-                                <td style="padding: 8px; color: var(--text-secondary);">${a.fecha ? a.fecha.substring(0, 16) : '-'}</td>
-                                <td style="padding: 8px; color: #34d399; font-weight: 700;">${formatCOP.format(a.monto)}</td>
-                                <td style="padding: 8px;">${a.metodo_pago}</td>
-                                <td style="padding: 8px; color: #38bdf8;">${a.usuario}</td>
-                                <td style="padding: 8px; color: var(--text-secondary);">${a.observacion || '-'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
+                    <thead><tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: var(--text-secondary);"><th style="padding: 10px;">Fecha</th><th style="padding: 10px;">Monto</th><th style="padding: 10px;">Método</th><th style="padding: 10px;">Nota</th></tr></thead>
+                    <tbody>${abonos.map(a => `<tr style="border-bottom: 1px solid rgba(255,255,255,0.04);"><td style="padding: 10px; color: var(--text-secondary);">${a.fecha.substring(0, 16)}</td><td style="padding: 10px; color: #34d399; font-weight: 700;">${formatCOP.format(a.monto)}</td><td style="padding: 10px;">${a.metodo_pago}</td><td style="padding: 10px; color: var(--text-secondary);">${a.observacion || '-'}</td></tr>`).join('')}</tbody>
+                </table>` : '<div style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">No hay abonos.</div>';
         }
         function cerrarModalHistorial() { document.getElementById('modal-historial').style.display = 'none'; }
-
         document.addEventListener('DOMContentLoaded', loadCartera);
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css') }}">
