@@ -83,6 +83,9 @@ SEMANTIC_CORE = {
         "FECHA DE LLEGADA", "FECHA LLEGADA", "FECHA RECEPCION",
         "ARRIVAL DATE", "FECHA ENTREGA", "FECHA INGRESO"
     ],
+    "estado_origen": [
+        "ESTADO", "ESTADO ORIGEN", "STATUS", "CONDICION", "ESTADO PRODUCTO", "ESTADO VENTA"
+    ],
 
     # ── Campos derivados ──
     "campo_calculado": [
@@ -214,9 +217,24 @@ def inferir_granularidad_costos(filas_datos, mapeo_usuario):
 
 def determinar_tipo_fila(mapped_data):
     """
-    Determina qué tipo de operación representa una fila:
-    COMPRA_Y_VENTA | SOLO_COMPRA | SOLO_VENTA | REGISTRO_HISTORICO
+    Determina qué tipo de operación representa una fila considerando 'estado_origen':
+    - STOCK / EN_STOCK / DISPONIBLE -> SOLO_COMPRA (Crear lote/inventario disponible, NO crear venta)
+    - PERDIDA / PÉRDIDA / DAÑADO / MERMA -> PERDIDA (Crear lote + Salida por Pérdida, NO crear venta)
+    - DEBE / CARTERA / CRÉDITO -> COMPRA_Y_VENTA (Crear lote + Venta a Crédito + Salida por venta)
+    - VENDIDA / VENDIDADA / PAGADO -> COMPRA_Y_VENTA (Crear lote + Venta al Contado + Salida por venta)
     """
+    raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip().upper()
+
+    if raw_est in ('STOCK', 'EN_STOCK', 'INVENTARIO', 'DISPONIBLE'):
+        return "SOLO_COMPRA"
+    elif raw_est in ('PERDIDA', 'PÉRDIDA', 'DAÑADO', 'DAÑADA', 'ROBO', 'MERMA'):
+        return "PERDIDA"
+    elif raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+        return "COMPRA_Y_VENTA"
+    elif raw_est in ('VENDIDA', 'VENDIDADA', 'PAGADO', 'PAGADA', 'VENTA'):
+        return "COMPRA_Y_VENTA"
+
+    # Fallback si no hay columna Estado explícita:
     tiene_costos = any(mapped_data.get(c) for c in [
         'costo_unitario_origen', 'costo_unitario_local', 'costo_total'
     ])
@@ -886,6 +904,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if not nombre_prod:
                     continue
 
+                estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
                 tipo_fila = determinar_tipo_fila(mapped)
 
                 cant = parse_money(mapped.get('cantidad')) or 1.0
@@ -931,7 +950,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     subcategoria = (mapped.get('subcategoria') or '').strip() or None
                     nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
 
-                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
+                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA", "PERDIDA"):
                     if key_p not in inventario_cache and key_p not in nuevos_inv_dict:
                         codigo_inv = (mapped.get('codigo_sku') or '').strip() or None
                         stock_ini = cant if tipo_fila == "SOLO_COMPRA" else 0.0
@@ -946,6 +965,15 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 pedido_key = f"{fecha_compra_raw[:10]}_{fecha_recepcion_raw[:10]}_{tasa_cambio}_{costo_envio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
+                # Cálculo de saldo pendiente de cartera por fila
+                total_v_row = precio_v * cant
+                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
+                    saldo_calc = max(0.0, total_v_row - abono_val) if abono_val > 0 else (deuda_val if deuda_val > 0 else total_v_row)
+                    metodo_pago = "CRÉDITO"
+                else:
+                    saldo_calc = 0.0
+                    metodo_pago = "Efectivo"
+
                 filas_mapeadas.append({
                     "fila_num": fila_num,
                     "raw_row": raw_row,
@@ -953,12 +981,15 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "nombre_prod": nombre_prod,
                     "key_p": key_p,
                     "tipo_fila": tipo_fila,
+                    "estado_raw": estado_raw,
                     "cant": cant,
                     "precio_v": precio_v,
                     "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre,
                     "deuda_val": deuda_val,
                     "abono_val": abono_val,
+                    "saldo_calc": saldo_calc,
+                    "metodo_pago": metodo_pago,
                     "fecha_compra": fecha_compra_fmt,
                     "fecha_recepcion": fecha_recepcion_fmt,
                     "fecha_venta": fecha_compra_fmt,
@@ -1008,7 +1039,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 cursor.executemany(sql_link, links_a_crear)
 
             # ── PASO 3: Agrupación Consolidada de Lotes Maestros ──
-            # Regla exacta: Mismo Pedido ID + Mismo producto/insumo + Mismo costo landed unitario = Mismo Lote
             lotes_acumulados = {}
             batch_atributos = []
 
@@ -1023,7 +1053,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                         if val:
                             batch_atributos.append((negocio_id, pid, col_excel, val, campo_target.upper(), undo_token))
 
-                if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_COMPRA") and inv_id:
+                if inv_id:
                     lk = f["lote_key"]
                     if lk not in lotes_acumulados:
                         lotes_acumulados[lk] = {
@@ -1039,6 +1069,14 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     lotes_acumulados[lk]["cant_total"] += f["cant"]
                     if f["tipo_fila"] == "SOLO_COMPRA":
                         lotes_acumulados[lk]["solo_compra_cant"] += f["cant"]
+
+            # Actualizar stock_actual en la tabla inventario para productos con stock disponible activo
+            for lk, ldata in lotes_acumulados.items():
+                if ldata["solo_compra_cant"] > 0:
+                    cursor.execute(
+                        f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
+                        (ldata["solo_compra_cant"], ldata["inv_id"], negocio_id)
+                    )
 
             # Creación masiva de Lotes Maestros en BD
             batch_lotes = []
@@ -1084,13 +1122,19 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                 if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
                     costo_venta_total = (f["costo_adq"] * f["cant"]) if f["tipo_fila"] == "COMPRA_Y_VENTA" else 0.0
-                    metodo_pago = "CRÉDITO" if f["deuda_val"] > 0 else "Efectivo"
                     total_venta = f["precio_v"] * f["cant"]
 
+                    if f["saldo_calc"] <= 0.01:
+                        est_pago = "PAGADO"
+                    elif f["abono_val"] > 0:
+                        est_pago = "PARCIAL"
+                    else:
+                        est_pago = "PENDIENTE"
+
                     batch_ventas.append((
-                        negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, metodo_pago,
+                        negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, f["metodo_pago"],
                         costo_venta_total, f["precio_v"], usuario_id,
-                        f["cli_nombre"] or None, cli_id, f["deuda_val"], undo_token
+                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, undo_token
                     ))
                     ventas_meta.append({
                         "fecha_v": f["fecha_venta"], "cant": f["cant"], "costo_adq": f["costo_adq"],
@@ -1099,7 +1143,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     })
                     procesados += 1
 
-            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "importacion_id"]
+            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "importacion_id"]
             res_ventas = bulk_insert_con_returning(cursor, "ventas", cols_v, batch_ventas, ph, is_pg, "id")
 
             batch_movimientos = []
@@ -1115,7 +1159,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     ldata["costo_adq"], costo_total, f"Importación {undo_token}", None, usuario_id
                 ))
 
-            # Movimientos de Salida por Venta y Abonos
+            # Movimientos de Salida por Venta
             for idx, r in enumerate(res_ventas):
                 v_id = r[0]
                 creados_info["ventas"].append(v_id)
@@ -1131,6 +1175,15 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if meta["abono_val"] > 0:
                     batch_abonos.append((
                         negocio_id, v_id, meta["fecha_v"], meta["abono_val"], 'Efectivo', usuario_id, 'Abono cargado por Importador Inteligente'
+                    ))
+
+            # Movimientos de Salida por Pérdida/Merma
+            for f in filas_mapeadas:
+                if f["tipo_fila"] == "PERDIDA" and f["lote_key"] in lote_id_map:
+                    l_id = lote_id_map[f["lote_key"]]
+                    batch_movimientos.append((
+                        negocio_id, l_id, f["fecha_recepcion"], 'SALIDA_PERDIDA', f["cant"],
+                        f["costo_adq"], f["costo_adq"] * f["cant"], f"Pérdida/Dañado (Importación {undo_token})", None, usuario_id
                     ))
 
             if batch_atributos:
@@ -1335,7 +1388,9 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 nombre_prod = (mapped.get('nombre_producto') or '').strip()
                 if not nombre_prod: continue
 
+                estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
                 tipo_fila = determinar_tipo_fila(mapped)
+
                 cant = parse_money(mapped.get('cantidad')) or 1.0
                 precio_v = parse_money(mapped.get('precio_venta'))
                 costo_origen = parse_money(mapped.get('costo_unitario_origen'))
@@ -1365,7 +1420,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     subcategoria = (mapped.get('subcategoria') or '').strip() or None
                     nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
 
-                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
+                if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA", "PERDIDA"):
                     if key_p not in inventario_cache and key_p not in nuevos_inv_dict:
                         codigo_inv = (mapped.get('codigo_sku') or '').strip() or None
                         stock_ini = cant if tipo_fila == "SOLO_COMPRA" else 0.0
@@ -1379,11 +1434,20 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 pedido_key = f"{fecha_compra_raw[:10]}_{fecha_recepcion_raw[:10]}_{tasa_cambio}_{costo_envio}"
                 lote_key = (pedido_key, key_p, round(costo_adq, 2))
 
+                total_v_row = precio_v * cant
+                if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
+                    saldo_calc = max(0.0, total_v_row - abono_val) if abono_val > 0 else (deuda_val if deuda_val > 0 else total_v_row)
+                    metodo_pago = "CRÉDITO"
+                else:
+                    saldo_calc = 0.0
+                    metodo_pago = "Efectivo"
+
                 filas_mapeadas.append({
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
                     "nombre_prod": nombre_prod, "key_p": key_p, "tipo_fila": tipo_fila,
-                    "cant": cant, "precio_v": precio_v, "costo_adq": costo_adq,
+                    "estado_raw": estado_raw, "cant": cant, "precio_v": precio_v, "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre, "deuda_val": deuda_val, "abono_val": abono_val,
+                    "saldo_calc": saldo_calc, "metodo_pago": metodo_pago,
                     "fecha_compra": fecha_compra_fmt, "fecha_recepcion": fecha_recepcion_fmt,
                     "fecha_venta": fecha_compra_fmt, "pedido_key": pedido_key, "lote_key": lote_key
                 })
@@ -1442,7 +1506,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                         if val:
                             batch_atributos.append((negocio_id, pid, col_excel, val, campo_target.upper(), undo_token))
 
-                if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_COMPRA") and inv_id:
+                if inv_id:
                     lk = f["lote_key"]
                     if lk not in lotes_acumulados:
                         lotes_acumulados[lk] = {
@@ -1453,6 +1517,13 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     lotes_acumulados[lk]["cant_total"] += f["cant"]
                     if f["tipo_fila"] == "SOLO_COMPRA":
                         lotes_acumulados[lk]["solo_compra_cant"] += f["cant"]
+
+            for lk, ldata in lotes_acumulados.items():
+                if ldata["solo_compra_cant"] > 0:
+                    cursor.execute(
+                        f"UPDATE inventario SET stock_actual = stock_actual + {ph} WHERE id={ph} AND negocio_id={ph}",
+                        (ldata["solo_compra_cant"], ldata["inv_id"], negocio_id)
+                    )
 
             batch_lotes = []
             batch_compras = []
@@ -1505,13 +1576,19 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
                 if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
                     costo_venta_total = (f["costo_adq"] * f["cant"]) if f["tipo_fila"] == "COMPRA_Y_VENTA" else 0.0
-                    metodo_pago = "CRÉDITO" if f["deuda_val"] > 0 else "Efectivo"
                     total_venta = f["precio_v"] * f["cant"]
 
+                    if f["saldo_calc"] <= 0.01:
+                        est_pago = "PAGADO"
+                    elif f["abono_val"] > 0:
+                        est_pago = "PARCIAL"
+                    else:
+                        est_pago = "PENDIENTE"
+
                     batch_ventas.append((
-                        negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, metodo_pago,
+                        negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, f["metodo_pago"],
                         costo_venta_total, f["precio_v"], usuario_id,
-                        f["cli_nombre"] or None, cli_id, f["deuda_val"], undo_token
+                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, undo_token
                     ))
                     ventas_meta.append({
                         "fecha_v": f["fecha_venta"], "cant": f["cant"], "costo_adq": f["costo_adq"],
@@ -1520,7 +1597,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     })
                     procesados += 1
 
-            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "importacion_id"]
+            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "importacion_id"]
             res_ventas = bulk_insert_con_returning(cursor, "ventas", cols_v, batch_ventas, ph, is_pg, "id")
 
             batch_movimientos = []
@@ -1550,6 +1627,14 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 if meta["abono_val"] > 0:
                     batch_abonos.append((
                         negocio_id, v_id, meta["fecha_v"], meta["abono_val"], 'Efectivo', usuario_id, 'Abono cargado por Importador Inteligente'
+                    ))
+
+            for f in filas_mapeadas:
+                if f["tipo_fila"] == "PERDIDA" and f["lote_key"] in lote_id_map:
+                    l_id = lote_id_map[f["lote_key"]]
+                    batch_movimientos.append((
+                        negocio_id, l_id, f["fecha_recepcion"], 'SALIDA_PERDIDA', f["cant"],
+                        f["costo_adq"], f["costo_adq"] * f["cant"], f"Pérdida/Dañado (Importación {undo_token})", None, usuario_id
                     ))
 
             if batch_atributos:

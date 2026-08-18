@@ -489,6 +489,35 @@ def api_usuarios():
     res = ejecutar_query("SELECT id, username, role, estado, ultimo_acceso FROM usuarios WHERE negocio_id=?", (nid,), fetch=True) or []
     return jsonify([{"id": x[0], "username": x[1], "role": x[2], "estado": x[3], "ultimo_acceso": x[4]} for x in res])
 
+@app.route('/api/usuarios/<int:uid>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_usuario_delete(uid):
+    try:
+        nid = session['negocio_id']
+        current_uid = session['user_id']
+
+        if uid == current_uid:
+            return jsonify({"error": "No puedes eliminar tu propio usuario mientras estás en sesión."}), 400
+
+        u_res = ejecutar_query("SELECT role FROM usuarios WHERE id=? AND negocio_id=?", (uid, nid), fetch=True)
+        if not u_res:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+        role_target = u_res[0][0]
+        if role_target == 'SUPER' and session.get('role') != 'SUPER':
+            return jsonify({"error": "No tienes permisos para eliminar a un Super Administrador"}), 403
+
+        if role_target == 'ADMIN':
+            admins_count = ejecutar_query("SELECT COUNT(*) FROM usuarios WHERE negocio_id=? AND role='ADMIN'", (nid,), fetch=True)[0][0]
+            if admins_count <= 1:
+                return jsonify({"error": "No puedes eliminar al único Administrador de este negocio."}), 400
+
+        ejecutar_query("DELETE FROM usuarios WHERE id=? AND negocio_id=?", (uid, nid))
+        return jsonify({"message": "Usuario eliminado exitosamente"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/ventas', methods=['GET', 'POST'])
 @login_required
 def post_venta():
@@ -1578,6 +1607,71 @@ def api_costos_variables_detail(cid):
             cid, nid, d.get('concepto'), d.get('tipo_calculo'), d.get('base_calculo'), d.get('valor'), d.get('estado', 'ACTIVO'), d.get('observaciones', '')
         )
         return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
+
+
+# ==========================
+# API: MANTENIMIENTO Y BACKUP DE SEGURIDAD
+# ==========================
+
+@app.route('/api/mantenimiento/reset', methods=['POST'])
+@login_required
+@admin_required
+def api_mantenimiento_reset():
+    try:
+        nid = session['negocio_id']
+        tablas_a_limpiar = [
+            "ventas", "abonos_cartera", "movimientos_inventario", "movimientos_lote",
+            "lotes_inventario", "compras_entradas", "producto_insumo", "productos",
+            "inventario", "clientes", "informes_guardados", "costos_fijos",
+            "costos_variables", "importaciones_staging", "auditoria_importaciones",
+            "producto_atributos"
+        ]
+        for t in tablas_a_limpiar:
+            try:
+                ejecutar_query(f"DELETE FROM {t} WHERE negocio_id=?", (nid,))
+            except Exception as e_t:
+                print(f"[RESET TABLE ERROR] Tabla {t}: {e_t}")
+
+        return jsonify({"message": "¡Reset completado! Se han borrado todos los datos operativos de tu negocio exitosamente."})
+    except Exception as e:
+        return jsonify({"error": f"Error al resetear los datos del sistema: {str(e)}"}), 500
+
+@app.route('/api/mantenimiento/backup', methods=['POST'])
+@login_required
+@admin_required
+def api_mantenimiento_backup():
+    try:
+        nid = session['negocio_id']
+        os.makedirs("backups", exist_ok=True)
+        
+        tablas_a_respaldar = [
+            "productos", "inventario", "producto_insumo", "ventas", "clientes",
+            "abonos_cartera", "lotes_inventario", "compras_entradas", "costos_variables",
+            "configuracion_negocio"
+        ]
+        
+        data_backup = {
+            "negocio_id": nid,
+            "fecha_backup": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "tablas": {}
+        }
+        
+        for t in tablas_a_respaldar:
+            try:
+                rows = ejecutar_query(f"SELECT * FROM {t} WHERE negocio_id=?", (nid,), fetch=True) or []
+                data_backup["tablas"][t] = [list(r) for r in rows]
+            except Exception as e_b:
+                data_backup["tablas"][t] = []
+                print(f"[BACKUP TABLE ERROR] Tabla {t}: {e_b}")
+                
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join("backups", f"backup_negocio_{nid}_{timestamp}.json")
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data_backup, f, ensure_ascii=False, indent=2)
+
+        return jsonify({"message": f"Backup de seguridad creado exitosamente en la carpeta backups."})
+    except Exception as e:
+        return jsonify({"error": f"Error al crear el backup: {str(e)}"}), 500
 
 
 # ==========================

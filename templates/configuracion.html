@@ -1522,8 +1522,36 @@
             cargarCostosVariables();
         });
 
-        async function doBackup() { await fetch('/api/mantenimiento/backup', {method:'POST'}); alert('Backup creado en la carpeta /backups'); }
-        async function doReset() { if(confirm('¡ATENCIÓN! Esto borrará todos tus datos. ¿Proceder?')) { await fetch('/api/mantenimiento/reset', {method:'POST'}); location.reload(); } }
+        async function doBackup() {
+            try {
+                const res = await fetch('/api/mantenimiento/backup', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('✅ ' + (data.message || 'Backup creado exitosamente en la carpeta /backups'));
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo crear el backup.'));
+                }
+            } catch(e) {
+                alert('❌ Error de comunicación con el servidor al solicitar el backup.');
+            }
+        }
+
+        async function doReset() {
+            if (confirm('¡ATENCIÓN! Esto borrará permanentemente todos los productos, inventario, ventas y datos operativos de tu negocio. ¿Deseas proceder con el reset del sistema?')) {
+                try {
+                    const res = await fetch('/api/mantenimiento/reset', { method: 'POST' });
+                    const data = await res.json();
+                    if (res.ok) {
+                        alert('✅ ' + (data.message || 'Sistema reseteado exitosamente.'));
+                        location.reload();
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'No se pudo resetear el sistema.'));
+                    }
+                } catch(e) {
+                    alert('❌ Error de comunicación con el servidor al solicitar el reset.');
+                }
+            }
+        }
 
         window.onload = loadAll;
 

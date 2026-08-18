@@ -264,8 +264,16 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
             v_id, fecha, prod_nombre, total, saldo, estado, cliente, vence, obs = x
             saldo_p = saldo if saldo is not None else total
             abonado = total - saldo_p
-
             es_vencido = bool(vence and vence < hoy_str and saldo_p > 0.01)
+
+            if saldo_p <= 0.01:
+                estado_real = "PAGADO"
+            elif es_vencido:
+                estado_real = "VENCIDO"
+            elif abonado > 0.01:
+                estado_real = "PARCIAL"
+            else:
+                estado_real = "PENDIENTE"
 
             # Buscar teléfono/WhatsApp del cliente en el maestro si existe
             ws_num = ""
@@ -281,7 +289,7 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                 "total": total,
                 "abonado": max(0.0, abonado),
                 "saldo": max(0.0, saldo_p),
-                "estado": estado or "PENDIENTE",
+                "estado": estado_real,
                 "cliente": cliente or "Cliente General",
                 "whatsapp": ws_num,
                 "vencimiento": vence or "Sin fecha",
