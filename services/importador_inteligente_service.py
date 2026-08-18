@@ -648,7 +648,7 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             except Exception:
                 pass
 
-        # ── Evaluación de Estado y Discrepancia de Cartera (Excel vs AS) ──
+        # ── Evaluación de Estado y Discrepancia de Origen (Excel vs Realidad Financiera) ──
         raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip()
         concepto_est = normalizar_concepto_estado(raw_est)
 
@@ -661,21 +661,41 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         precio_v = parse_money(mapped_data.get('precio_venta'))
         abono_val = parse_money(mapped_data.get('abono_monto'))
         deuda_excel = parse_money(mapped_data.get('saldo_pendiente'))
+        total_v_row = precio_v * cant_val
 
-        if concepto_est == "DEBE":
-            total_v_row = precio_v * cant_val
-            saldo_calc_as = max(0.0, total_v_row - abono_val)
-            if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
-                diferencias_detectadas.append({
-                    "fila": fila_num,
-                    "producto": mapped_data.get('nombre_producto', 'Producto'),
-                    "campo": "Cuenta por cobrar / Cartera",
-                    "existente": deuda_excel,
-                    "importado": saldo_calc_as
-                })
-                advs.append(
-                    f"💳 Discrepancia de Cartera (Fila #{fila_num}): Excel reporta ${deuda_excel:,.0f} pero AS calcula ${saldo_calc_as:,.0f} (${total_v_row:,.0f} venta - ${abono_val:,.0f} abono)."
-                )
+        # Abono efectivo percibido
+        if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_excel == 0.0:
+            abono_efectivo = total_v_row
+        else:
+            abono_efectivo = abono_val
+
+        saldo_calc_as = max(0.0, total_v_row - abono_efectivo)
+
+        # Advertencia de Inconsistencia de Origen (Estado contradice los flujos de dinero)
+        if concepto_est == "VENDIDA" and saldo_calc_as > 0.01:
+            advs.append(
+                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
+                f"pero reporta un saldo pendiente de ${saldo_calc_as:,.0f}. AS lo clasifica financieramente como "
+                f"{'PARCIAL' if abono_efectivo > 0 else 'PENDIENTE'}."
+            )
+        elif concepto_est == "DEBE" and saldo_calc_as <= 0.01 and total_v_row > 0:
+            advs.append(
+                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
+                f"pero se reportan pagos por el 100% de la venta (${total_v_row:,.0f}). AS lo clasifica financieramente como PAGADO."
+            )
+
+        # Discrepancia con la columna explícita de deuda reportada en el Excel
+        if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
+            diferencias_detectadas.append({
+                "fila": fila_num,
+                "producto": mapped_data.get('nombre_producto', 'Producto'),
+                "campo": "Cuenta por cobrar / Cartera",
+                "existente": deuda_excel,
+                "importado": saldo_calc_as
+            })
+            advs.append(
+                f"💳 Discrepancia de Cartera (Fila #{fila_num}): Excel reporta ${deuda_excel:,.0f} de deuda, pero la matemática de AS calcula ${saldo_calc_as:,.0f} (${total_v_row:,.0f} venta - ${abono_efectivo:,.0f} abono)."
+            )
 
         # ── Conciliación de producto ──
         nombre_prod = (mapped_data.get('nombre_producto') or '').strip()
@@ -859,9 +879,9 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         else:
             costo_adq = 0.0
 
-        # Regla de Lote para Importación
+        # Regla de Lote para Importación: (Fecha Compra + Tasa Cambio, Producto)
         pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
-        lote_key = (pedido_key, key_p, round(costo_adq, 2))
+        lote_key = (pedido_key, key_p)
         lotes_set.add(lote_key)
 
         if lote_key not in lotes_acumulados_sim:
@@ -1129,22 +1149,28 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                 # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
-                lote_key = (pedido_key, key_p, round(costo_adq, 2))
+                lote_key = (pedido_key, key_p)
 
                 concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
-                if concepto_est == "DEBE":
-                    saldo_calc = max(0.0, total_v_row - abono_val)
-                    metodo_pago = "CRÉDITO"
-                elif deuda_val > 0:
-                    saldo_calc = deuda_val
-                    metodo_pago = "CRÉDITO"
-                elif concepto_est == "VENDIDA":
-                    saldo_calc = 0.0
-                    metodo_pago = "Efectivo"
+
+                # Abono efectivo percibido
+                if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_val == 0.0:
+                    abono_efectivo = total_v_row
                 else:
-                    saldo_calc = 0.0
+                    abono_efectivo = abono_val
+
+                saldo_calc = max(0.0, total_v_row - abono_efectivo)
+
+                if saldo_calc <= 0.01:
+                    est_pago = "PAGADO"
                     metodo_pago = "Efectivo"
+                elif abono_efectivo > 0:
+                    est_pago = "PARCIAL"
+                    metodo_pago = "CRÉDITO"
+                else:
+                    est_pago = "PENDIENTE"
+                    metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num,
@@ -1614,22 +1640,28 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
                 # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
-                lote_key = (pedido_key, key_p, round(costo_adq, 2))
+                lote_key = (pedido_key, key_p)
 
                 concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
-                if concepto_est == "DEBE":
-                    saldo_calc = max(0.0, total_v_row - abono_val)
-                    metodo_pago = "CRÉDITO"
-                elif deuda_val > 0:
-                    saldo_calc = deuda_val
-                    metodo_pago = "CRÉDITO"
-                elif concepto_est == "VENDIDA":
-                    saldo_calc = 0.0
-                    metodo_pago = "Efectivo"
+
+                # Abono efectivo percibido
+                if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_val == 0.0:
+                    abono_efectivo = total_v_row
                 else:
-                    saldo_calc = 0.0
+                    abono_efectivo = abono_val
+
+                saldo_calc = max(0.0, total_v_row - abono_efectivo)
+
+                if saldo_calc <= 0.01:
+                    est_pago = "PAGADO"
                     metodo_pago = "Efectivo"
+                elif abono_efectivo > 0:
+                    est_pago = "PARCIAL"
+                    metodo_pago = "CRÉDITO"
+                else:
+                    est_pago = "PENDIENTE"
+                    metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
