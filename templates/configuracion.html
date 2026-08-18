@@ -980,7 +980,14 @@
             { value: "costo_total",          label: "📦 Costo total de adquisición" },
             { value: "precio_venta",         label: "🏷️ Precio de venta" },
             { value: "cantidad",             label: "🔢 Cantidad / Unidades" },
+            { value: "estado_origen",        label: "🚦 Estado (Stock, Vendida, Debe, Pérdida)" },
             { value: "cliente_nombre",       label: "👤 Cliente" },
+            { value: "cliente_documento",    label: "🪪 Documento / Cédula / NIT" },
+            { value: "cliente_telefono",     label: "📱 Teléfono / Celular" },
+            { value: "cliente_whatsapp",     label: "💬 WhatsApp" },
+            { value: "cliente_email",        label: "📧 Email / Correo" },
+            { value: "cliente_direccion",    label: "📍 Dirección / Ciudad" },
+            { value: "cliente_tipo",         label: "🏷️ Tipo / Segmento de cliente" },
             { value: "saldo_pendiente",      label: "💳 Cuenta por cobrar / Deuda" },
             { value: "abono_monto",          label: "💵 Pago / Abono recibido" },
             { value: "fecha_operacion",      label: "📅 Fecha de operación" },
@@ -1211,39 +1218,90 @@
                     currentGranularidadCostos = r.granularidad_costos.tipo_inferido || 'POR_UNIDAD';
                 }
 
-                // Render Tarjeta de Simulación
+                // Render Tarjeta de Simulación y Prueba de Oro
                 const simContainer = document.getElementById('simulacion-card-container');
                 if (simContainer && r.simulacion) {
                     const sim = r.simulacion;
+                    const po = sim.prueba_de_oro || {};
+                    const u = po.unidades || {};
+                    const f = po.financiero || {};
+                    const c = po.cartera || {};
+                    const l = po.lotes || {};
+                    const e = po.desglose_estados || {};
+
+                    const discColor = c.discrepancia_total > 1 ? '#ef4444' : '#34d399';
+                    const discText = c.discrepancia_total > 1 ? `⚠️ Discrepancia Excel vs AS: $${Number(c.discrepancia_total).toLocaleString('es-CO')}` : '✓ Cartera Conciliada (Sin discrepancias)';
+
                     simContainer.style.display = 'block';
                     simContainer.innerHTML = `
-                        <div style="background: rgba(56,189,248,0.04); border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; padding: 1rem; margin-bottom: 1.5rem;">
-                            <h4 style="color: #38bdf8; margin-bottom: 0.75rem; font-size: 0.95rem;">📊 Simulación de Impacto en Sistema (Pre-Transacción)</h4>
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 0.8rem; margin-bottom: 1rem;">
-                                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
-                                    <span style="color: #94a3b8; display: block;">Productos</span>
-                                    <strong style="color: white; font-size: 1.1rem;">${sim.productos_totales}</strong>
-                                    <span style="font-size: 0.7rem; color: #38bdf8;">(${sim.productos_nuevos} nuevos)</span>
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+                                <h4 style="color: #38bdf8; margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;">
+                                    🏆 MATRIZ DE CONCILIACIÓN "PRUEBA DE ORO" (Excel vs AS Platform)
+                                </h4>
+                                <span style="font-size: 0.75rem; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 4px 10px; border-radius: 20px; font-weight: 700;">
+                                    ${sim.total_filas} Filas Analizadas
+                                </span>
+                            </div>
+
+                            <!-- BLOQUE 1: DESGLOSE DE ESTADOS & UNIDADES -->
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem;">
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">📦 STOCK (Disponible)</span>
+                                    <strong style="color: #38bdf8; font-size: 1.1rem;">${e.stock || 0} filas</strong>
+                                    <div style="font-size: 0.7rem; color: #cbd5e1;">${u.disponibles || 0} uds disponibles</div>
                                 </div>
-                                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
-                                    <span style="color: #94a3b8; display: block;">Ventas & Lotes</span>
-                                    <strong style="color: white; font-size: 1.1rem;">${sim.ventas_a_crear}</strong>
-                                    <span style="font-size: 0.7rem; color: #a7f3d0;">(${sim.ventas_con_costo} con costo real)</span>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">🛍️ VENDIDAS (Contado)</span>
+                                    <strong style="color: #34d399; font-size: 1.1rem;">${e.vendida || 0} filas</strong>
+                                    <div style="font-size: 0.7rem; color: #a7f3d0;">$${Number(c.ventas_contado || 0).toLocaleString('es-CO')}</div>
                                 </div>
-                                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
-                                    <span style="color: #94a3b8; display: block;">Ingresos Totales</span>
-                                    <strong style="color: #34d399; font-size: 1.1rem;">$${Number(sim.total_ingresos).toLocaleString('es-CO')}</strong>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">💳 DEBE (Crédito)</span>
+                                    <strong style="color: #f59e0b; font-size: 1.1rem;">${e.debe || 0} filas</strong>
+                                    <div style="font-size: 0.7rem; color: #fde68a;">$${Number(c.ventas_credito || 0).toLocaleString('es-CO')}</div>
                                 </div>
-                                <div style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px;">
-                                    <span style="color: #94a3b8; display: block;">Utilidad Estimada</span>
-                                    <strong style="color: #38bdf8; font-size: 1.1rem;">$${Number(sim.utilidad_estimada).toLocaleString('es-CO')}</strong>
-                                    <span style="font-size: 0.7rem; color: #fde68a;">(${sim.margen_estimado_pct.toFixed(1)}% margen)</span>
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">⚠️ PÉRDIDAS (Mermas)</span>
+                                    <strong style="color: #ef4444; font-size: 1.1rem;">${e.perdida || 0} filas</strong>
+                                    <div style="font-size: 0.7rem; color: #fca5a5;">${u.perdidas || 0} uds pérdidas</div>
                                 </div>
                             </div>
-                            <div style="font-size: 0.75rem; color: #cbd5e1; display: flex; gap: 12px; flex-wrap: wrap;">
-                                <span>💵 Inversión adq: <strong>$${Number(sim.total_inversion).toLocaleString('es-CO')}</strong></span>
-                                <span>💳 Cartera por cobrar: <strong>$${Number(sim.total_cartera).toLocaleString('es-CO')}</strong></span>
-                                <span>👤 Clientes nuevos: <strong>${sim.clientes_nuevos}</strong></span>
+
+                            <!-- BLOQUE 2: MÉTRICAS FINANCIERAS DE IMPACTO -->
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem;">
+                                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">Ingresos Totales</span>
+                                    <strong style="color: #34d399; font-size: 1.15rem;">$${Number(f.ingresos_totales || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">Costo de Ventas</span>
+                                    <strong style="color: #cbd5e1; font-size: 1.15rem;">$${Number(f.costo_ventas || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">Utilidad Bruta</span>
+                                    <strong style="color: #38bdf8; font-size: 1.15rem;">$${Number(f.utilidad_bruta || 0).toLocaleString('es-CO')}</strong>
+                                    <span style="font-size: 0.7rem; color: #fde68a; display: block;">(${f.margen_pct || 0}% margen)</span>
+                                </div>
+                                <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">Valor Stock Restante</span>
+                                    <strong style="color: #a7f3d0; font-size: 1.15rem;">$${Number(f.valor_inventario_restante || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                            </div>
+
+                            <!-- BLOQUE 3: CONCILIACIÓN DE CARTERA (EXCEL VS AS PLATFORM) -->
+                            <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 12px; font-size: 0.8rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong style="color: #f59e0b;">💳 Conciliación de Cartera & Deudores</strong>
+                                    <span style="color: ${discColor}; font-weight: 700; font-size: 0.75rem;">${discText}</span>
+                                </div>
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap; color: #cbd5e1;">
+                                    <span>💵 Abonos Registrados: <strong>$${Number(c.total_abonos || 0).toLocaleString('es-CO')}</strong></span>
+                                    <span>📊 Deuda Reportada en Excel: <strong>$${Number(c.deuda_excel_total || 0).toLocaleString('es-CO')}</strong></span>
+                                    <span>💳 Cartera a Generar en AS: <strong style="color: #f59e0b;">$${Number(c.cartera_generada_as || 0).toLocaleString('es-CO')}</strong></span>
+                                    <span>👤 Clientes Deudores: <strong>${c.clientes_deudores_cnt || 0}</strong></span>
+                                    <span>📦 Lotes a Crear (Fecha + Tasa): <strong>${l.lotes_creados || 0}</strong></span>
+                                </div>
                             </div>
                         </div>
                     `;

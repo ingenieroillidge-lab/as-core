@@ -121,7 +121,7 @@ SEMANTIC_CORE = {
 
 SINGLETON_FIELDS = {
     "nombre_producto", "codigo_sku", "precio_venta", 
-    "cliente_nombre", "cliente_documento", "cliente_telefono", "cliente_whatsapp",
+    "estado_origen", "cliente_nombre", "cliente_documento", "cliente_telefono", "cliente_whatsapp",
     "cliente_email", "cliente_direccion", "cliente_tipo",
     "saldo_pendiente", "abono_monto", 
     "fecha_operacion", "fecha_recepcion"
@@ -159,6 +159,7 @@ CAMPO_LABELS = {
     "costo_total": "📦 Costo total de adquisición",
     "precio_venta": "🏷️ Precio de venta",
     "cantidad": "🔢 Cantidad / Unidades",
+    "estado_origen": "🚦 Estado (Stock, Vendida, Debe, Pérdida)",
     "cliente_nombre": "👤 Cliente",
     "cliente_documento": "🪪 Documento / Cédula / NIT",
     "cliente_telefono": "📱 Teléfono / Celular",
@@ -588,12 +589,6 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         key = (p[1] or '').strip().lower()
         prod_map[key] = {"id": p[0], "nombre": p[1], "precio": p[2], "categoria": p[3], "subcategoria": p[4], "variante": p[5]}
 
-    clientes_existentes = ejecutar_query(
-        "SELECT id, nombre FROM clientes WHERE negocio_id=?",
-        (negocio_id,), fetch=True
-    ) or []
-    cli_set = {(c[1] or '').strip().lower() for c in clientes_existentes}
-
     total_validos = 0
     total_advertencias = 0
     total_errores = 0
@@ -627,10 +622,9 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
 
         if origen_str and tasa_str and local_str:
             try:
-                v_origen = float(origen_str.replace('$', '').replace(',', '').strip())
-                v_tasa = float(tasa_str.replace('$', '').replace(',', '').strip())
-                v_local = float(local_str.replace('$', '').replace(',', '').strip())
-
+                v_origen = parse_money(origen_str)
+                v_tasa = parse_money(tasa_str)
+                v_local = parse_money(local_str)
                 calc_local = v_origen * v_tasa
                 if abs(calc_local - v_local) > 1.0:
                     advs.append(
@@ -639,6 +633,27 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                     )
             except Exception:
                 pass
+
+        # ── Discrepancia de Cartera Fila por Fila (Excel vs AS) ──
+        estado_raw = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip().upper()
+        precio_v = parse_money(mapped_data.get('precio_venta'))
+        abono_val = parse_money(mapped_data.get('abono_monto'))
+        deuda_excel = parse_money(mapped_data.get('saldo_pendiente'))
+
+        if estado_raw in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+            total_v_row = precio_v * cant_val
+            saldo_calc_as = max(0.0, total_v_row - abono_val)
+            if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
+                diferencias_detectadas.append({
+                    "fila": fila_num,
+                    "producto": mapped_data.get('nombre_producto', 'Producto'),
+                    "campo": "Cuenta por cobrar / Cartera",
+                    "existente": deuda_excel,
+                    "importado": saldo_calc_as
+                })
+                advs.append(
+                    f"💳 Discrepancia de Cartera (Fila #{fila_num}): Excel reporta ${deuda_excel:,.0f} pero AS calcula ${saldo_calc_as:,.0f} (${total_v_row:,.0f} venta - ${abono_val:,.0f} abono)."
+                )
 
         # ── Conciliación de producto ──
         nombre_prod = (mapped_data.get('nombre_producto') or '').strip()
@@ -650,7 +665,7 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                 precio_imp_str = mapped_data.get('precio_venta', '')
                 if precio_imp_str:
                     try:
-                        precio_imp = float(precio_imp_str.replace('$', '').replace(',', '').strip())
+                        precio_imp = parse_money(precio_imp_str)
                         if p_exist['precio'] and abs(p_exist['precio'] - precio_imp) > 0.01:
                             diferencias_detectadas.append({
                                 "fila": fila_num,
@@ -693,12 +708,12 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             "advertencias": advs
         })
 
-    t_conciliacion = time.time() - t_start
     ejecutar_query_many(
         "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
         update_params
     )
 
+    ok_sim, msg_sim, sim_data = simular_importacion(batch_id, negocio_id, mapeo_usuario)
     t_total = time.time() - t_start
 
     resumen = {
@@ -709,6 +724,7 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
         "errores": total_errores,
         "productos_nuevos": productos_nuevos,
         "diferencias_detectadas": diferencias_detectadas,
+        "simulacion": sim_data,
         "detalles_filas": resumen_filas[:50],
         "tiempo_ms": int(t_total * 1000)
     }
@@ -722,7 +738,8 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
 
 def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD"):
     """
-    Calcula exactamente el impacto de la importación antes de ejecutar la transacción atómica.
+    Calcula exactamente el impacto de la importación antes de ejecutar la transacción atómica
+    y genera la matriz completa de 'Prueba de Oro' para conciliación final.
     """
     registros_staging = ejecutar_query(
         "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
@@ -732,26 +749,40 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
     if not registros_staging:
         return False, "No hay datos en staging para simular", None
 
-    productos_procesados = set()
-    productos_nuevos = set()
-    clientes_nuevos = set()
-    lotes_con_costo = 0
-    lotes_sin_costo = 0
-    ventas_con_costo = 0
-    ventas_sin_costo = 0
-
-    total_inversion = 0.0
-    total_ingresos = 0.0
-    total_cartera = 0.0
-    total_abonos = 0.0
-
     prods_exist = ejecutar_query("SELECT LOWER(nombre) FROM productos WHERE negocio_id=?", (negocio_id,), fetch=True) or []
     prods_exist_set = {p[0] for p in prods_exist if p and p[0]}
 
     clis_exist = ejecutar_query("SELECT LOWER(nombre) FROM clientes WHERE negocio_id=?", (negocio_id,), fetch=True) or []
     clis_exist_set = {c[0] for c in clis_exist if c and c[0]}
 
-    tipos_filas_cnt = {"COMPRA_Y_VENTA": 0, "SOLO_COMPRA": 0, "SOLO_VENTA": 0, "REGISTRO_HISTORICO": 0}
+    productos_procesados = set()
+    productos_nuevos = set()
+    clientes_nuevos = set()
+    clientes_deudores_set = set()
+    lotes_set = set()
+
+    unidades_adquiridas = 0.0
+    unidades_vendidas = 0.0
+    unidades_perdidas = 0.0
+    unidades_disponibles = 0.0
+
+    total_inversion_lotes = 0.0
+    total_ingresos = 0.0
+    costo_ventas = 0.0
+    costo_perdidas = 0.0
+
+    ventas_contado_val = 0.0
+    ventas_credito_val = 0.0
+    total_abonos = 0.0
+    total_cartera_as = 0.0
+    total_deuda_excel = 0.0
+
+    cnt_stock = 0
+    cnt_vendida = 0
+    cnt_debe = 0
+    cnt_perdida = 0
+
+    lotes_acumulados_sim = {}
 
     for fila_num, raw_json in registros_staging:
         raw_row = json.loads(raw_json)
@@ -762,7 +793,16 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             continue
 
         tipo_fila = determinar_tipo_fila(mapped)
-        tipos_filas_cnt[tipo_fila] = tipos_filas_cnt.get(tipo_fila, 0) + 1
+        raw_est = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
+
+        if raw_est in ('STOCK', 'EN_STOCK', 'INVENTARIO', 'DISPONIBLE'):
+            cnt_stock += 1
+        elif raw_est in ('PERDIDA', 'PÉRDIDA', 'DAÑADO', 'DAÑADA', 'ROBO', 'MERMA'):
+            cnt_perdida += 1
+        elif raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA'):
+            cnt_debe += 1
+        else:
+            cnt_vendida += 1
 
         key_p = nombre_prod.lower()
         productos_procesados.add(key_p)
@@ -782,8 +822,9 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         costo_total_imp = parse_money(mapped.get('costo_total'))
         deuda_val = parse_money(mapped.get('saldo_pendiente'))
         abono_val = parse_money(mapped.get('abono_monto'))
+        fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
 
-        # Calcular costo unitario de adquisición
+        # Costo unitario landed
         if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
             costo_adq = costo_total_imp / cant
         elif costo_total_imp > 0:
@@ -795,24 +836,88 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         else:
             costo_adq = 0.0
 
-        if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA"):
-            if costo_adq > 0:
-                lotes_con_costo += 1
-                total_inversion += (costo_adq * cant)
-            else:
-                lotes_sin_costo += 1
+        # Regla de Lote para Importación
+        pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
+        lote_key = (pedido_key, key_p, round(costo_adq, 2))
+        lotes_set.add(lote_key)
 
-        if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
-            total_ingresos += (precio_v * cant)
-            total_cartera += deuda_val
+        if lote_key not in lotes_acumulados_sim:
+            lotes_acumulados_sim[lote_key] = {"cant_total": 0.0, "cant_disponible": 0.0, "costo_adq": costo_adq}
+        lotes_acumulados_sim[lote_key]["cant_total"] += cant
+
+        unidades_adquiridas += cant
+        total_inversion_lotes += (costo_adq * cant)
+
+        if tipo_fila == "SOLO_COMPRA":
+            unidades_disponibles += cant
+            lotes_acumulados_sim[lote_key]["cant_disponible"] += cant
+
+        elif tipo_fila == "PERDIDA":
+            unidades_perdidas += cant
+            costo_perdidas += (costo_adq * cant)
+
+        elif tipo_fila in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
+            unidades_vendidas += cant
+            tot_v_row = precio_v * cant
+            total_ingresos += tot_v_row
+            costo_ventas += (costo_adq * cant)
             total_abonos += abono_val
 
-            if costo_adq > 0:
-                ventas_con_costo += 1
+            if raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
+                ventas_credito_val += tot_v_row
+                saldo_calc = max(0.0, tot_v_row - abono_val)
+                total_cartera_as += saldo_calc
+                total_deuda_excel += deuda_val
+                if cli_nombre:
+                    clientes_deudores_set.add(cli_nombre.lower())
             else:
-                ventas_sin_costo += 1
+                ventas_contado_val += tot_v_row
 
-    utilidad_estimada = total_ingresos - total_inversion
+    utilidad_bruta = total_ingresos - costo_ventas
+    margen_pct = (utilidad_bruta / total_ingresos * 100.0) if total_ingresos > 0 else 0.0
+    valor_inventario_restante = sum(ldata["cant_disponible"] * ldata["costo_adq"] for ldata in lotes_acumulados_sim.values())
+
+    lotes_con_costo = sum(1 for ldata in lotes_acumulados_sim.values() if ldata["costo_adq"] > 0)
+    lotes_sin_costo = len(lotes_acumulados_sim) - lotes_con_costo
+
+    prueba_de_oro = {
+        "total_filas": len(registros_staging),
+        "desglose_estados": {
+            "stock": cnt_stock,
+            "vendida": cnt_vendida,
+            "debe": cnt_debe,
+            "perdida": cnt_perdida
+        },
+        "unidades": {
+            "adquiridas": unidades_adquiridas,
+            "vendidas": unidades_vendidas,
+            "perdidas": unidades_perdidas,
+            "disponibles": unidades_disponibles
+        },
+        "financiero": {
+            "ingresos_totales": total_ingresos,
+            "costo_ventas": costo_ventas,
+            "costo_perdidas": costo_perdidas,
+            "utilidad_bruta": utilidad_bruta,
+            "margen_pct": round(margen_pct, 2),
+            "inversion_lotes_total": total_inversion_lotes,
+            "valor_inventario_restante": valor_inventario_restante
+        },
+        "cartera": {
+            "ventas_contado": ventas_contado_val,
+            "ventas_credito": ventas_credito_val,
+            "total_abonos": total_abonos,
+            "cartera_generada_as": total_cartera_as,
+            "deuda_excel_total": total_deuda_excel,
+            "discrepancia_total": abs(total_cartera_as - total_deuda_excel),
+            "clientes_deudores_cnt": len(clientes_deudores_set)
+        },
+        "lotes": {
+            "lotes_creados": len(lotes_set),
+            "con_costo": lotes_con_costo,
+            "sin_costo": lotes_sin_costo
+        }
+    }
 
     return True, "Simulación generada", {
         "batch_id": batch_id,
@@ -820,19 +925,17 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         "productos_totales": len(productos_procesados),
         "productos_nuevos": len(productos_nuevos),
         "clientes_nuevos": len(clientes_nuevos),
-        "lotes_a_crear": lotes_con_costo + lotes_sin_costo,
+        "lotes_a_crear": len(lotes_set),
         "lotes_con_costo": lotes_con_costo,
         "lotes_sin_costo": lotes_sin_costo,
-        "ventas_a_crear": ventas_con_costo + ventas_sin_costo,
-        "ventas_con_costo": ventas_con_costo,
-        "ventas_sin_costo": ventas_sin_costo,
-        "total_inversion": total_inversion,
+        "ventas_a_crear": cnt_vendida + cnt_debe,
+        "total_inversion": total_inversion_lotes,
         "total_ingresos": total_ingresos,
-        "utilidad_estimada": utilidad_estimada,
-        "margen_estimado_pct": (utilidad_estimada / total_ingresos * 100.0) if total_ingresos > 0 else 0.0,
-        "total_cartera": total_cartera,
+        "utilidad_estimada": utilidad_bruta,
+        "margen_estimado_pct": round(margen_pct, 2),
+        "total_cartera": total_cartera_as,
         "total_abonos": total_abonos,
-        "desglose_operaciones": tipos_filas_cnt
+        "prueba_de_oro": prueba_de_oro
     }
 
 

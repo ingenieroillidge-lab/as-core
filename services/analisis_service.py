@@ -277,11 +277,12 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
     texto_alcance = f"Analizando {ventas_count} ventas de {tot_ventas_universo} totales | {len(prod_ids_filtrados)} productos | {len(lista_lotes)} lotes"
 
     # ──────────────────────────────────────────────────────────────────
-    # 6. CARTERA POR CLIENTE (consolidado de deudores)
+    # 6. CARTERA Y ANÁLISIS DE CLIENTES ENRIQUECIDO
     # ──────────────────────────────────────────────────────────────────
     sql_cartera_cli = """
         SELECT v.cliente_nombre, COUNT(*) as ops, SUM(v.total) as compras,
-               SUM(v.total - v.saldo_pendiente) as abonado, SUM(v.saldo_pendiente) as saldo
+               SUM(v.total - v.saldo_pendiente) as abonado, SUM(v.saldo_pendiente) as saldo,
+               MAX(v.fecha) as ultima_compra
         FROM ventas v
         WHERE v.negocio_id=? AND v.cliente_nombre IS NOT NULL AND v.cliente_nombre != ''
         GROUP BY v.cliente_nombre
@@ -289,13 +290,37 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
         ORDER BY saldo DESC
     """
     cartera_cli_rows = ejecutar_query(sql_cartera_cli, (negocio_id,), fetch=True) or []
-    cartera_por_cliente = [{
-        "cliente": r[0] or "Cliente General",
-        "operaciones": r[1] or 0,
-        "total_compras": r[2] or 0.0,
-        "total_abonos": r[3] or 0.0,
-        "saldo_pendiente": r[4] or 0.0
-    } for r in cartera_cli_rows]
+    cartera_por_cliente = []
+
+    for r in cartera_cli_rows:
+        cli_nom_r = r[0] or "Cliente General"
+        ops_r = r[1] or 0
+        compras_r = r[2] or 0.0
+        abonos_r = r[3] or 0.0
+        saldo_r = r[4] or 0.0
+        ult_comp_r = r[5] or ""
+
+        # Producto preferido del cliente (mayor número de unidades compradas)
+        pref_row = ejecutar_query(
+            """SELECT p.nombre, SUM(v.cantidad) as total_qty
+               FROM ventas v
+               LEFT JOIN productos p ON v.producto_id = p.id
+               WHERE v.negocio_id=? AND LOWER(v.cliente_nombre) = LOWER(?)
+               GROUP BY p.nombre ORDER BY total_qty DESC LIMIT 1""",
+            (negocio_id, cli_nom_r), fetch=True
+        )
+        prod_preferido = pref_row[0][0] if (pref_row and pref_row[0] and pref_row[0][0]) else "N/A"
+
+        cartera_por_cliente.append({
+            "cliente": cli_nom_r,
+            "operaciones": ops_r,
+            "total_compras": compras_r,
+            "total_abonos": abonos_r,
+            "saldo_pendiente": saldo_r,
+            "ticket_promedio": round(compras_r / ops_r, 2) if ops_r > 0 else 0.0,
+            "ultima_compra": ult_comp_r,
+            "producto_preferido": prod_preferido
+        })
 
     return {
         "ok": True,
