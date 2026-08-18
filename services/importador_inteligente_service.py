@@ -265,20 +265,20 @@ def normalizar_concepto_estado(val_raw):
 
 def determinar_tipo_fila(mapped_data):
     """
-    Determina qué tipo de operación representa una fila considerando 'estado_origen':
-    - STOCK -> SOLO_COMPRA (Crear lote/inventario disponible, NO crear venta)
-    - PERDIDA -> PERDIDA (Crear lote + Salida por Pérdida, NO crear venta)
-    - DEBE / VENDIDA -> COMPRA_Y_VENTA (Crear lote + Venta + Salida por venta)
+    Determina qué tipo de operación representa una fila y su nivel de confianza:
+    - Retorna (tipo_fila, origen_clasificacion)
+    - EXPLICITA: Determinado por Estado mapeado en Excel (STOCK, PERDIDA, DEBE, VENDIDA)
+    - INFERIDA: Determinado por deducción de estructura (Costos + Precio/Cliente)
     """
     raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip()
     concepto = normalizar_concepto_estado(raw_est)
 
     if concepto == "STOCK":
-        return "SOLO_COMPRA"
+        return "SOLO_COMPRA", "EXPLICITA"
     elif concepto == "PERDIDA":
-        return "PERDIDA"
+        return "PERDIDA", "EXPLICITA"
     elif concepto in ("DEBE", "VENDIDA"):
-        return "COMPRA_Y_VENTA"
+        return "COMPRA_Y_VENTA", "EXPLICITA"
 
     # Fallback estructural si no hay columna de Estado o si es AMBIGUO:
     tiene_costos = any(mapped_data.get(c) for c in [
@@ -288,13 +288,13 @@ def determinar_tipo_fila(mapped_data):
     tiene_cliente = bool(mapped_data.get('cliente_nombre'))
 
     if tiene_costos and (tiene_precio_venta or tiene_cliente):
-        return "COMPRA_Y_VENTA"
+        return "COMPRA_Y_VENTA", "INFERIDA"
     elif tiene_costos and not tiene_precio_venta:
-        return "SOLO_COMPRA"
+        return "SOLO_COMPRA", "INFERIDA"
     elif tiene_precio_venta and not tiene_costos:
-        return "SOLO_VENTA"
+        return "SOLO_VENTA", "INFERIDA"
     else:
-        return "REGISTRO_HISTORICO"
+        return "REGISTRO_HISTORICO", "INFERIDA"
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -843,7 +843,7 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         if not nombre_prod:
             continue
 
-        tipo_fila = determinar_tipo_fila(mapped)
+        tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
         raw_est = (mapped.get('estado_origen') or mapped.get('estado') or '').strip()
         concepto_est = normalizar_concepto_estado(raw_est)
 
@@ -1091,7 +1091,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     continue
 
                 estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
-                tipo_fila = determinar_tipo_fila(mapped)
+                tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
 
                 cant = parse_money(mapped.get('cantidad')) or 1.0
                 precio_v = parse_money(mapped.get('precio_venta'))
@@ -1162,24 +1162,32 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                 concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
+                tiene_col_abono = 'abono_monto' in mapped
 
-                # Abono efectivo percibido
-                if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_val == 0.0:
+                # Abono efectivo percibido (Regla 4)
+                if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_val == 0.0:
                     abono_efectivo = total_v_row
                 else:
                     abono_efectivo = abono_val
 
-                saldo_calc = max(0.0, total_v_row - abono_efectivo)
-
-                if saldo_calc <= 0.01:
+                # Manejo de Sobreabonos (Regla 2 & 5)
+                if abono_efectivo > total_v_row and total_v_row > 0:
+                    excedente_abono = abono_efectivo - total_v_row
+                    saldo_calc = 0.0
                     est_pago = "PAGADO"
                     metodo_pago = "Efectivo"
-                elif abono_efectivo > 0:
-                    est_pago = "PARCIAL"
-                    metodo_pago = "CRÉDITO"
                 else:
-                    est_pago = "PENDIENTE"
-                    metodo_pago = "CRÉDITO"
+                    excedente_abono = 0.0
+                    saldo_calc = max(0.0, total_v_row - abono_efectivo)
+                    if saldo_calc <= 0.01:
+                        est_pago = "PAGADO"
+                        metodo_pago = "Efectivo"
+                    elif abono_efectivo > 0:
+                        est_pago = "PARCIAL"
+                        metodo_pago = "CRÉDITO"
+                    else:
+                        est_pago = "PENDIENTE"
+                        metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num,
@@ -1188,6 +1196,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "nombre_prod": nombre_prod,
                     "key_p": key_p,
                     "tipo_fila": tipo_fila,
+                    "origen_clasificacion": origen_clasificacion,
                     "estado_raw": estado_raw,
                     "cant": cant,
                     "precio_v": precio_v,
@@ -1195,6 +1204,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "cli_nombre": cli_nombre,
                     "deuda_val": deuda_val,
                     "abono_val": abono_val,
+                    "abono_efectivo": abono_efectivo,
+                    "excedente_abono": excedente_abono,
                     "saldo_calc": saldo_calc,
                     "metodo_pago": metodo_pago,
                     "fecha_compra": fecha_compra_fmt,
@@ -1596,7 +1607,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 if not nombre_prod: continue
 
                 estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
-                tipo_fila = determinar_tipo_fila(mapped)
+                tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
 
                 cant = parse_money(mapped.get('cantidad')) or 1.0
                 precio_v = parse_money(mapped.get('precio_venta'))
@@ -1653,30 +1664,40 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
                 concepto_est = normalizar_concepto_estado(estado_raw)
                 total_v_row = precio_v * cant
+                tiene_col_abono = 'abono_monto' in mapped
 
-                # Abono efectivo percibido
-                if concepto_est == "VENDIDA" and abono_val == 0.0 and deuda_val == 0.0:
+                # Abono efectivo percibido (Regla 4)
+                if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_val == 0.0:
                     abono_efectivo = total_v_row
                 else:
                     abono_efectivo = abono_val
 
-                saldo_calc = max(0.0, total_v_row - abono_efectivo)
-
-                if saldo_calc <= 0.01:
+                # Manejo de Sobreabonos (Regla 2 & 5)
+                if abono_efectivo > total_v_row and total_v_row > 0:
+                    excedente_abono = abono_efectivo - total_v_row
+                    saldo_calc = 0.0
                     est_pago = "PAGADO"
                     metodo_pago = "Efectivo"
-                elif abono_efectivo > 0:
-                    est_pago = "PARCIAL"
-                    metodo_pago = "CRÉDITO"
                 else:
-                    est_pago = "PENDIENTE"
-                    metodo_pago = "CRÉDITO"
+                    excedente_abono = 0.0
+                    saldo_calc = max(0.0, total_v_row - abono_efectivo)
+                    if saldo_calc <= 0.01:
+                        est_pago = "PAGADO"
+                        metodo_pago = "Efectivo"
+                    elif abono_efectivo > 0:
+                        est_pago = "PARCIAL"
+                        metodo_pago = "CRÉDITO"
+                    else:
+                        est_pago = "PENDIENTE"
+                        metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
                     "nombre_prod": nombre_prod, "key_p": key_p, "tipo_fila": tipo_fila,
+                    "origen_clasificacion": origen_clasificacion,
                     "estado_raw": estado_raw, "cant": cant, "precio_v": precio_v, "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre, "deuda_val": deuda_val, "abono_val": abono_val,
+                    "abono_efectivo": abono_efectivo, "excedente_abono": excedente_abono,
                     "saldo_calc": saldo_calc, "metodo_pago": metodo_pago,
                     "fecha_compra": fecha_compra_fmt, "fecha_recepcion": fecha_recepcion_fmt,
                     "fecha_venta": fecha_compra_fmt, "pedido_key": pedido_key, "lote_key": lote_key
