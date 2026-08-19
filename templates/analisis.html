@@ -233,6 +233,11 @@
                 <div class="kpi-lbl">💳 Cartera Pendiente</div>
                 <div class="kpi-val" id="kpi-cartera" style="color: #fb7185;">$0</div>
             </div>
+            <div class="kpi-card" style="border: 1px solid rgba(192, 132, 252, 0.3);">
+                <div class="kpi-lbl">⚖️ Punto de Equilibrio</div>
+                <div class="kpi-val" id="kpi-equilibrio" style="color: #c084fc;">$0</div>
+                <div id="kpi-equilibrio-sub" style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">0 unidades/mes</div>
+            </div>
         </div>
 
         <!-- NAVEGACIÓN PESTAÑAS DENTRO DEL MISMO CONTEXTO ANALÍTICO -->
@@ -468,6 +473,12 @@
             document.getElementById('kpi-utilidad').textContent = formatCOP.format(k.utilidad);
             document.getElementById('kpi-margen').textContent = `${k.margen_pct}%`;
             document.getElementById('kpi-cartera').textContent = formatCOP.format(k.cartera_pendiente);
+            
+            document.getElementById('kpi-equilibrio').textContent = formatCOP.format(k.punto_equilibrio_pesos || 0);
+            const udsEq = Math.ceil(k.punto_equilibrio_unidades || 0);
+            document.getElementById('kpi-equilibrio-sub').textContent = k.costos_fijos > 0 
+                ? `${udsEq} unidades/mes necesarias` 
+                : '💡 Registra Costos Fijos en Configuración';
 
             document.getElementById('badge-alcance-contenedor').textContent = `🔎 ${data.alcance.texto}`;
 

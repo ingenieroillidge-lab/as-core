@@ -322,17 +322,35 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
             "producto_preferido": prod_preferido
         })
 
+    # ──────────────────────────────────────────────────────────────────
+    # 7. COSTOS FIJOS Y PUNTO DE EQUILIBRIO (PESOS Y UNIDADES)
+    # ──────────────────────────────────────────────────────────────────
+    cf_res = ejecutar_query(
+        "SELECT SUM(valor) FROM costos_fijos WHERE negocio_id=?",
+        (negocio_id,), fetch=True
+    )
+    costos_fijos_tot = (cf_res[0][0] or 0.0) if (cf_res and cf_res[0]) else 0.0
+
+    ratio_m = (utilidad / ingresos) if ingresos > 0 else 0.0
+    punto_equilibrio_pesos = (costos_fijos_tot / ratio_m) if ratio_m > 0 else 0.0
+    mcu_ponderado = (utilidad / unidades_vendidas) if unidades_vendidas > 0 else 0.0
+    punto_equilibrio_unidades = (costos_fijos_tot / mcu_ponderado) if mcu_ponderado > 0 else 0.0
+
     return {
         "ok": True,
         "kpis": {
             "ingresos": ingresos,
             "costos": costos,
+            "costos_fijos": costos_fijos_tot,
             "utilidad": utilidad,
+            "utilidad_neta": utilidad - costos_fijos_tot,
             "margen_pct": round(margen_pct, 2),
             "cartera_pendiente": cartera_pendiente,
             "unidades_vendidas": unidades_vendidas,
             "ventas_count": ventas_count,
-            "valor_inventario_lotes": valor_inventario_lotes
+            "valor_inventario_lotes": valor_inventario_lotes,
+            "punto_equilibrio_pesos": punto_equilibrio_pesos,
+            "punto_equilibrio_unidades": punto_equilibrio_unidades
         },
         "alcance": {
             "texto": texto_alcance,
