@@ -1170,24 +1170,23 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 else:
                     abono_efectivo = abono_val
 
+                metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
+                metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
+
                 # Manejo de Sobreabonos (Regla 2 & 5)
                 if abono_efectivo > total_v_row and total_v_row > 0:
                     excedente_abono = abono_efectivo - total_v_row
                     saldo_calc = 0.0
                     est_pago = "PAGADO"
-                    metodo_pago = "Efectivo"
                 else:
                     excedente_abono = 0.0
                     saldo_calc = max(0.0, total_v_row - abono_efectivo)
                     if saldo_calc <= 0.01:
                         est_pago = "PAGADO"
-                        metodo_pago = "Efectivo"
                     elif abono_efectivo > 0:
                         est_pago = "PARCIAL"
-                        metodo_pago = "CRÉDITO"
                     else:
                         est_pago = "PENDIENTE"
-                        metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num,
@@ -1672,24 +1671,23 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 else:
                     abono_efectivo = abono_val
 
+                metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
+                metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
+
                 # Manejo de Sobreabonos (Regla 2 & 5)
                 if abono_efectivo > total_v_row and total_v_row > 0:
                     excedente_abono = abono_efectivo - total_v_row
                     saldo_calc = 0.0
                     est_pago = "PAGADO"
-                    metodo_pago = "Efectivo"
                 else:
                     excedente_abono = 0.0
                     saldo_calc = max(0.0, total_v_row - abono_efectivo)
                     if saldo_calc <= 0.01:
                         est_pago = "PAGADO"
-                        metodo_pago = "Efectivo"
                     elif abono_efectivo > 0:
                         est_pago = "PARCIAL"
-                        metodo_pago = "CRÉDITO"
                     else:
                         est_pago = "PENDIENTE"
-                        metodo_pago = "CRÉDITO"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
