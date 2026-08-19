@@ -1687,14 +1687,10 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
                 metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
 
-                # Manejo de Sobreabonos y Descuentos Comerciales (Regla 2, 5 & Descuentos)
+                # Manejo de Sobreabonos y Nota de Origen VENDIDA
+                obs_nota = ""
                 if abono_efectivo > total_v_row and total_v_row > 0:
                     excedente_abono = abono_efectivo - total_v_row
-                    saldo_calc = 0.0
-                    est_pago = "PAGADO"
-                elif concepto_est == "VENDIDA" and 0 < abono_efectivo < total_v_row and deuda_val == 0.0:
-                    # Descuento comercial: No genera saldo pendiente en Cartera (Saldo = 0, Estado = PAGADO)
-                    excedente_abono = 0.0
                     saldo_calc = 0.0
                     est_pago = "PAGADO"
                 else:
@@ -1707,6 +1703,9 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     else:
                         est_pago = "PENDIENTE"
 
+                if concepto_est == "VENDIDA" and saldo_calc > 0.01:
+                    obs_nota = f"⚠️ Detectada como VENDIDA en origen (Abono ${abono_efectivo:,.0f} vs Total ${total_v_row:,.0f})"
+
                 filas_mapeadas.append({
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
                     "nombre_prod": nombre_prod, "key_p": key_p, "tipo_fila": tipo_fila,
@@ -1714,7 +1713,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     "estado_raw": estado_raw, "cant": cant, "precio_v": precio_v, "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre, "deuda_val": deuda_val, "abono_val": abono_val,
                     "abono_efectivo": abono_efectivo, "excedente_abono": excedente_abono,
-                    "saldo_calc": saldo_calc, "metodo_pago": metodo_pago,
+                    "saldo_calc": saldo_calc, "metodo_pago": metodo_pago, "obs_nota": obs_nota,
                     "fecha_compra": fecha_compra_fmt, "fecha_recepcion": fecha_recepcion_fmt,
                     "fecha_venta": fecha_compra_fmt, "pedido_key": pedido_key, "lote_key": lote_key
                 })
@@ -1852,10 +1851,11 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     else:
                         est_pago = "PENDIENTE"
 
+                    obs_final = f.get("obs_nota", "")
                     batch_ventas.append((
                         negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, f["metodo_pago"],
                         costo_venta_total, f["precio_v"], usuario_id,
-                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, undo_token
+                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, obs_final, undo_token
                     ))
                     ventas_meta.append({
                         "fecha_v": f["fecha_venta"], "cant": f["cant"], "costo_adq": f["costo_adq"],
@@ -1864,7 +1864,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     })
                     procesados += 1
 
-            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "importacion_id"]
+            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "observacion", "importacion_id"]
             res_ventas = bulk_insert_con_returning(cursor, "ventas", cols_v, batch_ventas, ph, is_pg, "id")
 
             batch_movimientos = []

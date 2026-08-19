@@ -242,7 +242,7 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                    v.estado_pago, v.cliente_nombre, v.fecha_limite_pago, v.observacion
             FROM ventas v
             LEFT JOIN productos p ON v.producto_id = p.id
-            WHERE v.negocio_id=? AND (v.metodo_pago='CRÉDITO' OR v.saldo_pendiente > 0.01 OR v.estado_pago IN ('PENDIENTE', 'PARCIAL'))
+            WHERE v.negocio_id=? AND v.saldo_pendiente > 0.01 AND v.estado_pago IN ('PENDIENTE', 'PARCIAL')
         """
         params = [negocio_id]
 
@@ -282,7 +282,7 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                 if cli_res:
                     ws_num = cli_res[0][0] or cli_res[0][1] or ""
 
-            es_origen_vendida = bool(obs and "Detectada como VENDIDA" in obs)
+            es_origen_vendida = bool(obs and ("Detectada como VENDIDA" in obs or "VENDIDA" in obs.upper()))
 
             out.append({
                 "id": v_id,
