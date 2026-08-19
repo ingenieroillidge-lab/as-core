@@ -1537,7 +1537,7 @@ def revertir_importacion(undo_token, negocio_id, usuario_id):
 # STREAMING DE PROGRESO REAL DE IMPORTACIÓN (SSE)
 # ══════════════════════════════════════════════════════════════════
 
-def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD"):
+def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", criterio_lote="FECHA_TRM"):
     """
     Generador SSE que emite notificaciones de progreso reales por cada fase
     del pipeline manteniendo 100% de integridad transaccional atómica.
@@ -1670,8 +1670,21 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                             cli_wa or cli_tel, cli_email, cli_dir, 0.0, 15, 'ACTIVO', undo_token
                         )
 
-                # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
-                pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
+                # Clave Única de Pedido/Embarque y Lote según criterio elegido por el emprendedor
+                crit_lote = (criterio_lote or 'FECHA_TRM').strip().upper()
+
+                if crit_lote == 'PEDIDO_NUM':
+                    ped_val = (mapped.get('numero_pedido') or mapped.get('numero_factura') or mapped.get('guia_envio') or '').strip()
+                    pedido_key = ped_val if ped_val else f"{fecha_compra_raw[:10]}_{tasa_cambio}"
+                elif crit_lote == 'FECHA_PROVEEDOR':
+                    prov_val = (mapped.get('proveedor') or cli_nombre or '').strip()
+                    pedido_key = f"{fecha_compra_raw[:10]}_{prov_val}"
+                elif crit_lote == 'INDIVIDUAL':
+                    pedido_key = f"ROW-{fila_num}_{fecha_compra_raw[:10]}"
+                else:
+                    # FECHA_TRM (Predeterminado para importaciones USD)
+                    pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
+
                 lote_key = (pedido_key, key_p)
 
                 concepto_est = normalizar_concepto_estado(estado_raw)

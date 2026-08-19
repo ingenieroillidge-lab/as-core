@@ -1579,6 +1579,7 @@ def api_importador_procesar_stream():
     mapeo_usuario = data.get('mapeo_usuario')
     autorizaciones = data.get('autorizaciones', {})
     granularidad_costos = data.get('granularidad_costos', 'POR_UNIDAD')
+    criterio_lote = data.get('criterio_lote', 'FECHA_TRM')
 
     if not batch_id or not mapeo_usuario:
         return jsonify({"error": "Faltan datos obligatorios (batch_id o mapeo_usuario)"}), 400
@@ -1586,7 +1587,7 @@ def api_importador_procesar_stream():
     return Response(
         stream_with_context(
             importador_service.procesar_importacion_aprobada_stream(
-                batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos
+                batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos, criterio_lote
             )
         ),
         mimetype='text/event-stream'

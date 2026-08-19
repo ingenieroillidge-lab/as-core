@@ -337,6 +337,22 @@
                     <!-- TARJETA DE SIMULACIÓN DE IMPACTO -->
                     <div id="simulacion-card-container" style="display: none;"></div>
 
+                    <!-- SELECTOR DE CRITERIO DE AGRUPACIÓN DE LOTES / EMBARQUES -->
+                    <div id="criterio-lote-container" style="margin-bottom: 1.5rem; background: rgba(192, 132, 252, 0.08); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 12px; padding: 1rem;">
+                        <h4 style="color: #c084fc; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
+                            📦 Criterio de Agrupación de Lotes / Embarques
+                        </h4>
+                        <p style="font-size: 0.8rem; color: #cbd5e1; margin-bottom: 0.75rem;">
+                            Selecciona cómo deseas agrupar los artículos de este cargue en Lotes Maestros de Inventario:
+                        </p>
+                        <select id="sel-criterio-lote" style="width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 8px; color: white; font-size: 0.88rem; font-weight: 700; cursor: pointer; outline: none;">
+                            <option value="FECHA_TRM" selected>💱 Por Fecha de Compra + Tasa de Cambio TRM (Predeterminado Importaciones USD)</option>
+                            <option value="PEDIDO_NUM">📄 Por Número de Pedido / Guía / Factura de Envío</option>
+                            <option value="FECHA_PROVEEDOR">🏢 Por Fecha de Compra + Proveedor</option>
+                            <option value="INDIVIDUAL">📦 Lote Único por Fila (Sin consolidar)</option>
+                        </select>
+                    </div>
+
                     <div id="diff-detector-container" style="margin-bottom: 1.5rem; display: none; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 1rem;">
                         <h4 style="color: #f59e0b; margin-bottom: 0.5rem;">⚠️ Diferencias Detectadas con Registros Existentes</h4>
                         <p style="font-size: 0.8rem; color: #cbd5e1; margin-bottom: 0.75rem;">Para evitar sobrescrituras silenciosas, confirma si deseas actualizar los precios o conservar los valores actuales:</p>
@@ -1706,7 +1722,8 @@
                 batch_id: currentBatchId,
                 mapeo_usuario: mapeo,
                 autorizaciones: { actualizar_precios: chkDiffs },
-                granularidad_costos: currentGranularidadCostos || 'POR_UNIDAD'
+                granularidad_costos: currentGranularidadCostos || 'POR_UNIDAD',
+                criterio_lote: document.getElementById('sel-criterio-lote') ? document.getElementById('sel-criterio-lote').value : 'FECHA_TRM'
             };
 
             try {
