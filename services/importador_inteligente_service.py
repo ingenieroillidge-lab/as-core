@@ -1835,10 +1835,12 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     envio_tot += c_env
             
             if envio_tot > 0:
-                avg_env = envio_tot / max(len(filas_mapeadas), 1)
+                cant_tot_unidades = sum(f["cant"] for f in filas_mapeadas)
+                avg_env = envio_tot / max(cant_tot_unidades, 1.0)
+                obs_flete = f"Flete total de ${envio_tot:,.0f} prorrateado entre {cant_tot_unidades:,.0f} unidades de la importación {undo_token}"
                 cursor.execute(
                     f"INSERT INTO costos_variables (negocio_id, concepto, tipo_calculo, base_calculo, valor, estado, observaciones) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'ACTIVO', {ph})",
-                    (negocio_id, 'Flete / Logística (Importación Excel)', 'POR_UNIDAD', 'COSTO', round(avg_env, 2), f'Registrado automáticamente desde importación masiva {undo_token}')
+                    (negocio_id, 'Flete / Logística (Importación Excel)', 'POR_UNIDAD', 'COSTO', round(avg_env, 2), obs_flete)
                 )
             
             time.sleep(0.05)
