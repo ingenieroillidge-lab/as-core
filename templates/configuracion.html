@@ -652,7 +652,7 @@
     <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
-        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
         function showSection(id) {
             document.querySelectorAll('.config-section').forEach(s => s.classList.remove('active'));
