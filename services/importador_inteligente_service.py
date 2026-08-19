@@ -672,26 +672,41 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
             # Columna existe (o se reporta explícitamente): usar el valor real tippado (incluso 0.0 si está vacía)
             abono_efectivo = abono_val
 
-        # Regla 5: Cartera y Alerta de Sobreabono
-        saldo_calc_as = max(0.0, total_v_row - abono_efectivo)
+        # Regla 5 & 7: Cartera, Descuentos y Alertas de Origen
         if abono_efectivo > total_v_row and total_v_row > 0:
             excedente = abono_efectivo - total_v_row
+            saldo_calc_as = 0.0
             advs.append(
                 f"⚠️ SOBREABONO (Fila #{fila_num}): Se reporta un pago de ${abono_efectivo:,.0f} mayor al total de la venta (${total_v_row:,.0f}). Excedente de ${excedente:,.0f} registrado para auditoría."
             )
-
-        # Regla 7: Contradicciones (Estado de Origen vs Realidad Financiera)
-        if concepto_est == "VENDIDA" and saldo_calc_as > 0.01:
+        elif concepto_est == "VENDIDA" and 0 < abono_efectivo < total_v_row:
+            if deuda_excel == 0.0:
+                # El emprendedor marcó VENDIDA, abonó menos que el catálogo y NO reportó deuda -> Descuento comercial
+                saldo_calc_as = 0.0
+                descuento_val = total_v_row - abono_efectivo
+                advs.append(
+                    f"💡 Descuento / Precio Especial (Fila #{fila_num}): Estado='{raw_est}' con Pago de ${abono_efectivo:,.0f} (Precio catálogo ${total_v_row:,.0f}, sin deuda reportada). "
+                    f"AS lo registra como Venta Pagada con Descuento de ${descuento_val:,.0f} (Saldo $0 en Cartera). Para registrar los ${descuento_val:,.0f} como crédito, asigna Estado='DEBE'."
+                )
+            else:
+                saldo_calc_as = max(0.0, total_v_row - abono_efectivo)
+                advs.append(
+                    f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', pero reporta una deuda de ${deuda_excel:,.0f}. "
+                    f"AS clasifica la venta como PARCIAL con Saldo de ${saldo_calc_as:,.0f} en Cartera."
+                )
+        elif concepto_est == "VENDIDA" and abono_efectivo <= 0.01 and total_v_row > 0:
+            saldo_calc_as = total_v_row
             advs.append(
-                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
-                f"pero reporta un saldo pendiente de ${saldo_calc_as:,.0f}. AS lo clasifica financieramente como "
-                f"{'PARCIAL' if abono_efectivo > 0 else 'PENDIENTE'}."
+                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', pero los abonos son $0. "
+                f"AS lo clasifica financieramente como PENDIENTE con Saldo de ${total_v_row:,.0f}."
             )
-        elif concepto_est == "DEBE" and saldo_calc_as <= 0.01 and total_v_row > 0:
+        elif concepto_est == "DEBE" and abono_efectivo >= total_v_row and total_v_row > 0:
+            saldo_calc_as = 0.0
             advs.append(
-                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', "
-                f"pero los pagos cubren el 100% de la venta (${total_v_row:,.0f}). AS lo clasifica financieramente como PAGADO."
+                f"⚠️ Inconsistencia de Origen (Fila #{fila_num}): El archivo indica Estado='{raw_est}', pero los pagos cubren el 100% de la venta (${total_v_row:,.0f}). AS lo clasifica financieramente como PAGADO."
             )
+        else:
+            saldo_calc_as = max(0.0, total_v_row - abono_efectivo)
 
         # Regla 6: Deuda del Excel vs Saldo AS
         if deuda_excel > 0 and abs(saldo_calc_as - deuda_excel) > 1.0:
@@ -1173,9 +1188,14 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
                 metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
 
-                # Manejo de Sobreabonos (Regla 2 & 5)
+                # Manejo de Sobreabonos y Descuentos Comerciales (Regla 2, 5 & Descuentos)
                 if abono_efectivo > total_v_row and total_v_row > 0:
                     excedente_abono = abono_efectivo - total_v_row
+                    saldo_calc = 0.0
+                    est_pago = "PAGADO"
+                elif concepto_est == "VENDIDA" and 0 < abono_efectivo < total_v_row and deuda_val == 0.0:
+                    # Descuento comercial: No genera saldo pendiente en Cartera (Saldo = 0, Estado = PAGADO)
+                    excedente_abono = 0.0
                     saldo_calc = 0.0
                     est_pago = "PAGADO"
                 else:
@@ -1674,9 +1694,14 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
                 metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
 
-                # Manejo de Sobreabonos (Regla 2 & 5)
+                # Manejo de Sobreabonos y Descuentos Comerciales (Regla 2, 5 & Descuentos)
                 if abono_efectivo > total_v_row and total_v_row > 0:
                     excedente_abono = abono_efectivo - total_v_row
+                    saldo_calc = 0.0
+                    est_pago = "PAGADO"
+                elif concepto_est == "VENDIDA" and 0 < abono_efectivo < total_v_row and deuda_val == 0.0:
+                    # Descuento comercial: No genera saldo pendiente en Cartera (Saldo = 0, Estado = PAGADO)
+                    excedente_abono = 0.0
                     saldo_calc = 0.0
                     est_pago = "PAGADO"
                 else:
