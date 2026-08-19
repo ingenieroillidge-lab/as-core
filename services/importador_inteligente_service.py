@@ -1827,6 +1827,20 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
             # ETAPA 5: Costos y Rentabilidad
             yield make_event("COSTOS", "Calculando costos y rentabilidad...", "processing", "Prorrateando fletes y costos de adquisición...")
+            
+            envio_tot = 0.0
+            for f in filas_mapeadas:
+                c_env = parse_money(f["mapped"].get('costo_envio'))
+                if c_env > 0:
+                    envio_tot += c_env
+            
+            if envio_tot > 0:
+                avg_env = envio_tot / max(len(filas_mapeadas), 1)
+                cursor.execute(
+                    f"INSERT INTO costos_variables (negocio_id, concepto, tipo_calculo, base_calculo, valor, estado, observaciones) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, 'ACTIVO', {ph})",
+                    (negocio_id, 'Flete / Logística (Importación Excel)', 'POR_UNIDAD', 'COSTO', round(avg_env, 2), f'Registrado automáticamente desde importación masiva {undo_token}')
+                )
+            
             time.sleep(0.05)
             yield make_event("COSTOS", "Costos y rentabilidad calculados", "completed", "✓ Costos landed por lote asignados")
 
