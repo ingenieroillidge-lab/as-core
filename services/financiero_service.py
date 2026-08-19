@@ -24,11 +24,16 @@ def obtener_resumen_financiero(negocio_id, mes_filtro=None, producto_id=None, me
     
     mes_actual = mes_filtro if mes_filtro else datetime.now().strftime("%Y-%m")
     res_f = ejecutar_query("SELECT SUM(valor) FROM costos_fijos WHERE mes = ? AND negocio_id=?", (mes_actual, negocio_id), fetch=True)
-    total_costos_f = res_f[0][0] or 0
+    total_costos_f = res_f[0][0] or 0.0
+
+    # Fallback 1: Si no hay costos fijos para este mes exacto, usar los costos fijos globales/más recientes del negocio
+    if total_costos_f == 0.0:
+        res_f_global = ejecutar_query("SELECT SUM(valor) FROM costos_fijos WHERE negocio_id=?", (negocio_id,), fetch=True)
+        total_costos_f = (res_f_global[0][0] or 0.0) if res_f_global else 0.0
     
     prods = ejecutar_query("SELECT id, nombre FROM productos WHERE negocio_id=?", (negocio_id,), fetch=True)
     
-    mcp = 0
+    mcp = 0.0
     analisis_productos = []
     for p_id, p_nombre in prods:
         p_ventas = [v for v in ventas if v[3] == p_id]
@@ -41,11 +46,24 @@ def obtener_resumen_financiero(negocio_id, mes_filtro=None, producto_id=None, me
         if p_unidades > 0:
             analisis_productos.append({"nombre": p_nombre, "unidades": p_unidades, "participacion": participacion * 100, "mcu": mcu})
 
-    punto_equilibrio = total_costos_f / mcp if mcp > 0 else 0
+    # Margen de Contribución Relativo % (Margen Global)
+    ratio_margen = (utilidad_bruta / total_ingresos) if total_ingresos > 0 else 0.0
+    
+    # Punto de Equilibrio en Pesos Facturados ($)
+    punto_equilibrio_pesos = (total_costos_f / ratio_margen) if ratio_margen > 0 else 0.0
+    
+    # Punto de Equilibrio en Unidades (#)
+    punto_equilibrio_unidades = (total_costos_f / mcp) if mcp > 0 else (punto_equilibrio_pesos / (total_ingresos / total_unidades) if (total_unidades > 0 and total_ingresos > 0) else 0.0)
+
     return {
         "ingresos": total_ingresos, "costos_v": total_costos_v, "costos_f": total_costos_f,
         "utilidad": utilidad_bruta - total_costos_f, "margen_contribucion": utilidad_bruta,
-        "mcp": mcp, "punto_equilibrio": punto_equilibrio, "unidades_totales": total_unidades,
+        "ratio_margen": ratio_margen * 100,
+        "mcp": mcp,
+        "punto_equilibrio": punto_equilibrio_unidades,
+        "punto_equilibrio_pesos": punto_equilibrio_pesos,
+        "unidades_totales": total_unidades,
+        "requiere_costos_fijos": bool(total_costos_f == 0.0),
         "detalle_productos": analisis_productos
     }
 
