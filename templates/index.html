@@ -467,11 +467,13 @@
                     if (elMargen) elMargen.textContent = formatCOP.format(data.margen_contribucion || data.utilidad || 0);
                     
                     if (elPe) {
-                        const udsEq = Math.ceil(data.punto_equilibrio || 0);
-                        if (data.costos_f > 0 && udsEq > 0) {
-                            elPe.textContent = `${udsEq} uds`;
+                        const rawEq = data.punto_equilibrio || 0;
+                        const pePesos = data.punto_equilibrio_pesos || 0;
+                        if (data.costos_f > 0 && pePesos > 0) {
+                            const udsEq = Math.max(1, Math.ceil(rawEq));
+                            elPe.textContent = `${udsEq} ud${udsEq > 1 ? 's' : ''}`;
                             const peSub = elPe.nextElementSibling;
-                            if (peSub) peSub.textContent = `${formatCOP.format(data.punto_equilibrio_pesos || 0)} / mes`;
+                            if (peSub) peSub.textContent = `${formatCOP.format(pePesos)} / mes sin pérdida`;
                         } else {
                             elPe.textContent = `0 uds`;
                             const peSub = elPe.nextElementSibling;
