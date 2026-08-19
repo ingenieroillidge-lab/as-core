@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Directorio Comercial 360° | AS CORE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-card: #151c2c;
+            --bg-hover: #1e293b;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #fb7185;
+            --purple: #c084fc;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 3rem; }
+
+        /* NAVEGACIÓN SUPERIOR */
+        nav {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.8rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .logo { font-weight: 800; font-size: 1.25rem; color: var(--accent); letter-spacing: -0.5px; }
+        .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+        .nav-links a { color: var(--text-secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; }
+        .nav-links a:hover, .nav-links a.active { color: var(--accent); }
+
+        /* CONTENEDOR PRINCIPAL */
+        main { max-width: 1300px; margin: 2rem auto; padding: 0 1.5rem; }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; }
+        .header h1 { font-size: 1.8rem; font-weight: 800; color: white; display: flex; align-items: center; gap: 10px; }
+        .header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+            color: #000;
+            font-weight: 800;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(56, 189, 248, 0.4); }
+
+        /* KPIS DE CLIENTES */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .kpi-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.2rem; }
+        .kpi-lbl { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; }
+        .kpi-val { font-size: 1.5rem; font-weight: 800; color: white; }
+
+        /* BARRA DE BÚSQUEDA Y FILTROS */
+        .filters-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .search-input {
+            flex: 1;
+            min-width: 280px;
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 16px;
+            color: white;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .search-input:focus { border-color: var(--accent); }
+
+        .filter-pills { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .pill {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pill.active, .pill:hover { background: rgba(56, 189, 248, 0.15); color: var(--accent); border-color: rgba(56, 189, 248, 0.3); }
+
+        /* GRID DE TARJETAS 360° */
+        .clients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; }
+        .client-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .client-card:hover { border-color: rgba(56, 189, 248, 0.4); transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+
+        .client-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+        .client-name { font-size: 1.1rem; font-weight: 800; color: white; margin-bottom: 2px; }
+        .client-meta { font-size: 0.78rem; color: var(--text-secondary); }
+
+        .badge-frecuencia {
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+        .badge-FRECUENTE { background: rgba(192, 132, 252, 0.15); color: var(--purple); border: 1px solid rgba(192, 132, 252, 0.3); }
+        .badge-RECIENTE { background: rgba(52, 211, 153, 0.15); color: var(--success); border: 1px solid rgba(52, 211, 153, 0.3); }
+        .badge-OCASIONAL { background: rgba(251, 191, 36, 0.15); color: var(--warning); border: 1px solid rgba(251, 191, 36, 0.3); }
+        .badge-NUEVO { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); border: 1px solid rgba(148, 163, 184, 0.3); }
+
+        .metrics-mini {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem;
+            margin: 1rem 0;
+        }
+        .metric-item-lbl { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; }
+        .metric-item-val { font-size: 0.95rem; font-weight: 800; color: white; }
+
+        .client-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+        .btn-action {
+            flex: 1;
+            padding: 7px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-primary);
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .btn-action:hover { background: rgba(56, 189, 248, 0.15); color: var(--accent); border-color: rgba(56, 189, 248, 0.3); }
+        .btn-action.btn-ws { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+        .btn-action.btn-ws:hover { background: rgba(34, 197, 94, 0.3); }
+
+        /* MODAL FICHA 360° */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+        }
+        .modal-card {
+            background: #151c2c;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);
+        }
+
+        .tab-subnav { display: flex; gap: 1rem; border-bottom: 1px solid var(--border-color); margin: 1.5rem 0 1rem 0; }
+        .tab-subbtn { padding: 8px 16px; font-weight: 700; color: var(--text-secondary); background: none; border: none; cursor: pointer; font-size: 0.85rem; border-bottom: 2px solid transparent; }
+        .tab-subbtn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">AS CORE</div>
+        <ul class="nav-links">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/ventas">Ventas</a></li>
+            <li><a href="/inventario">Inventario</a></li>
+            <li><a href="/cartera">Cartera</a></li>
+            <li><a href="/clientes" class="active">👥 Clientes</a></li>
+            {% if session.role == 'ADMIN' %}
+            <li><a href="/analisis">Análisis</a></li>
+            <li><a href="/configuracion">Configuración</a></li>
+            {% endif %}
+            <li><a href="/logout" style="color: #fb7185;">Salir</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="header">
+            <div>
+                <h1>👥 Directorio Comercial 360°</h1>
+                <p>Relaciones comerciales, comportamiento transaccional e inteligencia de cartera en una fuente única.</p>
+            </div>
+            <button class="btn-primary" onclick="mostrarModalNuevoCliente()">
+                + Registrar Cliente
+            </button>
+        </div>
+
+        <!-- KPIS CENTRALES -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-lbl">👥 Clientes Registrados</div>
+                <div class="kpi-val" id="kpi-tot-clientes">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">🔥 Clientes Frecuentes</div>
+                <div class="kpi-val" id="kpi-frecuentes" style="color: var(--purple);">0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">💰 Ventas Totales Clientes</div>
+                <div class="kpi-val" id="kpi-compras-totales" style="color: var(--accent);">$0</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-lbl">💳 Cartera Activa Global</div>
+                <div class="kpi-val" id="kpi-cartera-activa" style="color: var(--danger);">$0</div>
+            </div>
+        </div>
+
+        <!-- BÚSQUEDA Y FILTROS -->
+        <div class="filters-bar">
+            <input type="text" id="input-busqueda" class="search-input" placeholder="🔍 Buscar por nombre, NIT/Documento, teléfono o WhatsApp..." oninput="filtrarDirectorio()">
+            
+            <div class="filter-pills">
+                <button class="pill active" data-filtro="todos" onclick="setFiltro(this, 'todos')">Todos los Clientes</button>
+                <button class="pill" data-filtro="con_cartera" onclick="setFiltro(this, 'con_cartera')">💳 Con Cartera Activa</button>
+                <button class="pill" data-filtro="frecuentes" onclick="setFiltro(this, 'frecuentes')">🔥 Frecuentes & Recientes</button>
+                <button class="pill" data-filtro="al_dia" onclick="setFiltro(this, 'al_dia')">🟢 Al Día (Sin Deuda)</button>
+            </div>
+        </div>
+
+        <!-- REJILLA DE CLIENTES 360° -->
+        <div id="clients-container" class="clients-grid">
+            <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 3rem;">
+                Cargando directorio comercial 360°...
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL FICHA 360° DEL CLIENTE -->
+    <div id="modal-ficha-360" class="modal-overlay">
+        <div class="modal-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                <div>
+                    <h2 id="f360-nombre" style="color: white; font-size: 1.4rem; margin-bottom: 4px;">Nombre del Cliente</h2>
+                    <div id="f360-meta" style="color: var(--text-secondary); font-size: 0.85rem;">NIT/Doc: - | Tel: -</div>
+                </div>
+                <button onclick="cerrarModalFicha360()" style="background: none; border: none; color: var(--text-secondary); font-size: 1.6rem; cursor: pointer;">✕</button>
+            </div>
+
+            <!-- BLOQUE KPIS FICHA -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 1rem;">
+                <div class="kpi-card" style="padding: 0.85rem;">
+                    <div class="kpi-lbl">Total Comprado</div>
+                    <div class="kpi-val" id="f360-kpi-comprado" style="font-size: 1.1rem; color: var(--accent);">$0</div>
+                </div>
+                <div class="kpi-card" style="padding: 0.85rem;">
+                    <div class="kpi-lbl">Operaciones</div>
+                    <div class="kpi-val" id="f360-kpi-ops" style="font-size: 1.1rem;">0</div>
+                </div>
+                <div class="kpi-card" style="padding: 0.85rem;">
+                    <div class="kpi-lbl">Ticket Promedio</div>
+                    <div class="kpi-val" id="f360-kpi-ticket" style="font-size: 1.1rem; color: var(--success);">$0</div>
+                </div>
+                <div class="kpi-card" style="padding: 0.85rem;">
+                    <div class="kpi-lbl">Saldo Pendiente</div>
+                    <div class="kpi-val" id="f360-kpi-saldo" style="font-size: 1.1rem; color: var(--danger);">$0</div>
+                </div>
+            </div>
+
+            <!-- NAVEGACIÓN DENTRO DE LA FICHA -->
+            <div class="tab-subnav">
+                <button class="tab-subbtn active" onclick="verSubTab('f360-tab-compras', event)">🛒 Histórico de Compras</button>
+                <button class="tab-subbtn" onclick="verSubTab('f360-tab-abonos', event)">💳 Histórico de Pagos / Abonos</button>
+                <button class="tab-subbtn" onclick="verSubTab('f360-tab-info', event)">📝 Datos de Contacto & Crédito</button>
+            </div>
+
+            <!-- CONTENIDO TAB 1: COMPRAS -->
+            <div id="f360-tab-compras" class="f360-subtab">
+                <div style="overflow-x: auto; max-height: 280px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.83rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-align: left;">
+                                <th style="padding: 8px;">Fecha</th>
+                                <th style="padding: 8px;">Producto</th>
+                                <th style="padding: 8px; text-align: right;">Cant</th>
+                                <th style="padding: 8px; text-align: right;">Total ($)</th>
+                                <th style="padding: 8px; text-align: right;">Saldo ($)</th>
+                                <th style="padding: 8px; text-align: center;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="f360-tbl-compras">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 1rem;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CONTENIDO TAB 2: ABONOS -->
+            <div id="f360-tab-abonos" class="f360-subtab" style="display: none;">
+                <div style="overflow-x: auto; max-height: 280px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.83rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-align: left;">
+                                <th style="padding: 8px;">Fecha</th>
+                                <th style="padding: 8px;">Método de Pago</th>
+                                <th style="padding: 8px; text-align: right;">Monto Abonado ($)</th>
+                                <th style="padding: 8px;">Notas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="f360-tbl-abonos">
+                            <tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 1rem;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CONTENIDO TAB 3: CONTACTO Y CRÉDITO -->
+            <div id="f360-tab-info" class="f360-subtab" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; background: rgba(15, 23, 42, 0.5); padding: 1rem; border-radius: 12px; font-size: 0.85rem;">
+                    <div><strong>Dirección:</strong> <span id="f360-dir">-</span></div>
+                    <div><strong>Email:</strong> <span id="f360-email">-</span></div>
+                    <div><strong>Cupo de Crédito:</strong> <span id="f360-cupo" style="color: var(--success); font-weight: 700;">$0</span></div>
+                    <div><strong>Días Crédito:</strong> <span id="f360-dias">- días</span></div>
+                    <div><strong>Producto Favorito:</strong> <span id="f360-prod-fav" style="color: var(--purple); font-weight: 700;">-</span></div>
+                    <div><strong>Última Compra:</strong> <span id="f360-ult-fecha">-</span></div>
+                </div>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN NAVEGACIÓN CRUZADA -->
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <a id="f360-btn-cartera" href="#" class="btn-action" style="background: rgba(251, 113, 133, 0.15); color: var(--danger); border-color: rgba(251, 113, 133, 0.3); font-weight: 800;">
+                    💳 Ver Cartera del Cliente
+                </a>
+                <a id="f360-btn-compras" href="#" class="btn-action" style="background: rgba(56, 189, 248, 0.15); color: var(--accent); border-color: rgba(56, 189, 248, 0.3); font-weight: 800;">
+                    🛒 Ver Análisis de Compras
+                </a>
+                <a id="f360-btn-ws" href="#" target="_blank" class="btn-action btn-ws" style="font-weight: 800;">
+                    💬 Abrir WhatsApp
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO / EDITAR CLIENTE -->
+    <div id="modal-nuevo-cliente" class="modal-overlay">
+        <div class="modal-card" style="max-width: 500px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+                <h3 style="color: var(--accent); font-size: 1.1rem;">👤 Registrar / Editar Cliente</h3>
+                <button onclick="cerrarModalNuevoCliente()" style="background: none; border: none; color: var(--text-secondary); font-size: 1.4rem; cursor: pointer;">✕</button>
+            </div>
+            <form id="form-cliente" onsubmit="guardarCliente(event)">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Nombre Completo / Razón Social *</label>
+                    <input type="text" id="cli-nombre" placeholder="Ej: Juan Pérez o Distribuidora Andina" required style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Documento / NIT</label>
+                        <input type="text" id="cli-doc" placeholder="Ej: 1098765432" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Teléfono / WhatsApp</label>
+                        <input type="text" id="cli-tel" placeholder="Ej: 3001234567" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Cupo de Crédito ($)</label>
+                        <input type="number" id="cli-cupo" placeholder="Ej: 500000" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Días Crédito</label>
+                        <input type="number" id="cli-dias" placeholder="15" value="15" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                    </div>
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Dirección de Entrega</label>
+                    <input type="text" id="cli-dir" placeholder="Ej: Calle 45 # 23-10, Bogotá" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: white; font-size: 0.88rem;">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" style="flex: 1; background: var(--accent); color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem;">
+                        💾 Guardar Cliente
+                    </button>
+                    <button type="button" onclick="cerrarModalNuevoCliente()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid var(--border-color); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        let clientesData = [];
+        let filtroActual = 'todos';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarClientes360();
+        });
+
+        async function cargarClientes360() {
+            try {
+                const res = await fetch('/api/clientes/360');
+                clientesData = await res.json();
+                actualizarKPIsGlobales(clientesData);
+                filtrarDirectorio();
+            } catch(err) {
+                console.error("Error al cargar clientes:", err);
+            }
+        }
+
+        function actualizarKPIsGlobales(data) {
+            document.getElementById('kpi-tot-clientes').textContent = data.length;
+            const frecuentes = data.filter(c => c.frecuencia === 'FRECUENTE' || c.frecuencia === 'RECIENTE').length;
+            document.getElementById('kpi-frecuentes').textContent = frecuentes;
+            const totalCompras = data.reduce((sum, c) => sum + c.total_compras, 0);
+            document.getElementById('kpi-compras-totales').textContent = formatCOP.format(totalCompras);
+            const carteraActiva = data.reduce((sum, c) => sum + c.saldo_pendiente, 0);
+            document.getElementById('kpi-cartera-activa').textContent = formatCOP.format(carteraActiva);
+        }
+
+        function setFiltro(btn, filtro) {
+            document.querySelectorAll('.filter-pills .pill').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            filtroActual = filtro;
+            filtrarDirectorio();
+        }
+
+        function filtrarDirectorio() {
+            const term = (document.getElementById('input-busqueda').value || '').toLowerCase().strip ? document.getElementById('input-busqueda').value.toLowerCase().trim() : document.getElementById('input-busqueda').value.toLowerCase();
+            
+            let list = clientesData.filter(c => {
+                const nom = (c.nombre || '').toLowerCase();
+                const doc = (c.documento || '').toLowerCase();
+                const tel = (c.telefono || '').toLowerCase();
+                const ws = (c.whatsapp || '').toLowerCase();
+                return nom.includes(term) || doc.includes(term) || tel.includes(term) || ws.includes(term);
+            });
+
+            if (filtroActual === 'con_cartera') {
+                list = list.filter(c => c.tiene_cartera_activa);
+            } else if (filtroActual === 'frecuentes') {
+                list = list.filter(c => c.frecuencia === 'FRECUENTE' || c.frecuencia === 'RECIENTE');
+            } else if (filtroActual === 'al_dia') {
+                list = list.filter(c => !c.tiene_cartera_activa && c.operaciones > 0);
+            }
+
+            renderGridClientes(list);
+        }
+
+        function renderGridClientes(list) {
+            const container = document.getElementById('clients-container');
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 3rem;">
+                        No se encontraron clientes para este filtro o búsqueda.
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = list.map(c => {
+                const wsClean = c.whatsapp ? c.whatsapp.replace(/\D/g, '') : '';
+                const wsUrl = wsClean ? `https://wa.me/57${wsClean}` : '#';
+
+                return `
+                    <div class="client-card">
+                        <div>
+                            <div class="client-header">
+                                <div>
+                                    <div class="client-name">${c.nombre}</div>
+                                    <div class="client-meta">${c.documento ? `Doc: ${c.documento} | ` : ''}Tel: ${c.telefono || 'Sin teléfono'}</div>
+                                </div>
+                                <span class="badge-frecuencia badge-${c.frecuencia}">${c.frecuencia}</span>
+                            </div>
+
+                            <div class="metrics-mini">
+                                <div>
+                                    <div class="metric-item-lbl">Total Comprado</div>
+                                    <div class="metric-item-val" style="color: var(--accent);">${formatCOP.format(c.total_compras)}</div>
+                                </div>
+                                <div>
+                                    <div class="metric-item-lbl">Operaciones</div>
+                                    <div class="metric-item-val">${c.operaciones} compras</div>
+                                </div>
+                                <div>
+                                    <div class="metric-item-lbl">Ticket Promedio</div>
+                                    <div class="metric-item-val" style="color: var(--success);">${formatCOP.format(c.ticket_promedio)}</div>
+                                </div>
+                                <div>
+                                    <div class="metric-item-lbl">Saldo Cartera</div>
+                                    <div class="metric-item-val" style="color: ${c.saldo_pendiente > 0 ? 'var(--danger)' : '#94a3b8'};">
+                                        ${formatCOP.format(c.saldo_pendiente)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="client-actions">
+                            <button onclick="abrirFicha360(${c.id})" class="btn-action" style="font-weight: 800;">
+                                👁️ Ficha 360°
+                            </button>
+                            <a href="/cartera?cliente=${encodeURIComponent(c.nombre)}" class="btn-action">
+                                💳 Cartera
+                            </a>
+                            <a href="/analisis?cliente=${encodeURIComponent(c.nombre)}" class="btn-action">
+                                🛒 Compras
+                            </a>
+                            ${wsClean ? `
+                                <a href="${wsUrl}" target="_blank" class="btn-action btn-ws" title="Enviar WhatsApp">
+                                    💬
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function abrirFicha360(cid) {
+            try {
+                const res = await fetch(`/api/clientes/360/${cid}`);
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || "Error al cargar la ficha");
+                    return;
+                }
+
+                const c = data.cliente;
+                const k = data.kpis;
+
+                document.getElementById('f360-nombre').textContent = c.nombre;
+                document.getElementById('f360-meta').textContent = `Doc: ${c.documento || 'No especificado'} | Tel: ${c.telefono || 'No especificado'}`;
+                
+                document.getElementById('f360-kpi-comprado').textContent = formatCOP.format(k.total_compras);
+                document.getElementById('f360-kpi-ops').textContent = k.operaciones;
+                document.getElementById('f360-kpi-ticket').textContent = formatCOP.format(k.ticket_promedio);
+                document.getElementById('f360-kpi-saldo').textContent = formatCOP.format(k.saldo_pendiente);
+
+                document.getElementById('f360-dir').textContent = c.direccion || 'Sin registrar';
+                document.getElementById('f360-email').textContent = c.email || 'Sin registrar';
+                document.getElementById('f360-cupo').textContent = formatCOP.format(c.limite_credito);
+                document.getElementById('f360-dias').textContent = `${c.dias_credito} días`;
+                document.getElementById('f360-prod-fav').textContent = k.producto_preferido;
+                document.getElementById('f360-ult-fecha').textContent = k.ultima_compra || 'Sin compras';
+
+                // Enlaces de navegación cruzada
+                document.getElementById('f360-btn-cartera').href = `/cartera?cliente=${encodeURIComponent(c.nombre)}`;
+                document.getElementById('f360-btn-compras').href = `/analisis?cliente=${encodeURIComponent(c.nombre)}`;
+                const wsClean = (c.whatsapp || c.telefono || '').replace(/\D/g, '');
+                document.getElementById('f360-btn-ws').href = wsClean ? `https://wa.me/57${wsClean}` : '#';
+
+                // Tabla Compras
+                const tbodyC = document.getElementById('f360-tbl-compras');
+                tbodyC.innerHTML = data.historial_compras.length > 0 ? data.historial_compras.map(h => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 8px;">${h.fecha}</td>
+                        <td style="padding: 8px; font-weight: 700; color: white;">${h.producto}</td>
+                        <td style="padding: 8px; text-align: right;">${h.cantidad}</td>
+                        <td style="padding: 8px; text-align: right; color: var(--accent); font-weight: 700;">${formatCOP.format(h.total)}</td>
+                        <td style="padding: 8px; text-align: right; color: ${h.saldo_pendiente > 0 ? 'var(--danger)' : '#94a3b8'};">${formatCOP.format(h.saldo_pendiente)}</td>
+                        <td style="padding: 8px; text-align: center;"><span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 8px; background: rgba(255,255,255,0.08);">${h.estado_pago}</span></td>
+                    </tr>
+                `).join('') : '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 1rem;">Sin compras registradas.</td></tr>';
+
+                // Tabla Abonos
+                const tbodyA = document.getElementById('f360-tbl-abonos');
+                tbodyA.innerHTML = data.historial_abonos.length > 0 ? data.historial_abonos.map(a => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 8px;">${a.fecha}</td>
+                        <td style="padding: 8px; color: var(--accent); font-weight: 600;">${a.metodo_pago}</td>
+                        <td style="padding: 8px; text-align: right; color: var(--success); font-weight: 800;">${formatCOP.format(a.monto)}</td>
+                        <td style="padding: 8px; color: var(--text-secondary);">${a.observacion || '-'}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 1rem;">Sin abonos registrados.</td></tr>';
+
+                document.getElementById('modal-ficha-360').style.display = 'flex';
+            } catch(err) {
+                console.error("Error al abrir Ficha 360°:", err);
+            }
+        }
+
+        function verSubTab(id, e) {
+            document.querySelectorAll('.f360-subtab').forEach(t => t.style.display = 'none');
+            document.querySelectorAll('.tab-subbtn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).style.display = 'block';
+            e.target.classList.add('active');
+        }
+
+        function cerrarModalFicha360() {
+            document.getElementById('modal-ficha-360').style.display = 'none';
+        }
+
+        function mostrarModalNuevoCliente() {
+            document.getElementById('form-cliente').reset();
+            document.getElementById('modal-nuevo-cliente').style.display = 'flex';
+        }
+
+        function cerrarModalNuevoCliente() {
+            document.getElementById('modal-nuevo-cliente').style.display = 'none';
+        }
+
+        async function guardarCliente(e) {
+            e.preventDefault();
+            const data = {
+                nombre: document.getElementById('cli-nombre').value,
+                documento: document.getElementById('cli-doc').value,
+                telefono: document.getElementById('cli-tel').value,
+                whatsapp: document.getElementById('cli-tel').value,
+                direccion: document.getElementById('cli-dir').value,
+                limite_credito: parseFloat(document.getElementById('cli-cupo').value || 0),
+                dias_credito_predeterminado: parseInt(document.getElementById('cli-dias').value || 15)
+            };
+
+            try {
+                const res = await fetch('/api/clientes', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    alert("Cliente guardado con éxito");
+                    cerrarModalNuevoCliente();
+                    cargarClientes360();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || "Error al guardar cliente");
+                }
+            } catch(err) {
+                alert("Error de conexión");
+            }
+        }
+    </script>
+</body>
+</html>

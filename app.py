@@ -7,6 +7,7 @@ import services.cartera_service as cartera_service
 import services.importador_inteligente_service as importador_service
 import services.costos_variables_service as costos_variables_service
 import services.analisis_service as analisis_service
+import services.clientes_service as clientes_service
 from database import conectar, crear_tablas, ejecutar_query
 
 from datetime import datetime, timedelta
@@ -1044,6 +1045,29 @@ def h_clientes():
         return jsonify({"message": "ok", "id": res}) if ok else (jsonify({"error": res}), 400)
     else:
         return jsonify(cartera_service.obtener_clientes(nid))
+
+@app.route('/clientes')
+@login_required
+def view_clientes():
+    return render_template('clientes.html')
+
+@app.route('/api/clientes/360')
+@login_required
+def api_clientes_360():
+    nid = session['negocio_id']
+    q = request.args.get('q')
+    filtro = request.args.get('filtro')
+    directorio = clientes_service.obtener_directorio_clientes_360(nid, busqueda=q, filtro_estado=filtro)
+    return jsonify(directorio)
+
+@app.route('/api/clientes/360/<int:cid>')
+@login_required
+def api_clientes_360_detail(cid):
+    nid = session['negocio_id']
+    ok, msg, ficha = clientes_service.obtener_ficha_cliente_360(cid, nid)
+    if ok:
+        return jsonify(ficha)
+    return jsonify({"error": msg}), 404
 
 @app.route('/api/diagnostico')
 @login_required
