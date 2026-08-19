@@ -245,17 +245,17 @@
             </div>
 
             <div class="table-container">
-                <table>
+                <table id="tbl-cartera">
                     <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Cliente / Deudor</th>
-                            <th>Producto / Concepto</th>
-                            <th>Total Venta</th>
-                            <th>Abonado</th>
-                            <th>Saldo Pendiente</th>
-                            <th>Vencimiento</th>
-                            <th>Estado</th>
+                        <tr style="user-select: none;">
+                            <th onclick="sortTabla('tbl-cartera', 0, 'string')" style="cursor: pointer;" title="Haz clic para ordenar">Fecha ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 1, 'string')" style="cursor: pointer;" title="Haz clic para ordenar">Cliente / Deudor ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 2, 'string')" style="cursor: pointer;" title="Haz clic para ordenar">Producto / Concepto ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 3, 'money')" style="cursor: pointer;" title="Haz clic para ordenar">Total Venta ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 4, 'money')" style="cursor: pointer;" title="Haz clic para ordenar">Abonado ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 5, 'money')" style="cursor: pointer;" title="Haz clic para ordenar">Saldo Pendiente ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 6, 'string')" style="cursor: pointer;" title="Haz clic para ordenar">Vencimiento ↕️</th>
+                            <th onclick="sortTabla('tbl-cartera', 7, 'string')" style="cursor: pointer;" title="Haz clic para ordenar">Estado ↕️</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -470,6 +470,35 @@
                 </table>` : '<div style="text-align: center; color: var(--text-secondary); padding: 1.5rem;">No hay abonos.</div>';
         }
         function cerrarModalHistorial() { document.getElementById('modal-historial').style.display = 'none'; }
+        let sortDirs = {};
+        function sortTabla(tableId, colIndex, dataType) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (rows.length <= 1) return;
+
+            const key = tableId + '_' + colIndex;
+            const dir = sortDirs[key] === 'asc' ? 'desc' : 'asc';
+            sortDirs[key] = dir;
+
+            rows.sort((a, b) => {
+                let valA = a.children[colIndex] ? a.children[colIndex].innerText.trim() : '';
+                let valB = b.children[colIndex] ? b.children[colIndex].innerText.trim() : '';
+
+                if (dataType === 'number' || dataType === 'money') {
+                    let numA = parseFloat(valA.replace(/[^0-9.-]+/g, '')) || 0;
+                    let numB = parseFloat(valB.replace(/[^0-9.-]+/g, '')) || 0;
+                    return dir === 'asc' ? numA - numB : numB - numA;
+                } else {
+                    return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
         document.addEventListener('DOMContentLoaded', loadCartera);
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css') }}">

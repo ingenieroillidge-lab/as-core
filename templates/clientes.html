@@ -260,11 +260,20 @@
         <div class="filters-bar">
             <input type="text" id="input-busqueda" class="search-input" placeholder="🔍 Buscar por nombre, NIT/Documento, teléfono o WhatsApp..." oninput="filtrarDirectorio()">
             
-            <div class="filter-pills">
-                <button class="pill active" data-filtro="todos" onclick="setFiltro(this, 'todos')">Todos los Clientes</button>
-                <button class="pill" data-filtro="con_cartera" onclick="setFiltro(this, 'con_cartera')">💳 Con Cartera Activa</button>
-                <button class="pill" data-filtro="frecuentes" onclick="setFiltro(this, 'frecuentes')">🔥 Frecuentes & Recientes</button>
-                <button class="pill" data-filtro="al_dia" onclick="setFiltro(this, 'al_dia')">🟢 Al Día (Sin Deuda)</button>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                <select id="select-orden" onchange="filtrarDirectorio()" style="background: #0f172a; border: 1px solid var(--border-color); color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; outline: none; cursor: pointer;">
+                    <option value="compras_desc" selected>📊 Mayor Compra ($)</option>
+                    <option value="cartera_desc">🚨 Mayor Saldo Cartera ($)</option>
+                    <option value="ops_desc">⚡ Más Operaciones (#)</option>
+                    <option value="nombre_asc">🔤 Nombre (A - Z)</option>
+                </select>
+
+                <div class="filter-pills">
+                    <button class="pill active" data-filtro="todos" onclick="setFiltro(this, 'todos')">Todos los Clientes</button>
+                    <button class="pill" data-filtro="con_cartera" onclick="setFiltro(this, 'con_cartera')">💳 Con Cartera Activa</button>
+                    <button class="pill" data-filtro="frecuentes" onclick="setFiltro(this, 'frecuentes')">🔥 Frecuentes & Recientes</button>
+                    <button class="pill" data-filtro="al_dia" onclick="setFiltro(this, 'al_dia')">🟢 Al Día (Sin Deuda)</button>
+                </div>
             </div>
         </div>
 
@@ -467,7 +476,8 @@
         }
 
         function filtrarDirectorio() {
-            const term = (document.getElementById('input-busqueda').value || '').toLowerCase().strip ? document.getElementById('input-busqueda').value.toLowerCase().trim() : document.getElementById('input-busqueda').value.toLowerCase();
+            const rawTerm = document.getElementById('input-busqueda').value || '';
+            const term = rawTerm.toLowerCase().trim();
             
             let list = clientesData.filter(c => {
                 const nom = (c.nombre || '').toLowerCase();
@@ -483,6 +493,17 @@
                 list = list.filter(c => c.frecuencia === 'FRECUENTE' || c.frecuencia === 'RECIENTE');
             } else if (filtroActual === 'al_dia') {
                 list = list.filter(c => !c.tiene_cartera_activa && c.operaciones > 0);
+            }
+
+            const orden = document.getElementById('select-orden').value;
+            if (orden === 'nombre_asc') {
+                list.sort((a,b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            } else if (orden === 'compras_desc') {
+                list.sort((a,b) => b.total_compras - a.total_compras);
+            } else if (orden === 'cartera_desc') {
+                list.sort((a,b) => b.saldo_pendiente - a.saldo_pendiente);
+            } else if (orden === 'ops_desc') {
+                list.sort((a,b) => b.operaciones - a.operaciones);
             }
 
             renderGridClientes(list);
