@@ -47,6 +47,7 @@
             <button class="tab-btn" onclick="showSection('sec-perfil')">🏢 Perfil y Marca</button>
             <button class="tab-btn" onclick="showSection('sec-importador-inteligente')">🧠 Importador Inteligente</button>
             <button class="tab-btn" onclick="showSection('sec-costos-variables')">🚚 Costos Variables</button>
+            <button class="tab-btn" onclick="showSection('sec-costos-fijos')">🏢 Costos Fijos</button>
             <button class="tab-btn" onclick="showSection('sec-cargue')">📥 Cargue Básico (Plantillas)</button>
             <button class="tab-btn" onclick="showSection('sec-usuarios')">Gestión de Usuarios</button>
             <button class="tab-btn" onclick="showSection('sec-mantenimiento')" style="color: #fb7185;">Mantenimiento</button>
@@ -535,6 +536,37 @@
             </div>
         </div>
 
+        <!-- SECCIÓN COSTOS FIJOS -->
+        <div id="sec-costos-fijos" class="config-section">
+            <div class="card" style="max-width: 900px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="color: #c084fc; margin: 0;">🏢 Gestión de Costos Fijos Mensuales</h3>
+                        <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 4px;">Registra los gastos fijos del negocio (arriendo, servicios, nómina, software) necesarios para calcular la Utilidad Neta y el Punto de Equilibrio.</p>
+                    </div>
+                    <button type="button" onclick="mostrarModalNuevoCostoFijo()" style="background: #c084fc; color: black; font-weight: 800; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                        + Nuevo Costo Fijo
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto; max-height: 350px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: #94a3b8; text-align: left;">
+                                <th style="padding: 10px;">Concepto / Gastos</th>
+                                <th style="padding: 10px;">Mes / Período</th>
+                                <th style="padding: 10px; text-align: right;">Valor Mensual ($)</th>
+                                <th style="padding: 10px; text-align: center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-costos-fijos-body">
+                            <tr><td colspan="4" style="text-align: center; color: #666; padding: 12px;">Cargando costos fijos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- SECCIÓN CARGUE MASIVO Y PLANTILLAS -->
         <div id="sec-cargue" class="config-section">
 
@@ -701,6 +733,40 @@
         </div>
     </div>
 
+    <!-- MODAL NUEVO COSTO FIJO MENSUAL -->
+    <div id="modal-costo-fijo" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #1e293b; border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 16px; width: 90%; max-width: 480px; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; color: #c084fc; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    🏢 Registrar Costo Fijo Mensual
+                </h3>
+                <button onclick="cerrarModalCostoFijo()" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">✕</button>
+            </div>
+            <form id="form-costo-fijo" onsubmit="guardarCostoFijo(event)">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Concepto / Gastos *</label>
+                    <input type="text" id="cf-concepto" placeholder="Ej: Arriendo de local, Nómina, Servicios públicos, Software" required style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.88rem;">
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Valor Mensual ($) *</label>
+                    <input type="number" step="0.01" id="cf-valor" placeholder="Ej: 1500000 para $1.500.000" required style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.88rem;">
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Mes (AAAA-MM)</label>
+                    <input type="month" id="cf-mes" style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: white; font-size: 0.88rem;">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" style="flex: 1; background: #c084fc; color: black; font-weight: 800; padding: 0.75rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9rem;">
+                        💾 Guardar Costo Fijo
+                    </button>
+                    <button type="button" onclick="cerrarModalCostoFijo()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='lang_engine.js') }}"></script>
     <script src="{{ url_for('static', filename='theme_engine.js') }}"></script>
     <script>
@@ -781,12 +847,90 @@
                 document.getElementById('lbl-resumen-cartera').textContent = data.maneja_cartera == 1 ? '✅ Activa (Cartera, Clientes y Abonos)' : '❌ Inactiva (Solo cobros al contado)';
                 
                 document.getElementById('swatch-resumen-color').style.background = data.color_acento || '#38bdf8';
+                document.getElementById('swatch-resumen-color').style.background = data.color_acento || '#38bdf8';
                 document.getElementById('acento-hex-lbl').textContent = data.color_acento || '#38bdf8';
             }
             loadUsuarios();
             loadCostosVariables();
+            loadCostosFijos();
             aplicarTemaVisual();
             aplicarTraduccionOperativa();
+        }
+
+        // GESTIÓN DE COSTOS FIJOS MENSUALES
+        async function loadCostosFijos() {
+            try {
+                const res = await fetch('/api/costos-fijos');
+                const data = await res.json();
+                const tbody = document.getElementById('tbl-costos-fijos-body');
+                if (!tbody) return;
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 1.5rem;">No hay costos fijos registrados aún. Haz clic en '+ Nuevo Costo Fijo' para ingresar tus gastos mensuales (arriendo, servicios, nómina).</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = data.map(c => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 10px;"><strong style="color: white;">${c.concepto}</strong></td>
+                        <td style="padding: 10px; color: #c084fc; font-weight: 600;">${c.mes || 'Global / Recurrente'}</td>
+                        <td style="padding: 10px; text-align: right; font-weight: 800; color: #34d399;">${formatCOP.format(c.valor)}</td>
+                        <td style="padding: 10px; text-align: center;">
+                            <button onclick="eliminarCostoFijo(${c.id}, '${c.concepto.replace(/'/g, "\\'")}')" style="background: rgba(251, 113, 133, 0.15); color: #fb7185; border: 1px solid rgba(251, 113, 133, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Eliminar</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(err) {
+                console.error("Error al cargar costos fijos:", err);
+            }
+        }
+
+        function mostrarModalNuevoCostoFijo() {
+            document.getElementById('form-costo-fijo').reset();
+            document.getElementById('modal-costo-fijo').style.display = 'flex';
+        }
+
+        function cerrarModalCostoFijo() {
+            document.getElementById('modal-costo-fijo').style.display = 'none';
+        }
+
+        async function guardarCostoFijo(e) {
+            e.preventDefault();
+            const data = {
+                concepto: document.getElementById('cf-concepto').value,
+                valor: parseFloat(document.getElementById('cf-valor').value),
+                mes: document.getElementById('cf-mes').value
+            };
+            try {
+                const res = await fetch('/api/costos-fijos', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const resp = await res.json();
+                if (res.ok) {
+                    alert(resp.message || "Costo fijo registrado exitosamente.");
+                    cerrarModalCostoFijo();
+                    loadCostosFijos();
+                } else {
+                    alert(resp.error || "No se pudo guardar el costo fijo.");
+                }
+            } catch(err) {
+                alert("Error al procesar la solicitud.");
+            }
+        }
+
+        async function eliminarCostoFijo(id, concepto) {
+            if (!confirm(`¿Deseas eliminar el costo fijo '${concepto}'?`)) return;
+            try {
+                const res = await fetch(`/api/costos-fijos/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (res.ok) {
+                    loadCostosFijos();
+                } else {
+                    alert(data.error || "Error al eliminar");
+                }
+            } catch(err) {
+                alert("Error de conexión");
+            }
         }
 
         // GESTIÓN DE COSTOS VARIABLES & LOGÍSTICOS

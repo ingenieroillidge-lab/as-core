@@ -1618,6 +1618,37 @@ def api_costos_variables_detail(cid):
         )
         return jsonify({"message": msg}) if ok else (jsonify({"error": msg}), 400)
 
+@app.route('/api/costos-fijos', methods=['GET', 'POST'])
+@login_required
+def api_costos_fijos():
+    nid = session['negocio_id']
+    if request.method == 'POST':
+        d = request.json or {}
+        concepto = (d.get('concepto') or '').strip()
+        valor = float(d.get('valor') or 0.0)
+        mes = d.get('mes') or datetime.now().strftime("%Y-%m")
+        if not concepto:
+            return jsonify({"error": "El concepto es obligatorio"}), 400
+        ejecutar_query(
+            "INSERT INTO costos_fijos (negocio_id, concepto, valor, mes) VALUES (?, ?, ?, ?)",
+            (nid, concepto, valor, mes)
+        )
+        return jsonify({"message": "Costo fijo registrado con éxito"})
+    else:
+        mes = request.args.get('mes')
+        if mes:
+            res = ejecutar_query("SELECT id, concepto, valor, mes FROM costos_fijos WHERE negocio_id=? AND mes=? ORDER BY id DESC", (nid, mes), fetch=True) or []
+        else:
+            res = ejecutar_query("SELECT id, concepto, valor, mes FROM costos_fijos WHERE negocio_id=? ORDER BY id DESC", (nid,), fetch=True) or []
+        return jsonify([{"id": x[0], "concepto": x[1], "valor": x[2], "mes": x[3]} for x in res])
+
+@app.route('/api/costos-fijos/<int:cid>', methods=['DELETE'])
+@login_required
+def api_costos_fijos_delete(cid):
+    nid = session['negocio_id']
+    ejecutar_query("DELETE FROM costos_fijos WHERE id=? AND negocio_id=?", (cid, nid))
+    return jsonify({"message": "Costo fijo eliminado con éxito"})
+
 
 # ==========================
 # API: MANTENIMIENTO Y BACKUP DE SEGURIDAD
