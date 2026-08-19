@@ -282,6 +282,8 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                 if cli_res:
                     ws_num = cli_res[0][0] or cli_res[0][1] or ""
 
+            es_origen_vendida = bool(obs and "Detectada como VENDIDA" in obs)
+
             out.append({
                 "id": v_id,
                 "fecha": fecha,
@@ -294,12 +296,46 @@ def obtener_cuentas_por_cobrar(negocio_id, cliente_filtro=None, estado_filtro=No
                 "whatsapp": ws_num,
                 "vencimiento": vence or "Sin fecha",
                 "es_vencido": es_vencido,
-                "observacion": obs or ""
+                "observacion": obs or "",
+                "es_origen_vendida": es_origen_vendida
             })
         return out
     except Exception as e:
         print(f"Error cuentas por cobrar: {e}")
         return []
+
+def convertir_cuenta_en_descuento(venta_id, negocio_id, usuario_id):
+    try:
+        res_v = ejecutar_query(
+            "SELECT total, saldo_pendiente, cliente_nombre FROM ventas WHERE id=? AND negocio_id=?",
+            (venta_id, negocio_id), fetch=True
+        )
+        if not res_v:
+            return False, "Venta no encontrada."
+
+        total_v, saldo_actual, cli_nombre = res_v[0]
+        if not saldo_actual or saldo_actual <= 0.01:
+            return False, "Esta venta no tiene saldo pendiente por saldar."
+
+        fecha_ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 1. Registrar abono por ajuste de descuento
+        ejecutar_query(
+            """INSERT INTO abonos_cartera (negocio_id, venta_id, fecha, monto, metodo_pago, usuario_id, observacion)
+               VALUES (?, ?, ?, ?, 'DESCUENTO_COMERCIAL', ?, 'Saldado por decisión de Emprendedor: Descuento Comercial')""",
+            (negocio_id, venta_id, fecha_ahora, saldo_actual, usuario_id)
+        )
+
+        # 2. Liquidar venta en 0 saldo
+        obs_nueva = f"Saldado con Descuento Comercial de ${saldo_actual:,.0f}"
+        ejecutar_query(
+            "UPDATE ventas SET saldo_pendiente=0.0, estado_pago='PAGADO', observacion=? WHERE id=? AND negocio_id=?",
+            (obs_nueva, venta_id, negocio_id)
+        )
+
+        return True, f"Cuenta por cobrar de ${saldo_actual:,.0f} saldada con éxito como Descuento Comercial."
+    except Exception as e:
+        return False, f"Error al convertir cuenta en descuento: {str(e)}"
 
 def obtener_historial_abonos(venta_id, negocio_id):
     try:

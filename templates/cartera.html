@@ -393,7 +393,10 @@
             tbody.innerHTML = data.map(c => `
                 <tr>
                     <td style="color: var(--text-secondary);">${c.fecha ? c.fecha.substring(0, 10) : '-'}</td>
-                    <td><strong>${c.cliente}</strong></td>
+                    <td>
+                        <strong>${c.cliente}</strong>
+                        ${c.es_origen_vendida ? `<div style="margin-top: 3px;"><span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; display: inline-block;">⚠️ Origen: VENDIDA</span></div>` : ''}
+                    </td>
                     <td>${c.producto}</td>
                     <td style="font-weight: 600;">${formatCOP.format(c.total)}</td>
                     <td style="color: #34d399;">${formatCOP.format(c.abonado)}</td>
@@ -401,11 +404,32 @@
                     <td style="color: ${c.es_vencido ? '#fb7185' : 'var(--text-secondary)'};">${c.vencimiento}</td>
                     <td><span class="badge-status ${c.estado === 'PAGADO' ? 'badge-pagado' : (c.estado === 'PARCIAL' ? 'badge-parcial' : 'badge-pendiente')}">${c.estado}</span></td>
                     <td>
-                        ${c.saldo > 0.01 ? `<button onclick="abrirModalAbono(${c.id}, '${c.cliente.replace(/'/g, "\\'")}', ${c.saldo})" style="background: #34d399; color: black; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.75rem;">Abonar</button>` : ''}
-                        <button onclick="verHistorial(${c.id})" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Historial</button>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            ${c.saldo > 0.01 ? `<button onclick="abrirModalAbono(${c.id}, '${c.cliente.replace(/'/g, "\\'")}', ${c.saldo})" style="background: #34d399; color: black; font-weight: 700; padding: 4px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.75rem;">Abonar</button>` : ''}
+                            ${(c.saldo > 0.01 && c.es_origen_vendida) ? `<button onclick="convertirEnDescuento(${c.id}, ${c.saldo})" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 700; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;" title="Saldar en 1-clic aplicando Descuento Comercial por el saldo pendiente">💡 ¿Fue Descuento?</button>` : ''}
+                            <button onclick="verHistorial(${c.id})" style="background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">Historial</button>
+                        </div>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function convertirEnDescuento(ventaId, saldo) {
+            if (!confirm(`¿Confirmas que el saldo pendiente de ${formatCOP.format(saldo)} NO es una deuda, sino que se trató de un Descuento Comercial aplicado en el origen?\n\nAl confirmar, la cuenta quedará 100% SALDADA.`)) {
+                return;
+            }
+            try {
+                const res = await fetch(`/api/cartera/convertir_descuento/${ventaId}`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message || "Cuenta saldada como Descuento Comercial con éxito.");
+                    loadCartera();
+                } else {
+                    alert(data.error || "No se pudo saldar la cuenta.");
+                }
+            } catch (err) {
+                alert("Error al procesar la solicitud.");
+            }
         }
 
         function filtrarTabla() {

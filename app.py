@@ -1014,6 +1014,16 @@ def post_cartera_abono():
     else:
         return jsonify({"error": result}), 400
 
+@app.route('/api/cartera/convertir_descuento/<int:venta_id>', methods=['POST'])
+@login_required
+def post_cartera_convertir_descuento(venta_id):
+    nid = session['negocio_id']
+    uid = session['user_id']
+    ok, msg = cartera_service.convertir_cuenta_en_descuento(venta_id, nid, uid)
+    if ok:
+        return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
 @app.route('/api/clientes', methods=['GET', 'POST'])
 @login_required
 def h_clientes():
