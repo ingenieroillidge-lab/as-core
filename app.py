@@ -1076,6 +1076,20 @@ def get_diagnostico():
     diag = financiero_service.obtener_diagnostico_inteligencia(nid)
     return jsonify(diag)
 
+@app.route('/api/financiero/tablero_ejecutivo')
+@login_required
+def get_tablero_ejecutivo():
+    nid = session['negocio_id']
+    periodo = request.args.get('periodo', 'TODO')
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    comparar_anterior = request.args.get('comparar_anterior', 'true').lower() == 'true'
+
+    res = financiero_service.obtener_tablero_ejecutivo_completo(
+        nid, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, periodo=periodo, comparar_anterior=comparar_anterior
+    )
+    return jsonify(res)
+
 # ==========================
 # API: CARGUE MASIVO (PLANTILLAS, CSV Y GOOGLE SHEETS)
 # ==========================

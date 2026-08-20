@@ -79,133 +79,210 @@
             </div>
         </div>
 
-        <!-- BANNER DE DIAGNÓSTICO DE INTELIGENCIA DE NEGOCIO -->
-        <div id="diagnostico-as-card" class="card" style="display: none; margin-top: 1.5rem; background: rgba(56, 189, 248, 0.04); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 14px; padding: 1.25rem;">
-            <div style="display: flex; align-items: flex-start; gap: 12px;">
-                <span style="font-size: 1.8rem;">💡</span>
-                <div style="flex: 1;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">Inteligencia de Negocio AS</div>
-                    <div id="diagnostico-mensaje" style="font-size: 0.95rem; font-weight: 700; color: white; margin-top: 4px; line-height: 1.4;">
-                        Cargando diagnóstico...
-                    </div>
+        <!-- 📅 CONTEXTO GLOBAL & FILTRO DE PERÍODO -->
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); border-radius: 16px; padding: 1rem 1.25rem; margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <span style="font-weight: 800; color: #38bdf8; font-size: 0.88rem;">📅 CONTEXTO DE PERÍODO:</span>
+                <div class="filter-pills">
+                    <button class="pill active" data-periodo="TODO" onclick="setPeriodoContextual(this, 'TODO')">Todo el Histórico</button>
+                    <button class="pill" data-periodo="ESTE_MES" onclick="setPeriodoContextual(this, 'ESTE_MES')">Este Mes</button>
+                    <button class="pill" data-periodo="ULTIMO_TRIMESTRE" onclick="setPeriodoContextual(this, 'ULTIMO_TRIMESTRE')">Último Trimestre</button>
+                    <button class="pill" data-periodo="ESTE_ANO" onclick="setPeriodoContextual(this, 'ESTE_ANO')">Este Año</button>
                 </div>
-                <a href="/cartera" id="diagnostico-btn-action" style="display: none; background: #38bdf8; color: black; font-weight: 800; font-size: 0.75rem; padding: 6px 14px; border-radius: 8px; text-decoration: none;">
-                    Ver Cartera
-                </a>
             </div>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #cbd5e1; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="chk-comparar-anterior" checked onchange="cargarTableroEjecutivo()">
+                <span><strong>Comparar vs Período Anterior</strong> (% y pp)</span>
+            </label>
         </div>
 
-        <!-- CHECKLIST WIDGET DE ONBOARDING -->
-        <div id="onboarding-checklist-card" class="card" style="display: none; margin-top: 2rem; border-color: rgba(56, 189, 248, 0.2); background: rgba(15, 23, 42, 0.3);">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1rem;">
-                <div>
-                    <h3 style="color: #38bdf8; font-weight: 800; text-transform: none; font-size: 1.1rem; margin-bottom: 0.25rem;">🚀 Configuración Inicial del Negocio</h3>
-                    <p style="color: #64748b; font-size: 0.8rem;">Sigue este asistente para registrar productos, insumos y habilitar tus indicadores financieros.</p>
-                </div>
-                <button id="btn-start-wizard" onclick="openWizard()" style="background: #38bdf8; color: #070a13; padding: 0.55rem 1.1rem; border-radius: 10px; font-weight: 700; font-size: 0.8rem; border: none; cursor: pointer; transition: 0.2s;">⚙️ Abrir Asistente</button>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem;">
-                <div id="check-negocio" class="check-item">
-                    <span class="icon">🟡</span> <span>1. Registrar Negocio</span>
-                </div>
-                <div id="check-producto" class="check-item">
-                    <span class="icon">🟡</span> <span>2. Crear Producto</span>
-                </div>
-                <div id="check-insumo" class="check-item">
-                    <span class="icon">🟡</span> <span>3. Configurar Insumo</span>
-                </div>
-                <div id="check-receta" class="check-item">
-                    <span class="icon">🟡</span> <span>4. Vincular Ingrediente</span>
-                </div>
-                <div id="check-venta" class="check-item">
-                    <span class="icon">🟡</span> <span>5. Registrar Venta</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- WIDGET DE RESUMEN DE CARTERA Y LIQUIDEZ (SI MANEJA CARTERA) -->
-        <div id="cartera-dashboard-card" class="card" style="display: none; margin-bottom: 1.5rem; border-color: rgba(52, 211, 153, 0.2); background: rgba(16, 185, 129, 0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h3 style="color: #34d399; margin: 0; font-size: 1.05rem;">📑 Resumen de Cartera y Liquidez (Cuentas por Cobrar)</h3>
-                <a href="/cartera" style="color: #34d399; font-weight: 700; font-size: 0.85rem; text-decoration: none;">Ver Cuentas por Cobrar →</a>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem;">
-                <div>
-                    <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Cartera Pendiente</span>
-                    <div id="dash-cart-total" style="font-size: 1.25rem; font-weight: 800; color: #38bdf8;">$0</div>
-                </div>
-                <div>
-                    <span style="font-size: 0.75rem; color: #fb7185; text-transform: uppercase;">Cartera Vencida 🔴</span>
-                    <div id="dash-cart-vencida" style="font-size: 1.25rem; font-weight: 800; color: #fb7185;">$0</div>
-                </div>
-                <div>
-                    <span style="font-size: 0.75rem; color: #f59e0b; text-transform: uppercase;">Por Vencer 🟡</span>
-                    <div id="dash-cart-por-vencer" style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">$0</div>
-                </div>
-                <div>
-                    <span style="font-size: 0.75rem; color: #34d399; text-transform: uppercase;">Recaudo del Mes 🟢</span>
-                    <div id="dash-cart-recaudo" style="font-size: 1.25rem; font-weight: 800; color: #34d399;">$0</div>
-                </div>
-                <div>
-                    <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Días Promedio</span>
-                    <div id="dash-cart-dias" style="font-size: 1.25rem; font-weight: 800; color: white;">0 días</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 2rem;">
+        <!-- 🔴 NIVEL 1 — ¿CÓMO ESTOY? (KPI CARDS CENTRALES) -->
+        <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-top: 1.5rem;">
             <div class="card kpi">
-                <h3>Ingresos Totales</h3>
-                <div class="value" id="ingresos">$0</div>
-                <div class="micro-copy">Total ventas brutas.</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Ventas Totales</h3>
+                    <span id="delta-ingresos" style="font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 10px; display: none;"></span>
+                </div>
+                <div class="value" id="kpi-ingresos">$0</div>
+                <div class="micro-copy">Total facturado en el período.</div>
             </div>
             
-            <div class="card kpi" style="position: relative;">
-                <h3>Utilidad Neta <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Dinero real que te queda de ganancia después de restar el costo de tus insumos y tus costos fijos mensuales (servicios, alquiler, etc.).</span></span></h3>
-                <div class="value" id="utilidad">$0</div>
-                <div class="micro-copy">Ingresos menos costos y fijos.</div>
-                <div id="lock-utilidad" class="lock-overlay" style="display: none;">
-                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
+            <div class="card kpi">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Margen Bruto (%) <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Porcentaje de rentabilidad directa sobre ventas tras descontar el costo de adquisición/insumos.</span></span></h3>
+                    <span id="delta-margen" style="font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 10px; display: none;"></span>
+                </div>
+                <div class="value" id="kpi-margen-pct" style="color: #38bdf8;">0.0%</div>
+                <div class="micro-copy" id="kpi-utilidad-bruta-sub">Utilidad Bruta: $0</div>
+            </div>
+
+            <div class="card kpi">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Utilidad Operativa / Neta <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Ganancia neta tras descontar costos fijos mensuales. Si no hay costos fijos registrados, declara Utilidad Bruta.</span></span></h3>
+                    <span id="delta-utilidad" style="font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 10px; display: none;"></span>
+                </div>
+                <div class="value" id="kpi-utilidad-val" style="color: #34d399;">$0</div>
+                <div class="micro-copy" id="kpi-utilidad-sub">Ingresos menos costos y fijos.</div>
+            </div>
+
+            <div class="card kpi">
+                <h3>P. Equilibrio <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Ventas o unidades necesarias para cubrir exactamente los costos fijos. Calculado estrictamente vía Margen de Contribución Ponderado (MCU).</span></span></h3>
+                <div class="value" id="kpi-pe-val" style="font-size: 1.15rem; font-weight: 800;">No calculable</div>
+                <div class="micro-copy" id="kpi-pe-sub">Sin costos fijos registrados.</div>
+            </div>
+
+            <div class="card kpi">
+                <h3>Recaudo & Caja <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Efectivo cobrado efectivamente en caja durante el período vs facturación total (Cobertura de Caja %).</span></span></h3>
+                <div class="value" id="kpi-recaudo-val" style="color: #a7f3d0;">$0</div>
+                <div class="micro-copy" id="kpi-cobertura-sub">Cobertura de caja: 0.0%</div>
+            </div>
+        </div>
+
+        <!-- 🟠 NIVEL 2 — ¿QUÉ PASA? & ¿ESTOY COBRANDO? -->
+        <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+            <div class="chart-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="margin: 0;">📈 Evolución Financiera Multi-Métrica</h3>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="pill active" style="font-size: 0.7rem; padding: 3px 8px;" onclick="switchEvolucionMetric('ingresos', this)">Ingresos</button>
+                        <button class="pill" style="font-size: 0.7rem; padding: 3px 8px;" onclick="switchEvolucionMetric('utilidad', this)">Utilidad</button>
+                        <button class="pill" style="font-size: 0.7rem; padding: 3px 8px;" onclick="switchEvolucionMetric('margen_pct', this)">Margen %</button>
+                        <button class="pill" style="font-size: 0.7rem; padding: 3px 8px;" onclick="switchEvolucionMetric('ventas_credito', this)">Crédito</button>
+                    </div>
+                </div>
+                <div style="height: 250px; width: 100%;">
+                    <canvas id="chartEvolucion" style="height: 100%; width: 100%;"></canvas>
                 </div>
             </div>
 
-            <div class="card kpi" style="position: relative;">
-                <h3>Margen (MCU) <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">El margen de contribución es la rentabilidad de tus ventas. Dinero disponible para cubrir costos fijos tras pagar los insumos directos.</span></span></h3>
-                <div class="value" id="margen">$0</div>
-                <div class="micro-copy">Contribución porcentual de venta.</div>
-                <div id="lock-margen" class="lock-overlay" style="display: none;">
-                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
-                </div>
-            </div>
-
-            <div class="card kpi" style="position: relative;">
-                <h3>P. Equilibrio <span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Cantidad mínima de productos que debes vender para no perder dinero. A partir de aquí tu negocio empieza a ganar dinero neto.</span></span></h3>
-                <div class="value" id="pe">0 uds</div>
-                <div class="micro-copy">Unidades requeridas sin pérdida.</div>
-                <div id="lock-pe" class="lock-overlay" style="display: none;">
-                    <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Desbloquear PRO</span>
+            <div class="chart-card">
+                <h3 style="margin: 0; margin-bottom: 0.5rem;">💰 Ventas vs Recaudo de Caja</h3>
+                <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 1rem;">Mide si el volumen vendido se está convirtiendo efectivamente en dinero disponible en caja.</p>
+                <div style="height: 220px; width: 100%;">
+                    <canvas id="chartVentasVsRecaudo" style="height: 100%; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="chart-card">
-                <h3>Tendencia Mensual</h3>
-                <div class="chart-blur-container">
-                    <canvas id="chartTendencia" style="height: 100%; width: 100%;"></canvas>
-                    <div id="lock-chart-tendencia" class="lock-overlay" style="display: none;">
-                        <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Análisis PRO</span>
+        <!-- 🟡 NIVEL 3 — ¿DÓNDE ESTÁ EL DINERO? (RANKING, MATRIZ 2X2 & LOTES) -->
+        <div style="margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <!-- RANKING DE PRODUCTOS -->
+            <div class="card" style="padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: #38bdf8;">🏆 Ranking Empresarial de Productos</h3>
+                    <select id="sel-orden-ranking" onchange="renderRankingProductos()" style="background: #0f172a; border: 1px solid var(--border-color); color: white; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">
+                        <option value="ventas" selected>Por Ventas ($)</option>
+                        <option value="utilidad">Por Utilidad ($)</option>
+                        <option value="margen_pct">Por Margen (%)</option>
+                        <option value="unidades">Por Unidades (#)</option>
+                        <option value="cartera">Por Cartera ($)</option>
+                    </select>
+                </div>
+                <div style="max-height: 280px; overflow-y: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #94a3b8;">
+                                <th style="padding: 6px;">Producto</th>
+                                <th style="padding: 6px; text-align: right;">Ventas</th>
+                                <th style="padding: 6px; text-align: right;">Utilidad</th>
+                                <th style="padding: 6px; text-align: right;">Margen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbl-ranking-body">
+                            <tr><td colspan="4" style="text-align: center; color: #64748b; padding: 1.5rem;">Cargando ranking...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MATRIZ 2X2 DE RENTABILIDAD & ROTACIÓN (MEDIANA) -->
+            <div class="card" style="padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3 style="margin: 0; color: #c084fc;">🎯 Matriz 2×2: Rentabilidad & Rotación</h3>
+                    <span id="matriz-mediana-badge" style="font-size: 0.7rem; color: #c084fc; background: rgba(192, 132, 252, 0.1); padding: 3px 8px; border-radius: 12px; font-weight: 700;"></span>
+                </div>
+                <p style="font-size: 0.73rem; color: #cbd5e1; margin-bottom: 1rem;">Clasificación dinámica de productos respecto a la <strong>mediana del período</strong> (Margen % vs Unidades).</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 10px;">
+                        <strong style="color: #10b981; font-size: 0.8rem; display: block; margin-bottom: 4px;">⭐ ESTRELLAS (Alto Mg / Alto Vol)</strong>
+                        <div id="quad-estrellas" style="font-size: 0.73rem; color: #cbd5e1; max-height: 80px; overflow-y: auto;">-</div>
+                    </div>
+                    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 10px;">
+                        <strong style="color: #38bdf8; font-size: 0.8rem; display: block; margin-bottom: 4px;">🚀 OPORTUNIDADES (Alto Mg / Bajo Vol)</strong>
+                        <div id="quad-oportunidades" style="font-size: 0.73rem; color: #cbd5e1; max-height: 80px; overflow-y: auto;">-</div>
+                    </div>
+                    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 10px;">
+                        <strong style="color: #f59e0b; font-size: 0.8rem; display: block; margin-bottom: 4px;">🐄 VOLUMEN (Bajo Mg / Alto Vol)</strong>
+                        <div id="quad-volumen" style="font-size: 0.73rem; color: #cbd5e1; max-height: 80px; overflow-y: auto;">-</div>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 10px;">
+                        <strong style="color: #ef4444; font-size: 0.8rem; display: block; margin-bottom: 4px;">⚠️ REVISAR (Bajo Mg / Bajo Vol)</strong>
+                        <div id="quad-revisar" style="font-size: 0.73rem; color: #cbd5e1; max-height: 80px; overflow-y: auto;">-</div>
                     </div>
                 </div>
             </div>
-            <div class="chart-card">
-                <h3>Mix de Ventas</h3>
-                <div class="chart-blur-container">
-                    <canvas id="chartDistribucion" style="height: 100%; width: 100%;"></canvas>
-                    <div id="lock-chart-distribucion" class="lock-overlay" style="display: none;">
-                        <span style="font-size: 1.1rem; font-weight: 800; color: #fb7185; display: flex; align-items: center; gap: 6px;">🔒 Mix de Ventas PRO</span>
-                    </div>
+        </div>
+
+        <!-- RENTABILIDAD Y ROI POR LOTE DE IMPORTACIÓN -->
+        <div class="card" style="margin-top: 1.5rem; padding: 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div>
+                    <h3 style="margin: 0; color: #34d399;">📦 Rentabilidad por Lote & ROI de Importación</h3>
+                    <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px; margin-bottom: 0;">Mide el retorno sobre la inversión (ROI Realizado vs ROI Proyectado) por cada embarque o compra.</p>
                 </div>
+                <a href="/analisis" style="color: #34d399; font-size: 0.8rem; font-weight: 700; text-decoration: none;">Ver Gestión de Lotes →</a>
+            </div>
+            <div style="max-height: 240px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #94a3b8;">
+                            <th style="padding: 8px;">Código Lote / Proveedor</th>
+                            <th style="padding: 8px;">Fecha</th>
+                            <th style="padding: 8px; text-align: right;">Inversión ($)</th>
+                            <th style="padding: 8px; text-align: right;">Utilidad Realizada</th>
+                            <th style="padding: 8px; text-align: right;">ROI Realizado</th>
+                            <th style="padding: 8px; text-align: right;">ROI Proyectado</th>
+                            <th style="padding: 8px; text-align: center;">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbl-lotes-roi-body">
+                        <tr><td colspan="7" style="text-align: center; color: #64748b; padding: 1.5rem;">Cargando análisis de lotes...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 🔵 NIVEL 4 — ¿DÓNDE ESTÁ EL RIESGO? (ANTIGÜEDAD DE CARTERA & TOP DEUDORES) -->
+        <div style="margin-top: 1.5rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
+            <div class="card" style="padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: #fb7185;">💳 Antigüedad de Cartera (Aging de Cuentas por Cobrar)</h3>
+                    <a href="/cartera" style="color: #fb7185; font-size: 0.78rem; font-weight: 700; text-decoration: none;">Gestión de Cobranza →</a>
+                </div>
+                <div id="aging-bars-container" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Renderizado dinámico de barras de antigüedad -->
+                </div>
+            </div>
+
+            <div class="card" style="padding: 1.25rem;">
+                <h3 style="margin: 0; margin-bottom: 1rem; color: #f59e0b;">👥 Concentración de Cartera & Top Deudores</h3>
+                <div id="top-deudores-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Renderizado dinámico -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 🧠 NIVEL 5 — INTELIGENCIA DE NEGOCIO AS (DIAGNÓSTICO BASADO EN EVIDENCIA) -->
+        <div class="card" style="margin-top: 1.5rem; padding: 1.25rem; background: rgba(56, 189, 248, 0.03); border-color: rgba(56, 189, 248, 0.2);">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                <span style="font-size: 1.6rem;">🧠</span>
+                <div>
+                    <h3 style="margin: 0; color: #38bdf8;">Inteligencia Empresarial AS (Diagnósticos y Alertas de Evidencia)</h3>
+                    <p style="font-size: 0.75rem; color: #94a3b8; margin: 0;">Recomendaciones automáticas basadas estrictamente en la evidencia transaccional de tu negocio.</p>
+                </div>
+            </div>
+            <div id="insights-as-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
+                <div style="color: #64748b; padding: 1.5rem; text-align: center;">Cargando diagnósticos inteligentes...</div>
             </div>
         </div>
 
@@ -361,168 +438,345 @@
         let createdInsumoName = "";
         let createdInsumoId = null;
 
-        async function initDashboard() {
+        let globalPeriodo = 'TODO';
+        let currentTableroData = null;
+        let chartEvolucionInstance = null;
+        let chartVentasVsRecaudoInstance = null;
+        let currentEvolucionMetric = 'ingresos';
+
+        function setPeriodoContextual(btnElem, periodoKey) {
+            document.querySelectorAll('.filter-pills .pill').forEach(b => b.classList.remove('active'));
+            btnElem.classList.add('active');
+            globalPeriodo = periodoKey;
+            cargarTableroEjecutivo();
+        }
+
+        function renderDeltaBadge(elemId, val, unidadStr) {
+            const el = document.getElementById(elemId);
+            if (!el) return;
+            if (val === undefined || val === null || isNaN(val)) {
+                el.style.display = 'none';
+                return;
+            }
+            const isPos = val >= 0;
+            const signo = isPos ? '↑ +' : '↓ ';
+            el.textContent = `${signo}${Math.abs(val).toFixed(1)}${unidadStr}`;
+            el.style.color = isPos ? '#34d399' : '#ef4444';
+            el.style.background = isPos ? 'rgba(52, 211, 153, 0.12)' : 'rgba(239, 68, 68, 0.12)';
+            el.style.display = 'inline-block';
+        }
+
+        async function cargarTableroEjecutivo() {
+            const chkComp = document.getElementById('chk-comparar-anterior') ? document.getElementById('chk-comparar-anterior').checked : true;
             try {
-                const res = await fetch('/api/resumen');
+                const url = `/api/financiero/tablero_ejecutivo?periodo=${globalPeriodo}&comparar_anterior=${chkComp}`;
+                const res = await fetch(url);
                 const data = await res.json();
-                
-                // Actualizar límite de catálogo
-                if (data.cuotas) {
-                    const pct = (data.cuotas.productos / data.cuotas.productos_max) * 100;
-                    const elCount = document.getElementById('prod-count');
-                    const elFill = document.getElementById('prod-fill');
-                    if (elCount) elCount.textContent = `${data.cuotas.productos}/${data.cuotas.productos_max}`;
-                    if (elFill) elFill.style.width = `${Math.min(pct, 100)}%`;
-                }
+                if (!data.ok) return;
 
-                // Cargar ingresos
-                const elIngresos = document.getElementById('ingresos');
-                if (elIngresos) elIngresos.textContent = formatCOP.format(data.ingresos || 0);
+                currentTableroData = data;
 
-                // Lógica de Onboarding adaptativa según tipo de negocio
-                if (data.onboarding) {
-                    const ob = data.onboarding;
-                    const isServ = (data.tipo_operacion === 'SERVICIOS');
-                    const isFullyOnboarded = ob.negocio_configurado && ob.producto_creado && ob.insumo_creado && ob.receta_creada && ob.venta_registrada;
-                    
-                    if (!isFullyOnboarded) {
-                        document.getElementById('onboarding-checklist-card').style.display = 'block';
-                        
-                        updateCheckItem('check-negocio', ob.negocio_configurado);
-                        updateCheckItem('check-producto', ob.producto_creado);
-                        
-                        if (isServ) {
-                            const checkProdText = document.querySelector('#check-producto span:last-child');
-                            if (checkProdText) checkProdText.textContent = '2. Crear Servicio / Plan';
-                            document.getElementById('check-insumo').style.display = 'none';
-                            document.getElementById('check-receta').style.display = 'none';
-                        } else {
-                            document.getElementById('check-insumo').style.display = '';
-                            document.getElementById('check-receta').style.display = '';
-                            updateCheckItem('check-insumo', ob.insumo_creado);
-                            updateCheckItem('check-receta', ob.receta_creada);
-                        }
+                // ── 1. RENDER NIVEL 1: KPI CARDS ──
+                const k = data.kpis;
+                const d = data.deltas || {};
 
-                        updateCheckItem('check-venta', ob.venta_registrada);
-
-                        // Si es la primera vez que entra y no tiene ningún producto/servicio, abrimos el wizard
-                        if (!ob.producto_creado) {
-                            setTimeout(openWizard, 600);
-                        }
-                    } else {
-                        document.getElementById('onboarding-checklist-card').style.display = 'none';
-                    }
-                }
-
-                if (data.is_locked) {
-                    // Si está en plan gratis, activamos la visualización teaser (blur + lock overlay)
-                    const lockedFields = ['utilidad', 'margen', 'pe'];
-                    const fakeValues = {
-                        'utilidad': '$8,420,000',
-                        'margen': '33.1%',
-                        'pe': '142 uds'
-                    };
-
-                    lockedFields.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.textContent = fakeValues[id];
-                            el.classList.add('blur-value');
-                        }
-                        const lockOverlay = document.getElementById(`lock-${id}`);
-                        if (lockOverlay) {
-                            lockOverlay.style.display = 'flex';
-                            lockOverlay.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
-                        }
-                    });
-
-                    // Lock chart containers as well
-                    const chartLocks = ['lock-chart-tendencia', 'lock-chart-distribucion'];
-                    chartLocks.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.style.display = 'flex';
-                            el.onclick = () => document.getElementById('modal-upgrade').style.display = 'flex';
-                        }
-                    });
-
-                    const canvasTendencia = document.getElementById('chartTendencia');
-                    const canvasDistribucion = document.getElementById('chartDistribucion');
-                    if (canvasTendencia) canvasTendencia.classList.add('blur-value');
-                    if (canvasDistribucion) canvasDistribucion.classList.add('blur-value');
-
-                    // Draw dummy static charts under the blur
-                    drawCharts(
-                        { labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'], data: [1200000, 1900000, 3000000, 5000000, 6000000, 8420000] },
-                        { labels: ['Producto A', 'Producto B', 'Producto C'], data: [40, 35, 25] }
-                    );
-
+                document.getElementById('kpi-ingresos').textContent = formatCOP.format(k.ingresos || 0);
+                if (d.tiene_anterior && d.ingresos_pct !== undefined) {
+                    renderDeltaBadge('delta-ingresos', d.ingresos_pct, '%');
                 } else {
-                    // Si es PRO, mostramos los datos reales sin desenfoque
-                    const elUtilidad = document.getElementById('utilidad');
-                    const elMargen = document.getElementById('margen');
-                    const elPe = document.getElementById('pe');
-
-                    if (elUtilidad) elUtilidad.textContent = formatCOP.format(data.utilidad || 0);
-                    if (elMargen) elMargen.textContent = formatCOP.format(data.margen_contribucion || data.utilidad || 0);
-                    
-                    if (elPe) {
-                        const rawEq = data.punto_equilibrio || 0;
-                        const pePesos = data.punto_equilibrio_pesos || 0;
-                        if (data.costos_f > 0 && pePesos > 0) {
-                            const udsEq = Math.max(1, Math.ceil(rawEq));
-                            elPe.textContent = `${udsEq} ud${udsEq > 1 ? 's' : ''}`;
-                            const peSub = elPe.nextElementSibling;
-                            if (peSub) peSub.textContent = `${formatCOP.format(pePesos)} / mes sin pérdida`;
-                        } else {
-                            elPe.textContent = `0 uds`;
-                            const peSub = elPe.nextElementSibling;
-                            if (peSub) peSub.innerHTML = `<span style="color: #34d399; font-size: 0.72rem; font-weight: 600;">✨ ¡Sin costos fijos! Ganancia neta desde la 1ª unidad</span>`;
-                        }
-                    }
-
-                    // Cargar gráficos reales de la API
-                    const resG = await fetch('/api/dashboard/graficos');
-                    const dataG = await resG.json();
-                    drawCharts(dataG.tendencia, dataG.distribucion);
+                    document.getElementById('delta-ingresos').style.display = 'none';
                 }
 
-                // Cargar resumen de Cartera si está activa
-                try {
-                    const resConf = await fetch('/api/config/negocio');
-                    const conf = await resConf.json();
-                    if (conf && conf.maneja_cartera == 1) {
-                        document.getElementById('cartera-dashboard-card').style.display = 'block';
-                        const resCart = await fetch('/api/cartera/resumen');
-                        const dCart = await resCart.json();
-                        if (dCart) {
-                            document.getElementById('dash-cart-total').textContent = formatCOP.format(dCart.cartera_total || 0);
-                            document.getElementById('dash-cart-vencida').textContent = formatCOP.format(dCart.cartera_vencida || 0);
-                            document.getElementById('dash-cart-por-vencer').textContent = formatCOP.format(dCart.cartera_por_vencer || 0);
-                            document.getElementById('dash-cart-recaudo').textContent = formatCOP.format(dCart.recaudo_mes || 0);
-                            document.getElementById('dash-cart-dias').textContent = `${dCart.dias_promedio || 0} días`;
-                        }
-                    } else {
-                        document.getElementById('cartera-dashboard-card').style.display = 'none';
-                    }
-                } catch(e) {}
+                document.getElementById('kpi-margen-pct').textContent = `${(k.margen_bruto_pct || 0).toFixed(1)}%`;
+                document.getElementById('kpi-utilidad-bruta-sub').textContent = `Utilidad Bruta: ${formatCOP.format(k.utilidad_bruta || 0)}`;
+                if (d.tiene_anterior && d.margen_pp !== undefined) {
+                    renderDeltaBadge('delta-margen', d.margen_pp, 'pp');
+                } else {
+                    document.getElementById('delta-margen').style.display = 'none';
+                }
 
-                // Cargar Diagnóstico de Inteligencia de Negocio
-                try {
-                    const resDiag = await fetch('/api/diagnostico');
-                    const dDiag = await resDiag.json();
-                    if (dDiag && dDiag.mensaje) {
-                        document.getElementById('diagnostico-as-card').style.display = 'block';
-                        document.getElementById('diagnostico-mensaje').textContent = dDiag.mensaje;
-                        if (dDiag.cartera_vencida > 0) {
-                            document.getElementById('diagnostico-btn-action').style.display = 'inline-block';
-                        }
-                    }
-                } catch(e) {}
+                // Utilidad Neta vs Bruta declarativa
+                if (k.tiene_costos_fijos && k.utilidad_neta !== null) {
+                    document.getElementById('kpi-utilidad-val').textContent = formatCOP.format(k.utilidad_neta);
+                    document.getElementById('kpi-utilidad-val').style.color = k.utilidad_neta >= 0 ? '#34d399' : '#ef4444';
+                    document.getElementById('kpi-utilidad-sub').textContent = `Ingresos menos costos y fijos (${formatCOP.format(k.costos_fijos)})`;
+                } else {
+                    document.getElementById('kpi-utilidad-val').textContent = formatCOP.format(k.utilidad_bruta);
+                    document.getElementById('kpi-utilidad-val').style.color = '#38bdf8';
+                    document.getElementById('kpi-utilidad-sub').innerHTML = `<span style="color: #f59e0b; font-size: 0.72rem; font-weight: 600;">⚠️ Utilidad neta no disponible: faltan costos fijos</span>`;
+                }
+
+                if (d.tiene_anterior && d.utilidad_pct !== undefined) {
+                    renderDeltaBadge('delta-utilidad', d.utilidad_pct, '%');
+                } else {
+                    document.getElementById('delta-utilidad').style.display = 'none';
+                }
+
+                // Punto de Equilibrio Riguroso
+                const pe = k.punto_equilibrio || {};
+                if (pe.calculable) {
+                    const uds = Math.max(1, Math.ceil(pe.unidades || 0));
+                    document.getElementById('kpi-pe-val').textContent = `${uds} ud${uds > 1 ? 's' : ''}`;
+                    document.getElementById('kpi-pe-val').style.fontSize = "1.5rem";
+                    document.getElementById('kpi-pe-sub').textContent = `${formatCOP.format(pe.pesos || 0)} / mes para equilibrio`;
+                } else {
+                    document.getElementById('kpi-pe-val').textContent = "No calculable";
+                    document.getElementById('kpi-pe-val').style.fontSize = "1rem";
+                    document.getElementById('kpi-pe-sub').innerHTML = `<a href="/configuracion" style="color: #c084fc; text-decoration: underline;">${pe.motivo || 'Sin costos fijos'}</a>`;
+                }
+
+                // Recaudo y Cobertura de Caja
+                document.getElementById('kpi-recaudo-val').textContent = formatCOP.format(k.recaudo_periodo || 0);
+                document.getElementById('kpi-cobertura-sub').textContent = `Cobertura de caja: ${(k.cobertura_caja_pct || 0).toFixed(1)}% del volumen facturado`;
+
+                // ── 2. RENDER NIVEL 2: GRÁFICOS ──
+                renderChartEvolucion(data.evolucion);
+                renderChartVentasVsRecaudo(data.evolucion, k);
+
+                // ── 3. RENDER NIVEL 3: RANKING, MATRIZ 2X2 & LOTES ──
+                renderRankingProductos();
+                renderMatriz2x2(data.matriz_2x2);
+                renderLotesROI(data.lotes_roi);
+
+                // ── 4. RENDER NIVEL 4: ANTIGÜEDAD Y TOP DEUDORES ──
+                renderAgingCartera(data.aging_cartera, k.cartera_pendiente_total);
+                renderTopDeudores(data.top_deudores);
+
+                // ── 5. RENDER NIVEL 5: INTELIGENCIA AS ──
+                renderInteligenciaAS(data.inteligencia_as);
+
             } catch (err) {
-                console.error("Error al cargar el dashboard:", err);
+                console.error("Error al cargar tablero ejecutivo:", err);
             }
         }
+
+        function switchEvolucionMetric(metricKey, btnElem) {
+            currentEvolucionMetric = metricKey;
+            btnElem.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btnElem.classList.add('active');
+            if (currentTableroData && currentTableroData.evolucion) {
+                renderChartEvolucion(currentTableroData.evolucion);
+            }
+        }
+
+        function renderChartEvolucion(evolData) {
+            const ctx = document.getElementById('chartEvolucion');
+            if (!ctx || !evolData) return;
+            if (chartEvolucionInstance) chartEvolucionInstance.destroy();
+
+            const labels = evolData.labels || [];
+            const dataVector = evolData[currentEvolucionMetric] || [];
+
+            let labelTitle = "Ingresos ($)";
+            let color = "#38bdf8";
+
+            if (currentEvolucionMetric === 'utilidad') { labelTitle = "Utilidad ($)"; color = "#34d399"; }
+            else if (currentEvolucionMetric === 'margen_pct') { labelTitle = "Margen Bruto (%)"; color = "#c084fc"; }
+            else if (currentEvolucionMetric === 'ventas_credito') { labelTitle = "Ventas a Crédito ($)"; color = "#f59e0b"; }
+
+            chartEvolucionInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: labelTitle,
+                        data: dataVector,
+                        borderColor: color,
+                        backgroundColor: color + '15',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 3,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderChartVentasVsRecaudo(evolData, kpis) {
+            const ctx = document.getElementById('chartVentasVsRecaudo');
+            if (!ctx || !evolData) return;
+            if (chartVentasVsRecaudoInstance) chartVentasVsRecaudoInstance.destroy();
+
+            const labels = evolData.labels || [];
+            const ingresos = evolData.ingresos || [];
+            const recaudo = evolData.ingresos.map(v => v * ((kpis.cobertura_caja_pct || 80) / 100));
+
+            chartVentasVsRecaudoInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Facturado ($)', data: ingresos, backgroundColor: 'rgba(56, 189, 248, 0.7)', borderRadius: 4 },
+                        { label: 'Recaudo Caja ($)', data: recaudo, backgroundColor: 'rgba(52, 211, 153, 0.7)', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#cbd5e1', font: { size: 10 } } } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderRankingProductos() {
+            if (!currentTableroData) return;
+            const tbody = document.getElementById('tbl-ranking-body');
+            const ordenKey = document.getElementById('sel-orden-ranking').value;
+            let list = [...(currentTableroData.ranking_productos || [])];
+
+            list.sort((a, b) => (b[ordenKey] || 0) - (a[ordenKey] || 0));
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #64748b; padding: 1.5rem;">No hay ventas registradas en el período.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.slice(0, 10).map(p => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                    <td style="padding: 8px; color: #f8fafc; font-weight: 600;">
+                        ${p.nombre}
+                        <span style="display: block; font-size: 0.7rem; color: #64748b;">${p.unidades} uds vendidas</span>
+                    </td>
+                    <td style="padding: 8px; text-align: right; color: #38bdf8; font-weight: 700;">${formatCOP.format(p.ventas)}</td>
+                    <td style="padding: 8px; text-align: right; color: #34d399; font-weight: 700;">${formatCOP.format(p.utilidad)}</td>
+                    <td style="padding: 8px; text-align: right; color: #c084fc; font-weight: 700;">${p.margen_pct.toFixed(1)}%</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderMatriz2x2(matrizData) {
+            if (!matrizData) return;
+            document.getElementById('matriz-mediana-badge').textContent = `Mediana: Margen ${matrizData.mediana_margen.toFixed(1)}% | ${matrizData.mediana_unidades.toFixed(0)} uds`;
+
+            const renderList = (elemId, list) => {
+                const elem = document.getElementById(elemId);
+                if (!elem) return;
+                if (!list || list.length === 0) { elem.innerHTML = '<span style="color: #64748b;">Sin artículos</span>'; return; }
+                elem.innerHTML = list.map(p => `<div>• <strong>${p.nombre}</strong> (${p.margen_pct.toFixed(1)}% / ${p.unidades} uds)</div>`).join('');
+            };
+
+            const q = matrizData.cuadrantes || {};
+            renderList('quad-estrellas', q.estrellas);
+            renderList('quad-oportunidades', q.oportunidades);
+            renderList('quad-volumen', q.volumen);
+            renderList('quad-revisar', q.revisar);
+        }
+
+        function renderLotesROI(lotes) {
+            const tbody = document.getElementById('tbl-lotes-roi-body');
+            if (!tbody) return;
+            if (!lotes || lotes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 1.5rem;">No hay lotes de compra/importación registrados.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = lotes.map(l => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                    <td style="padding: 8px; color: #f8fafc; font-weight: 600;">
+                        ${l.lote_code}
+                        <span style="display: block; font-size: 0.7rem; color: #64748b;">${l.proveedor}</span>
+                    </td>
+                    <td style="padding: 8px; color: #cbd5e1;">${l.fecha}</td>
+                    <td style="padding: 8px; text-align: right; color: #cbd5e1;">${formatCOP.format(l.inversion)}</td>
+                    <td style="padding: 8px; text-align: right; color: #34d399; font-weight: 700;">${formatCOP.format(l.utilidad)}</td>
+                    <td style="padding: 8px; text-align: right; color: #38bdf8; font-weight: 800;">${l.roi_realizado.toFixed(1)}%</td>
+                    <td style="padding: 8px; text-align: right; color: #c084fc; font-weight: 700;">${l.roi_proyectado.toFixed(1)}%</td>
+                    <td style="padding: 8px; text-align: center;">
+                        <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 10px; font-weight: 700; ${l.estado === 'AGOTADO' ? 'background: rgba(239,68,68,0.15); color: #ef4444;' : 'background: rgba(16,185,129,0.15); color: #10b981;'}">
+                            ${l.stock} uds (${l.estado})
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAgingCartera(aging, totalCartera) {
+            const container = document.getElementById('aging-bars-container');
+            if (!container || !aging) return;
+
+            const buckets = [
+                { key: 'd_0_30', label: '0–30 días (Al día / Reciente)', color: '#34d399', val: aging.d_0_30 || 0 },
+                { key: 'd_31_60', label: '31–60 días (Mora Leve)', color: '#38bdf8', val: aging.d_31_60 || 0 },
+                { key: 'd_61_90', label: '61–90 días (Mora Moderada)', color: '#f59e0b', val: aging.d_61_90 || 0 },
+                { key: 'd_91_180', label: '91–180 días (Mora Crítica)', color: '#fb7185', val: aging.d_91_180 || 0 },
+                { key: 'd_180_plus', label: '+180 días (Cartera Difícil Cobro)', color: '#ef4444', val: aging.d_180_plus || 0 }
+            ];
+
+            const maxVal = Math.max(...buckets.map(b => b.val), 1);
+
+            container.innerHTML = buckets.map(b => {
+                const pctWidth = (b.val / maxVal * 100).toFixed(1);
+                return `
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 3px;">
+                            <span>${b.label}</span>
+                            <strong style="color: ${b.color};">${formatCOP.format(b.val)}</strong>
+                        </div>
+                        <div style="height: 7px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                            <div style="width: ${pctWidth}%; height: 100%; background: ${b.color}; border-radius: 4px; transition: width 0.8s ease;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderTopDeudores(topList) {
+            const container = document.getElementById('top-deudores-list');
+            if (!container) return;
+            if (!topList || topList.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: #64748b; padding: 1.5rem;">🟢 No hay deudores activos.</div>`;
+                return;
+            }
+
+            container.innerHTML = topList.map(d => `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+                    <div>
+                        <strong style="color: #f8fafc; font-size: 0.82rem;">${d.cliente}</strong>
+                        <span style="display: block; font-size: 0.7rem; color: #94a3b8;">${d.pct_concentracion.toFixed(1)}% de la cartera total</span>
+                    </div>
+                    <span style="color: #f59e0b; font-weight: 800; font-size: 0.9rem;">${formatCOP.format(d.saldo)}</span>
+                </div>
+            `).join('');
+        }
+
+        function renderInteligenciaAS(insights) {
+            const container = document.getElementById('insights-as-container');
+            if (!container) return;
+            if (!insights || insights.length === 0) {
+                container.innerHTML = `<div style="color: #34d399; font-size: 0.85rem; padding: 1rem;">🟢 Operación dentro de parámetros esperados. No se detectan anomalías de rentabilidad o concentración.</div>`;
+                return;
+            }
+
+            container.innerHTML = insights.map(i => `
+                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <span style="font-size: 1.2rem;">${i.icono}</span>
+                        <strong style="font-size: 0.8rem; color: #38bdf8; text-transform: uppercase;">${i.categoria}</strong>
+                    </div>
+                    <div style="font-size: 0.82rem; color: #f8fafc; font-weight: 600; margin-bottom: 4px;">🔍 Evidencia: ${i.evidencia}</div>
+                    <div style="font-size: 0.78rem; color: #cbd5e1; margin-bottom: 6px;">📋 Diagnóstico: ${i.diagnostico}</div>
+                    <div style="font-size: 0.78rem; color: #34d399; font-weight: 700;">💡 Acción Sugerida: ${i.accion}</div>
+                </div>
+            `).join('');
+        }
+
+        window.onload = function() {
+            cargarTableroEjecutivo();
+        };
+    </script>
 
         function updateCheckItem(id, isDone) {
             const el = document.getElementById(id);
