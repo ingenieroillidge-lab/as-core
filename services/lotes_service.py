@@ -270,7 +270,7 @@ def reagrupar_lotes_post_cargue(negocio_id, criterio):
     try:
         crit = (criterio or 'FECHA_TRM').strip().upper()
         rows = ejecutar_query(
-            "SELECT id, fecha_compra, proveedor, importacion_id FROM lotes_inventario WHERE negocio_id=?",
+            "SELECT id, fecha_compra, proveedor, importacion_id, costo_unitario FROM lotes_inventario WHERE negocio_id=?",
             (negocio_id,), fetch=True
         ) or []
 
@@ -278,9 +278,9 @@ def reagrupar_lotes_post_cargue(negocio_id, criterio):
             return True, "No se encontraron lotes registrados para reagrupar."
 
         for r in rows:
-            lid, fcomp, prov, imp_id = r[0], r[1] or '', r[2] or 'PROV', r[3] or 'IMP'
-            f_clean = str(fcomp)[:10] if fcomp else 'FECHA'
-            m_clean = str(fcomp)[:7] if fcomp else 'MES'
+            lid, fcomp, prov, imp_id, cost_u = r[0], r[1] or '', r[2] or 'PROV', r[3] or 'IMP', float(r[4] or 0)
+            f_clean = str(fcomp)[:10].replace('/', '-') if fcomp else 'FECHA'
+            m_clean = str(fcomp)[:7].replace('/', '-') if fcomp else 'MES'
             str_imp = str(imp_id) if imp_id else ''
             str_prov = str(prov) if prov else 'PROVEEDOR'
 
@@ -299,15 +299,16 @@ def reagrupar_lotes_post_cargue(negocio_id, criterio):
             elif crit == 'MASTER_UNICO':
                 new_code = f"IMP-{str_imp[-6:]}" if str_imp else "LOTE-MAESTRO"
             else:
-                # FECHA_TRM
-                new_code = f"IMP-{str_imp[-6:]}" if str_imp else f"LOT-{f_clean}"
+                # FECHA_TRM (Agrupa por la combinación única de Fecha de Compra + Tasa TRM/Costo)
+                c_int = int(cost_u) if cost_u > 0 else 0
+                new_code = f"LOT-{f_clean}-T{c_int}" if c_int > 0 else f"LOT-{f_clean}"
 
             ejecutar_query(
                 "UPDATE lotes_inventario SET codigo_lote=? WHERE id=? AND negocio_id=?",
                 (new_code, lid, negocio_id)
             )
 
-        return True, "Lotes reagrupados correctamente en la base de datos."
+        return True, "Lotes reagrupados correctamente por Fecha y Tasa TRM/Costo."
     except Exception as e:
         print(f"Error en reagrupar_lotes_post_cargue: {e}")
         return False, str(e)
