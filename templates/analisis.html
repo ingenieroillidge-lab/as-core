@@ -562,16 +562,19 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ criterio: crit })
                 });
-                const data = await res.json();
-                if (data.ok) {
+                let data = {};
+                try { data = await res.json(); } catch(e) { data = { error: `Error HTTP ${res.status}` }; }
+
+                if (res.ok && data.ok) {
                     cerrarModalReagruparLotes();
                     aplicarFiltrosGlobales();
                 } else {
-                    alert('Error al reagrupar lotes: ' + data.mensaje);
+                    const msgErr = data.mensaje || data.error || `Error HTTP ${res.status}`;
+                    alert('Error al reagrupar lotes: ' + msgErr);
                 }
             } catch (err) {
                 console.error(err);
-                alert('Ocurrió un error al conectar con el servidor.');
+                alert('Ocurrió un error al conectar con el servidor: ' + (err.message || 'Error de conexión'));
             }
         }
     </script>

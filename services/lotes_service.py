@@ -274,28 +274,33 @@ def reagrupar_lotes_post_cargue(negocio_id, criterio):
             (negocio_id,), fetch=True
         ) or []
 
+        if not rows:
+            return True, "No se encontraron lotes registrados para reagrupar."
+
         for r in rows:
             lid, fcomp, prov, imp_id = r[0], r[1] or '', r[2] or 'PROV', r[3] or 'IMP'
-            f_clean = fcomp[:10] if fcomp else 'FECHA'
-            m_clean = fcomp[:7] if fcomp else 'MES'
+            f_clean = str(fcomp)[:10] if fcomp else 'FECHA'
+            m_clean = str(fcomp)[:7] if fcomp else 'MES'
+            str_imp = str(imp_id) if imp_id else ''
+            str_prov = str(prov) if prov else 'PROVEEDOR'
 
             if crit == 'PEDIDO_NUM':
-                new_code = f"PED-{imp_id[-6:]}" if imp_id else f"PED-{f_clean}"
+                new_code = f"PED-{str_imp[-6:]}" if str_imp else f"PED-{f_clean}"
             elif crit == 'FECHA_PROVEEDOR':
-                p_clean = prov.replace(' ', '_')[:8].upper()
+                p_clean = str_prov.replace(' ', '_')[:8].upper()
                 new_code = f"LOT-{f_clean}-{p_clean}"
             elif crit == 'MES_COMPRA':
                 new_code = f"LOT-{m_clean}"
             elif crit == 'PROVEEDOR':
-                p_clean = prov.replace(' ', '_')[:12].upper()
+                p_clean = str_prov.replace(' ', '_')[:12].upper()
                 new_code = f"LOT-PROV-{p_clean}"
             elif crit == 'INDIVIDUAL':
                 new_code = f"LOTE-{lid}"
             elif crit == 'MASTER_UNICO':
-                new_code = f"IMP-{imp_id[-6:]}" if imp_id else "LOTE-MAESTRO"
+                new_code = f"IMP-{str_imp[-6:]}" if str_imp else "LOTE-MAESTRO"
             else:
                 # FECHA_TRM
-                new_code = f"IMP-{imp_id[-6:]}" if imp_id else f"LOT-{f_clean}"
+                new_code = f"IMP-{str_imp[-6:]}" if str_imp else f"LOT-{f_clean}"
 
             ejecutar_query(
                 "UPDATE lotes_inventario SET codigo_lote=? WHERE id=? AND negocio_id=?",

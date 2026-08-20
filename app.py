@@ -921,12 +921,16 @@ def post_generar_informe():
 @app.route('/api/analisis/reagrupar_lotes', methods=['POST'])
 @login_required
 def api_reagrupar_lotes():
-    nid = obtener_negocio_id()
-    data = request.get_json() or {}
-    criterio = data.get('criterio', 'FECHA_TRM')
-    
-    ok, msg = lotes_service.reagrupar_lotes_post_cargue(nid, criterio)
-    return jsonify({"ok": ok, "mensaje": msg})
+    try:
+        nid = obtener_negocio_id()
+        data = request.get_json() or {}
+        criterio = data.get('criterio', 'FECHA_TRM')
+        
+        ok, msg = lotes_service.reagrupar_lotes_post_cargue(nid, criterio)
+        return jsonify({"ok": ok, "mensaje": msg})
+    except Exception as e:
+        print(f"Error en api_reagrupar_lotes: {e}")
+        return jsonify({"ok": False, "mensaje": f"Error al procesar reagrupamiento: {str(e)}"}), 500
 
 @app.route('/api/informes/exportar/excel', methods=['POST'])
 @login_required
