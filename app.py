@@ -1645,6 +1645,15 @@ def api_importador_deshacer(undo_token):
         return jsonify({"message": msg, "data": data})
     return jsonify({"error": msg}), 400
 
+@app.route('/api/importador/purgar', methods=['POST'])
+@login_required
+def api_importador_purgar():
+    nid = session['negocio_id']
+    ok, msg = importador_service.purgar_datos_importaciones(nid)
+    if ok:
+        return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
 @app.route('/api/costos-variables', methods=['GET', 'POST'])
 @login_required
 def api_costos_variables():

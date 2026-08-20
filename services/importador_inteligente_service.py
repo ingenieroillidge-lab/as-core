@@ -2016,3 +2016,88 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
         yield make_event("ERROR", "Error de procesamiento", "error", f"Error en la importación (0 registros guardados): {str(e_stream)}")
 
 
+def revertir_importacion(undo_token, negocio_id, usuario_id):
+    """
+    Revierte atómicamente una importación anterior eliminando todas las ventas, lotes,
+    compras, movimientos y abonos asociados a dicho undo_token.
+    """
+    try:
+        with transaccion() as cursor:
+            # 1. Obtener ventas asociadas al undo_token
+            res_v = ejecutar_query(
+                "SELECT id FROM ventas WHERE importacion_id=? AND negocio_id=?",
+                (undo_token, negocio_id), fetch=True
+            ) or []
+            v_ids = [r[0] for r in res_v]
+
+            if v_ids:
+                for v_id in v_ids:
+                    ejecutar_query("DELETE FROM abonos_cartera WHERE venta_id=? AND negocio_id=?", (v_id, negocio_id))
+
+            # 2. Obtener lotes asociados al undo_token
+            res_l = ejecutar_query(
+                "SELECT id FROM lotes_inventario WHERE importacion_id=? AND negocio_id=?",
+                (undo_token, negocio_id), fetch=True
+            ) or []
+            l_ids = [r[0] for r in res_l]
+
+            if l_ids:
+                for l_id in l_ids:
+                    ejecutar_query("DELETE FROM movimientos_lote WHERE lote_id=? AND negocio_id=?", (l_id, negocio_id))
+
+            # 3. Eliminar ventas del undo_token
+            ejecutar_query("DELETE FROM ventas WHERE importacion_id=? AND negocio_id=?", (undo_token, negocio_id))
+
+            # 4. Eliminar lotes y compras
+            ejecutar_query("DELETE FROM lotes_inventario WHERE importacion_id=? AND negocio_id=?", (undo_token, negocio_id))
+            ejecutar_query("DELETE FROM compras_entradas WHERE importacion_id=? AND negocio_id=?", (undo_token, negocio_id))
+
+            # 5. Eliminar atributos y costos de fletes
+            ejecutar_query("DELETE FROM producto_atributos WHERE importacion_id=? AND negocio_id=?", (undo_token, negocio_id))
+            ejecutar_query("DELETE FROM costos_variables WHERE observaciones LIKE ? AND negocio_id=?", (f"%{undo_token}%", negocio_id))
+
+            # 6. Actualizar auditoría
+            ejecutar_query(
+                "UPDATE auditoria_importaciones SET estado='REVERTIDO' WHERE undo_token=? AND negocio_id=?",
+                (undo_token, negocio_id)
+            )
+
+            # 7. Recalcular stock_actual en inventario
+            res_inv = ejecutar_query("SELECT id FROM inventario WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+            for r_inv in res_inv:
+                inv_id = r_inv[0]
+                stock_lotes = ejecutar_query(
+                    "SELECT SUM(cantidad_disponible) FROM lotes_inventario WHERE insumo_id=? AND negocio_id=? AND estado='ACTIVO'",
+                    (inv_id, negocio_id), fetch=True
+                )
+                nuevo_stock = float(stock_lotes[0][0]) if stock_lotes and stock_lotes[0][0] is not None else 0.0
+                ejecutar_query("UPDATE inventario SET stock_actual=? WHERE id=? AND negocio_id=?", (nuevo_stock, inv_id, negocio_id))
+
+        return True, f"Importación {undo_token} revertida exitosamente.", {"undo_token": undo_token}
+    except Exception as e:
+        print(f"Error revirtiendo importación {undo_token}: {e}")
+        return False, f"Error al revertir importación: {str(e)}", {}
+
+
+def purgar_datos_importaciones(negocio_id):
+    """
+    Reestablece y elimina todas las importaciones y registros operacionales para permitir
+    un cargue limpio desde cero.
+    """
+    try:
+        with transaccion() as cursor:
+            ejecutar_query("DELETE FROM abonos_cartera WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM movimientos_lote WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM ventas WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM lotes_inventario WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM compras_entradas WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM producto_atributos WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM costos_variables WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("DELETE FROM auditoria_importaciones WHERE negocio_id=?", (negocio_id,))
+            ejecutar_query("UPDATE inventario SET stock_actual=0 WHERE negocio_id=?", (negocio_id,))
+        return True, "Datos operativos e importaciones purgadas correctamente. Ya puedes realizar un nuevo cargue desde cero."
+    except Exception as e:
+        print(f"Error al purgar datos: {e}")
+        return False, f"Error al purgar datos: {str(e)}"
+
+

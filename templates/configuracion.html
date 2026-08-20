@@ -511,7 +511,12 @@
 
             <!-- HISTORIAL Y AUDITORÍA DE IMPORTACIONES -->
             <div class="card" style="max-width: 900px;">
-                <h3 style="margin-bottom: 1rem; color: #f8fafc;">📋 Historial y Auditoría de Importaciones Pasadas</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; color: #f8fafc;">📋 Historial y Auditoría de Importaciones Pasadas</h3>
+                    <button type="button" onclick="purgarImportacionesDuplicadas()" style="background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); padding: 5px 12px; border-radius: 6px; font-size: 0.78rem; font-weight: 700; cursor: pointer;">
+                        🧹 Limpiar Todo / Reestablecer Base de Datos
+                    </button>
+                </div>
                 <div style="max-height: 250px; overflow-y: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
                         <thead>
@@ -1911,6 +1916,23 @@
                     alert(`❌ Error: ${data.error}`);
                 }
             } catch(e) { alert("Error de conexión."); }
+        }
+
+        async function purgarImportacionesDuplicadas() {
+            if (!confirm('⚠️ ALERTA: ¿Deseas eliminar TODAS las importaciones y datos operativos cargados para reestablecer tu base de datos y realizar un nuevo cargue limpio desde cero?')) return;
+            try {
+                const res = await fetch('/api/importador/purgar', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('✅ ' + data.message);
+                    resetWizard();
+                    cargarHistorialAuditoria();
+                } else {
+                    alert('❌ Error: ' + (data.error || 'No se pudo purgar los datos.'));
+                }
+            } catch(e) {
+                alert('Error de conexión al purgar la base de datos.');
+            }
         }
 
         async function cargarCostosVariables() {
