@@ -54,6 +54,12 @@ SEMANTIC_CORE = {
         "PRICE", "PRECIO UNITARIO", "PRECIO AL PUBLICO"
     ],
 
+    # ── Identificadores de Lote / Embarque ──
+    "codigo_lote": [
+        "CODIGO LOTE", "LOTE", "NUMERO LOTE", "NUMERO DE LOTE", "LOTE ID",
+        "BATCH", "BATCH ID", "EMBARQUE", "CODIGO DE LOTE", "LOTE COMPRA"
+    ],
+
     # ── Cantidades ──
     "cantidad": [
         "CANTIDAD", "UNIDADES", "CANTIDAD DE UNIDADES", "UNIDADES COMPRADAS",
@@ -1673,7 +1679,10 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 # Clave Única de Pedido/Embarque y Lote según criterio elegido por el emprendedor
                 crit_lote = (criterio_lote or 'FECHA_TRM').strip().upper()
 
-                if crit_lote.startswith('COLS:'):
+                if crit_lote == 'EXCEL_COL' or mapped.get('codigo_lote'):
+                    lote_val = (mapped.get('codigo_lote') or '').strip()
+                    pedido_key = lote_val if lote_val else f"{fecha_compra_raw[:10]}_{tasa_cambio}"
+                elif crit_lote.startswith('COLS:'):
                     col_names = crit_lote.replace('COLS:', '').split(',')
                     vals = []
                     for cn in col_names:
@@ -1822,9 +1831,9 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
             for idx_lote, (lk, ldata) in enumerate(lotes_acumulados.items(), start=1):
                 if crit_lote == 'INDIVIDUAL':
                     codigo_lote = f"IMP-{undo_token[-6:]}-L{idx_lote}"
-                elif crit_lote == 'PEDIDO_NUM' and lk[0]:
+                elif crit_lote == 'EXCEL_COL' or lk[0]:
                     ped_clean = str(lk[0]).replace(' ', '_').strip()
-                    codigo_lote = f"PED-{ped_clean}" if ped_clean else f"IMP-{undo_token[-6:]}"
+                    codigo_lote = f"LOT-{ped_clean}" if ped_clean else f"IMP-{undo_token[-6:]}"
                 else:
                     codigo_lote = f"IMP-{undo_token[-6:]}"
 
