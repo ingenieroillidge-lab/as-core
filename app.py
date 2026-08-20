@@ -918,6 +918,16 @@ def post_generar_informe():
 
     return jsonify({"dimension": dim, "resumen": summary, "filas": rows})
 
+@app.route('/api/analisis/reagrupar_lotes', methods=['POST'])
+@login_required
+def api_reagrupar_lotes():
+    nid = obtener_negocio_id()
+    data = request.get_json() or {}
+    criterio = data.get('criterio', 'FECHA_TRM')
+    
+    ok, msg = lotes_service.reagrupar_lotes_post_cargue(nid, criterio)
+    return jsonify({"ok": ok, "mensaje": msg})
+
 @app.route('/api/informes/exportar/excel', methods=['POST'])
 @login_required
 def post_exportar_informe_excel():

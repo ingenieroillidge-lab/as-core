@@ -277,7 +277,15 @@
         <!-- PESTAÑA 2: ANÁLISIS POR LOTE -->
         <div id="tab-lotes" class="tab-content" style="display: none;">
             <div class="card">
-                <h3 style="color: #c084fc; margin-bottom: 1rem;">Desglose y Rotación por Lote de Compra</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h3 style="color: #c084fc; margin: 0;">Desglose y Rotación por Lote de Compra</h3>
+                        <p style="color: #94a3b8; font-size: 0.8rem; margin: 2px 0 0 0;">Consolidado de inventario por orden de compra o lote maestro.</p>
+                    </div>
+                    <button onclick="abrirModalReagruparLotes()" style="background: rgba(192, 132, 252, 0.15); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3); font-weight: 700; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; display: flex; align-items: center; gap: 6px;">
+                        ⚙️ Parametrizar Agrupamiento de Lotes
+                    </button>
+                </div>
                 <div class="table-container">
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
                         <thead>
@@ -535,8 +543,72 @@
             document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(tabId).style.display = 'block';
-            evt.target.classList.add('active');
+            if (evt) evt.target.classList.add('active');
+        }
+
+        function abrirModalReagruparLotes() {
+            document.getElementById('modal-reagrupar-lotes').style.display = 'flex';
+        }
+
+        function cerrarModalReagruparLotes() {
+            document.getElementById('modal-reagrupar-lotes').style.display = 'none';
+        }
+
+        async function ejecutarReagrupamientoLotes() {
+            const crit = document.getElementById('sel-reagrupar-criterio').value;
+            try {
+                const res = await fetch('/api/analisis/reagrupar_lotes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ criterio: crit })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    cerrarModalReagruparLotes();
+                    aplicarFiltrosGlobales();
+                } else {
+                    alert('Error al reagrupar lotes: ' + data.mensaje);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Ocurrió un error al conectar con el servidor.');
+            }
         }
     </script>
+
+    <!-- MODAL DE PARAMETRIZACIÓN Y REAGRUPAMIENTO POST-CARGUE DE LOTES -->
+    <div id="modal-reagrupar-lotes" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #1e293b; border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 16px; width: 90%; max-width: 520px; padding: 1.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; color: #c084fc; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    ⚙️ Parametrizar Agrupamiento de Lotes
+                </h3>
+                <button onclick="cerrarModalReagruparLotes()" style="background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 1.25rem; line-height: 1.5;">
+                Re-clasifica dinámicamente tus lotes de compra en la base de datos según el parámetro empresarial deseado:
+            </p>
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px;">Selecciona la Regla de Agrupamiento:</label>
+                <select id="sel-reagrupar-criterio" style="width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 8px; color: white; font-size: 0.88rem; font-weight: 700; cursor: pointer;">
+                    <option value="FECHA_TRM" selected>💱 Por Fecha de Compra + TRM (Predeterminado Importación)</option>
+                    <option value="PEDIDO_NUM">📄 Por Número de Pedido / Guía / Factura</option>
+                    <option value="FECHA_PROVEEDOR">🏢 Por Fecha de Compra + Proveedor</option>
+                    <option value="MES_COMPRA">📅 Por Mes de Adquisición (Agrupación Mensual)</option>
+                    <option value="PROVEEDOR">🏬 Por Proveedor General</option>
+                    <option value="MASTER_UNICO">🔒 Lote Maestro Único por Importación (IMP-XXXXXX)</option>
+                    <option value="INDIVIDUAL">📦 Lote Único por Fila (Sin agrupar)</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button onclick="ejecutarReagrupamientoLotes()" style="flex: 1; background: #c084fc; color: black; font-weight: 800; padding: 0.8rem; border-radius: 8px; border: none; cursor: pointer;">
+                    🔄 Aplicar Nuevo Agrupamiento
+                </button>
+                <button onclick="cerrarModalReagruparLotes()" style="background: rgba(255,255,255,0.08); color: #ccc; border: 1px solid rgba(255,255,255,0.15); font-weight: 700; padding: 0.8rem 1rem; border-radius: 8px; cursor: pointer;">
+                    ✕ Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

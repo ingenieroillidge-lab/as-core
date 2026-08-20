@@ -1673,7 +1673,16 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 # Clave Única de Pedido/Embarque y Lote según criterio elegido por el emprendedor
                 crit_lote = (criterio_lote or 'FECHA_TRM').strip().upper()
 
-                if crit_lote == 'PEDIDO_NUM':
+                if crit_lote.startswith('COLS:'):
+                    col_names = crit_lote.replace('COLS:', '').split(',')
+                    vals = []
+                    for cn in col_names:
+                        cn = cn.strip()
+                        if cn:
+                            v = str(mapped.get(cn) or raw_row.get(cn) or '').strip()
+                            if v: vals.append(v)
+                    pedido_key = "_".join(vals) if vals else f"IMP-{undo_token[-6:]}"
+                elif crit_lote == 'PEDIDO_NUM':
                     ped_val = (mapped.get('numero_pedido') or mapped.get('numero_factura') or mapped.get('guia_envio') or '').strip()
                     pedido_key = ped_val if ped_val else f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 elif crit_lote == 'FECHA_PROVEEDOR':

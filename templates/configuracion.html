@@ -340,17 +340,28 @@
                     <!-- SELECTOR DE CRITERIO DE AGRUPACIÓN DE LOTES / EMBARQUES -->
                     <div id="criterio-lote-container" style="margin-bottom: 1.5rem; background: rgba(192, 132, 252, 0.08); border: 1px solid rgba(192, 132, 252, 0.3); border-radius: 12px; padding: 1rem;">
                         <h4 style="color: #c084fc; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
-                            📦 Criterio de Agrupación de Lotes / Embarques
+                            📦 Parametrización de Agrupamiento de Lotes / Embarques
                         </h4>
                         <p style="font-size: 0.8rem; color: #cbd5e1; margin-bottom: 0.75rem;">
-                            Selecciona cómo deseas agrupar los artículos de este cargue en Lotes Maestros de Inventario:
+                            Elige la regla previa para agrupar los artículos de este cargue en Lotes Maestros o selecciona las columnas específicas de tu Excel:
                         </p>
-                        <select id="sel-criterio-lote" style="width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 8px; color: white; font-size: 0.88rem; font-weight: 700; cursor: pointer; outline: none;">
+                        <select id="sel-criterio-lote" onchange="togglePickerColumnasLote(this.value)" style="width: 100%; padding: 10px 14px; background: #0f172a; border: 1px solid rgba(192, 132, 252, 0.4); border-radius: 8px; color: white; font-size: 0.88rem; font-weight: 700; cursor: pointer; outline: none; margin-bottom: 0.75rem;">
                             <option value="FECHA_TRM" selected>💱 Por Fecha de Compra + Tasa de Cambio TRM (Predeterminado Importaciones USD)</option>
                             <option value="PEDIDO_NUM">📄 Por Número de Pedido / Guía / Factura de Envío</option>
                             <option value="FECHA_PROVEEDOR">🏢 Por Fecha de Compra + Proveedor</option>
                             <option value="INDIVIDUAL">📦 Lote Único por Fila (Sin consolidar)</option>
+                            <option value="CUSTOM">⚙️ Personalizado: Escoger columnas de mi archivo Excel...</option>
                         </select>
+
+                        <!-- CONTENEDOR DE COLUMNAS MULTI-SELECT PARA AGRUPAMIENTO PERSONALIZADO -->
+                        <div id="picker-columnas-lote-container" style="display: none; background: rgba(15, 23, 42, 0.8); border: 1px dashed rgba(192, 132, 252, 0.4); border-radius: 8px; padding: 10px 14px;">
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #c084fc; display: block; margin-bottom: 6px;">
+                                📌 Selecciona las columnas de tu Excel para construir la clave de cada lote:
+                            </span>
+                            <div id="grid-checkboxes-columnas-lote" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                                <!-- Renderizado dinámicamente en JS según el mapeo del archivo -->
+                            </div>
+                        </div>
                     </div>
 
                     <div id="diff-detector-container" style="margin-bottom: 1.5rem; display: none; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 10px; padding: 1rem;">
@@ -1616,12 +1627,30 @@
                     document.getElementById('diff-detector-container').style.display = 'none';
                 }
 
+                // Población de checkboxes de columnas para Agrupamiento Personalizado
+                const gridCols = document.getElementById('grid-checkboxes-columnas-lote');
+                if (gridCols && currentPropuestaMapeo) {
+                    gridCols.innerHTML = currentPropuestaMapeo.map(item => `
+                        <label style="font-size: 0.78rem; color: #f8fafc; display: flex; align-items: center; gap: 6px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                            <input type="checkbox" class="chk-col-lote" value="${item.columna_excel}" ${['fecha_compra', 'tasa_cambio_usd', 'numero_pedido', 'proveedor'].includes(item.campo_propuesto) ? 'checked' : ''}>
+                            <span>${item.columna_excel}</span>
+                        </label>
+                    `).join('');
+                }
+
                 hideImportLoading();
                 document.getElementById('wiz-paso2').style.display = 'none';
                 document.getElementById('wiz-paso3').style.display = 'block';
             } catch(e) {
                 hideImportLoading();
                 alert("Error de conexión durante la pre-validación: " + e.message);
+            }
+        }
+
+        function togglePickerColumnasLote(val) {
+            const pContainer = document.getElementById('picker-columnas-lote-container');
+            if (pContainer) {
+                pContainer.style.display = (val === 'CUSTOM') ? 'block' : 'none';
             }
         }
 
@@ -1718,12 +1747,22 @@
             resetWizardStageUI();
             startImportTimer();
 
+            let critLoteVal = document.getElementById('sel-criterio-lote') ? document.getElementById('sel-criterio-lote').value : 'FECHA_TRM';
+            if (critLoteVal === 'CUSTOM') {
+                const checkedCols = Array.from(document.querySelectorAll('.chk-col-lote:checked')).map(c => c.value);
+                if (checkedCols.length > 0) {
+                    critLoteVal = 'COLS:' + checkedCols.join(',');
+                } else {
+                    critLoteVal = 'FECHA_TRM';
+                }
+            }
+
             const payload = {
                 batch_id: currentBatchId,
                 mapeo_usuario: mapeo,
                 autorizaciones: { actualizar_precios: chkDiffs },
                 granularidad_costos: currentGranularidadCostos || 'POR_UNIDAD',
-                criterio_lote: document.getElementById('sel-criterio-lote') ? document.getElementById('sel-criterio-lote').value : 'FECHA_TRM'
+                criterio_lote: critLoteVal
             };
 
             try {
