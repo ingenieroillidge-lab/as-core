@@ -922,7 +922,9 @@ def post_generar_informe():
 @login_required
 def api_reagrupar_lotes():
     try:
-        nid = obtener_negocio_id()
+        nid = session.get('negocio_id')
+        if not nid:
+            return jsonify({"ok": False, "mensaje": "Sesión no válida o negocio_id no encontrado."}), 401
         data = request.get_json() or {}
         criterio = data.get('criterio', 'FECHA_TRM')
         
