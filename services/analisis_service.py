@@ -242,34 +242,45 @@ def obtener_centro_analisis_completo(negocio_id, filtros=None):
         params_lotes.append(prov_nom)
 
     filas_lotes = ejecutar_query(sql_lotes, tuple(params_lotes), fetch=True) or []
-    lista_lotes = []
+    lotes_map = {}
     valor_inventario_lotes = 0.0
 
     for l in filas_lotes:
         lid = l[0]
-        code = l[1]
+        code = (l[1] or 'LOTE-GENERAL').strip()
         prov = l[2] or 'Proveedor General'
         c_ini = float(l[3] or 0)
         c_disp = float(l[4] or 0)
         c_unit = float(l[5] or 0)
         f_comp = l[6] or ''
 
-        inversion_lote = c_ini * c_unit
-        stock_valor_lote = c_disp * c_unit
-        valor_inventario_lotes += stock_valor_lote
+        inversion_row = c_ini * c_unit
+        stock_valor_row = c_disp * c_unit
+        valor_inventario_lotes += stock_valor_row
 
-        lista_lotes.append({
-            "id": lid,
-            "codigo_lote": code,
-            "proveedor": prov,
-            "cantidad_inicial": c_ini,
-            "cantidad_disponible": c_disp,
-            "unidades_vendidas": c_ini - c_disp,
-            "costo_unitario": c_unit,
-            "inversion_total": inversion_lote,
-            "valor_inventario_restante": stock_valor_lote,
-            "fecha_compra": f_comp
-        })
+        if code not in lotes_map:
+            lotes_map[code] = {
+                "id": lid,
+                "codigo_lote": code,
+                "proveedor": prov,
+                "cantidad_inicial": 0.0,
+                "cantidad_disponible": 0.0,
+                "unidades_vendidas": 0.0,
+                "inversion_total": 0.0,
+                "valor_inventario_restante": 0.0,
+                "fecha_compra": f_comp
+            }
+        
+        lotes_map[code]["cantidad_inicial"] += c_ini
+        lotes_map[code]["cantidad_disponible"] += c_disp
+        lotes_map[code]["unidades_vendidas"] += (c_ini - c_disp)
+        lotes_map[code]["inversion_total"] += inversion_row
+        lotes_map[code]["valor_inventario_restante"] += stock_valor_row
+
+    lista_lotes = []
+    for code, item in lotes_map.items():
+        item["costo_unitario"] = (item["inversion_total"] / item["cantidad_inicial"]) if item["cantidad_inicial"] > 0 else 0.0
+        lista_lotes.append(item)
 
     # ──────────────────────────────────────────────────────────────────
     # 5. ALCANCE DE ANÁLISIS ("¿Qué estoy analizando?")

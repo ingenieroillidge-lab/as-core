@@ -358,29 +358,21 @@ def obtener_tablero_ejecutivo_completo(negocio_id, fecha_inicio=None, fecha_fin=
             else:
                 matriz_cuadrantes["revisar"].append(item)
 
-        # ── 9. RENTABILIDAD Y ROI POR LOTE DE IMPORTACIÓN ──
+        # ── 9. RENTABILIDAD Y ROI POR LOTE DE IMPORTACIÓN CONSOLIDADO ──
         sql_lotes = """
             SELECT l.id, l.codigo_lote, l.fecha_compra, l.cantidad_inicial, l.cantidad_disponible, l.costo_unitario, l.proveedor
             FROM lotes_inventario l
-            WHERE l.negocio_id=? ORDER BY l.id DESC LIMIT 20
+            WHERE l.negocio_id=? ORDER BY l.id DESC
         """
         lotes_raw = ejecutar_query(sql_lotes, (negocio_id,), fetch=True) or []
-        lotes_roi = []
+        lotes_roi_dict = {}
 
         for l_row in lotes_raw:
-            lid, lcode, fcomp, c_ini, c_disp, c_unit, prov = l_row[0], l_row[1], l_row[2], float(l_row[3] or 0), float(l_row[4] or 0), float(l_row[5] or 0), l_row[6] or "Importación Directa"
+            lid, lcode, fcomp, c_ini, c_disp, c_unit, prov = l_row[0], (l_row[1] or 'LOTE-GENERAL').strip(), l_row[2], float(l_row[3] or 0), float(l_row[4] or 0), float(l_row[5] or 0), l_row[6] or "Importación Directa"
             c_vend = c_ini - c_disp
             inversion_total = c_ini * c_unit
             costo_vendido = c_vend * c_unit
 
-            # Obtener ventas vinculadas a movimientos de este lote
-            res_v_lote = ejecutar_query(
-                "SELECT SUM(costo_subtotal) FROM movimientos_lote WHERE lote_id=? AND tipo='SALIDA_VENTA' AND negocio_id=?",
-                (lid, negocio_id), fetch=True
-            )
-            ventas_lote_costo = res_v_lote[0][0] or 0.0 if res_v_lote else 0.0
-            
-            # Estimación de ventas del lote
             res_v_real = ejecutar_query(
                 """SELECT SUM(v.total) FROM ventas v 
                    JOIN movimientos_lote m ON m.venta_id = v.id 
@@ -389,23 +381,37 @@ def obtener_tablero_ejecutivo_completo(negocio_id, fecha_inicio=None, fecha_fin=
             )
             ingresos_lote = res_v_real[0][0] or 0.0 if res_v_real else 0.0
             if ingresos_lote == 0.0 and c_vend > 0:
-                # Si no hay enlace directo a venta, estimamos con precio promedio
                 ingresos_lote = costo_vendido * (1 + (margen_bruto_pct / 100.0))
 
             utilidad_realizada = ingresos_lote - costo_vendido
-            roi_realizado = (utilidad_realizada / costo_vendido * 100.0) if costo_vendido > 0 else 0.0
 
-            # ROI Proyectado incluyendo stock restante en bodega
-            mcu_est = (utilidad_realizada / c_vend) if c_vend > 0 else (c_unit * (margen_bruto_pct / 100.0))
-            utilidad_potencial_total = utilidad_realizada + (c_disp * mcu_est)
-            roi_proyectado = (utilidad_potencial_total / inversion_total * 100.0) if inversion_total > 0 else 0.0
+            if lcode not in lotes_roi_dict:
+                lotes_roi_dict[lcode] = {
+                    "lote_code": lcode, "fecha": fcomp, "proveedor": prov,
+                    "inversion": 0.0, "costo_vendido": 0.0, "vendidas": 0.0, "stock": 0.0,
+                    "ingresos": 0.0, "utilidad": 0.0
+                }
 
-            lotes_roi.append({
-                "lote_code": lcode, "fecha": fcomp, "proveedor": prov, "inversion": inversion_total,
-                "vendidas": c_vend, "stock": c_disp, "ingresos": ingresos_lote, "utilidad": utilidad_realizada,
-                "roi_realizado": roi_realizado, "roi_proyectado": roi_proyectado,
-                "estado": "AGOTADO" if c_disp <= 0.001 else "ACTIVO"
-            })
+            lotes_roi_dict[lcode]["inversion"] += inversion_total
+            lotes_roi_dict[lcode]["costo_vendido"] += costo_vendido
+            lotes_roi_dict[lcode]["vendidas"] += c_vend
+            lotes_roi_dict[lcode]["stock"] += c_disp
+            lotes_roi_dict[lcode]["ingresos"] += ingresos_lote
+            lotes_roi_dict[lcode]["utilidad"] += utilidad_realizada
+
+        lotes_roi = []
+        for lcode, item in lotes_roi_dict.items():
+            roi_realizado = (item["utilidad"] / item["costo_vendido"] * 100.0) if item["costo_vendido"] > 0 else 0.0
+            mcu_est = (item["utilidad"] / item["vendidas"]) if item["vendidas"] > 0 else (item["inversion"] / max(item["vendidas"] + item["stock"], 1) * (margen_bruto_pct / 100.0))
+            utilidad_potencial_total = item["utilidad"] + (item["stock"] * mcu_est)
+            roi_proyectado = (utilidad_potencial_total / item["inversion"] * 100.0) if item["inversion"] > 0 else 0.0
+
+            item["roi_realizado"] = roi_realizado
+            item["roi_proyectado"] = roi_proyectado
+            item["estado"] = "AGOTADO" if item["stock"] <= 0.001 else "ACTIVO"
+            lotes_roi.append(item)
+
+        lotes_roi = lotes_roi[:20]
 
         # ── 10. EVOLUCIÓN TEMPORAL MULTI-MÉTRICA ──
         sql_trend = """

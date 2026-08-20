@@ -1808,8 +1808,17 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
             batch_compras = []
             lotes_keys_order = []
 
+            crit_lote = (criterio_lote or 'FECHA_TRM').strip().upper()
+
             for idx_lote, (lk, ldata) in enumerate(lotes_acumulados.items(), start=1):
-                codigo_lote = f"IMP-{undo_token[-6:]}-L{idx_lote}"
+                if crit_lote == 'INDIVIDUAL':
+                    codigo_lote = f"IMP-{undo_token[-6:]}-L{idx_lote}"
+                elif crit_lote == 'PEDIDO_NUM' and lk[0]:
+                    ped_clean = str(lk[0]).replace(' ', '_').strip()
+                    codigo_lote = f"PED-{ped_clean}" if ped_clean else f"IMP-{undo_token[-6:]}"
+                else:
+                    codigo_lote = f"IMP-{undo_token[-6:]}"
+
                 cant_total = ldata["cant_total"]
                 cant_disp = ldata["solo_compra_cant"]
                 estado_lote = 'AGOTADO' if cant_disp <= 0.0001 else 'ACTIVO'
