@@ -1536,6 +1536,7 @@ def api_importador_prevalidar():
         d = request.json or {}
         batch_id = d.get('batch_id')
         mapeo_usuario = d.get('mapeo_usuario', {})
+        etapa0_config = d.get('etapa0_config', {})
 
         if not batch_id or not mapeo_usuario:
             return jsonify({"ok": False, "error": "batch_id y mapeo_usuario son obligatorios", "stage": "input_validation"}), 400
@@ -1544,7 +1545,6 @@ def api_importador_prevalidar():
         ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
 
         if ok:
-            # Obtener datos de staging para análisis de granularidad de costos y simulación
             registros = ejecutar_query(
                 "SELECT datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=?",
                 (batch_id, nid), fetch=True
@@ -1552,13 +1552,14 @@ def api_importador_prevalidar():
             filas_datos = [json.loads(r[0]) for r in registros if r and r[0]]
 
             gran_costo, gran_motivos = importador_service.inferir_granularidad_costos(filas_datos, mapeo_usuario)
-            ok_sim, msg_sim, simulacion = importador_service.simular_importacion(batch_id, nid, mapeo_usuario, gran_costo)
+            ok_sim, msg_sim, simulacion = importador_service.simular_importacion(batch_id, nid, mapeo_usuario, gran_costo, etapa0_config)
 
             resumen["granularidad_costos"] = {
                 "tipo_inferido": gran_costo,
                 "motivos": gran_motivos
             }
             resumen["simulacion"] = simulacion if ok_sim else None
+            resumen["matriz_conciliacion"] = simulacion.get("matriz_conciliacion") if (ok_sim and simulacion) else None
 
             print(f"[PREVALIDAR] Completado: registros={resumen.get('total_registros', 0)}, tiempo={resumen.get('tiempo_ms', '?')}ms")
             return jsonify({"ok": True, "message": msg, "resumen": resumen})
@@ -1587,12 +1588,13 @@ def api_importador_procesar():
     mapeo_usuario = d.get('mapeo_usuario', {})
     autorizaciones = d.get('autorizaciones', {})
     granularidad_costos = d.get('granularidad_costos', 'POR_UNIDAD')
+    etapa0_config = d.get('etapa0_config', {})
 
     if not batch_id or not mapeo_usuario:
         return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
 
     ok, msg, result = importador_service.procesar_importacion_aprobada(
-        batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos
+        batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos, etapa0_config
     )
     if ok:
         return jsonify({"message": msg, "data": result})

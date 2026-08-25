@@ -307,7 +307,7 @@ def determinar_tipo_fila(mapped_data):
 # ETAPA 1: CARGA Y STAGING CON DETECCIÓN DE DUPLICADOS Y FILTRADO
 # ══════════════════════════════════════════════════════════════════
 
-def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
+def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz, hoja_origen="Ventas"):
     if not filas_matriz or len(filas_matriz) < 1:
         return False, "El archivo no contiene filas de datos", None
 
@@ -327,9 +327,30 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
 
     filas_datos = filas_matriz[1:]
 
+    # Consultar hashes previos en DB para clasificación en 3 niveles
+    hashes_filas_existentes = set()
+    rows_h_f = ejecutar_query("SELECT hash_fila FROM importaciones_staging WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+    for r in rows_h_f:
+        if r and r[0]: hashes_filas_existentes.add(r[0])
+    rows_v_f = ejecutar_query("SELECT hash_fila FROM ventas WHERE negocio_id=? AND hash_fila IS NOT NULL", (negocio_id,), fetch=True) or []
+    for r in rows_v_f:
+        if r and r[0]: hashes_filas_existentes.add(r[0])
+
+    hashes_contenido_existentes = {}
+    rows_h_c = ejecutar_query("SELECT hash_contenido, fila_num FROM importaciones_staging WHERE negocio_id=?", (negocio_id,), fetch=True) or []
+    for r in rows_h_c:
+        if r and r[0]: hashes_contenido_existentes[r[0]] = r[1]
+    rows_v_c = ejecutar_query("SELECT hash_contenido, fila_origen FROM ventas WHERE negocio_id=? AND hash_contenido IS NOT NULL", (negocio_id,), fetch=True) or []
+    for r in rows_v_c:
+        if r and r[0]: hashes_contenido_existentes[r[0]] = r[1]
+
     params_staging = []
     muestras = []
     fila_num_real = 0
+    hashes_contenido_batch = {}
+
+    duplicados_confirmados_cnt = 0
+    duplicados_sospechosos_cnt = 0
 
     for idx, row in enumerate(filas_datos):
         dict_row = {}
@@ -342,16 +363,31 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
             if val:
                 tiene_datos = True
 
-        # Filtrar filas completamente vacías
         if not tiene_datos:
             continue
 
-        # Filtrar filas que son resúmenes/totales al final del Excel
         primer_val = (dict_row.get(headers[0]) or "").upper().strip()
         if primer_val in ("TOTAL", "SUBTOTAL", "GRAN TOTAL", "SUMA", "TOTALES", "PROMEDIO"):
             continue
 
         fila_num_real += 1
+        fila_excel_origen = idx + 2  # Fila 1 es encabezado
+
+        row_sorted_json = json.dumps(dict_row, ensure_ascii=False, sort_keys=True)
+        hash_contenido = hashlib.sha256(row_sorted_json.encode('utf-8')).hexdigest()
+        hash_fila = hashlib.sha256(f"{nombre_archivo}|{hoja_origen}|{fila_excel_origen}|{hash_contenido}".encode('utf-8')).hexdigest()
+
+        # Clasificación en 3 niveles:
+        if hash_fila in hashes_filas_existentes:
+            nivel_dup = "CONFIRMADO"  # 🔴 Re-importación exacta
+            duplicados_confirmados_cnt += 1
+        elif hash_contenido in hashes_contenido_batch or hash_contenido in hashes_contenido_existentes:
+            nivel_dup = "SOSPECHOSO"   # 🟡 Mismo contenido en otra fila
+            duplicados_sospechosos_cnt += 1
+        else:
+            nivel_dup = "NORMAL"      # 🟢 Único
+
+        hashes_contenido_batch[hash_contenido] = fila_excel_origen
 
         if len(muestras) < 5:
             muestras.append(dict_row)
@@ -359,17 +395,17 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
         params_staging.append((
             negocio_id, batch_id, fila_num_real,
             json.dumps(dict_row, ensure_ascii=False),
-            fecha_creacion
+            'PENDIENTE', fecha_creacion,
+            nombre_archivo, hoja_origen, fila_excel_origen,
+            hash_fila, hash_contenido, nivel_dup
         ))
 
     if not params_staging:
         return False, "No se encontraron filas con datos válidos en el archivo", None
 
-    # Calcular hash basado en las filas útiles filtradas (coincide exactamente con el hash de procesar)
     filas_matriz_utiles = [json.loads(p[3]) for p in params_staging]
     hash_archivo = calcular_hash_contenido(filas_matriz_utiles)
 
-    # Verificar si este archivo ya fue importado anteriormente
     imp_previa = ejecutar_query(
         "SELECT undo_token, fecha, total_registros, estado FROM auditoria_importaciones WHERE negocio_id=? AND hash_archivo=? ORDER BY id DESC LIMIT 1",
         (negocio_id, hash_archivo), fetch=True
@@ -384,20 +420,24 @@ def crear_lote_staging(negocio_id, nombre_archivo, filas_matriz):
         }
 
     sql_insert = """INSERT INTO importaciones_staging 
-                    (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion)
-                    VALUES (?, ?, ?, ?, 'PENDIENTE', ?)"""
+                    (negocio_id, batch_id, fila_num, datos_raw_json, estado_validacion, fecha_creacion,
+                     archivo_origen, hoja_origen, fila_origen, hash_fila, hash_contenido, nivel_duplicado)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
     ejecutar_query_many(sql_insert, params_staging)
 
     res_info = {
         "batch_id": batch_id,
         "nombre_archivo": nombre_archivo,
+        "hoja_origen": hoja_origen,
         "headers": headers,
         "total_registros": len(params_staging),
+        "duplicados_confirmados": duplicados_confirmados_cnt,
+        "duplicados_sospechosos": duplicados_sospechosos_cnt,
         "muestras": muestras,
         "hash_archivo": hash_archivo,
         "importacion_previa": importacion_previa
     }
-    return True, "Archivo cargado en staging con éxito", res_info
+    return True, "Archivo cargado en staging con éxito con linaje completo", res_info
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -800,13 +840,26 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
 # ETAPA 4: SIMULACIÓN DE IMPORTACIÓN PRE-CONFIRMACIÓN
 # ══════════════════════════════════════════════════════════════════
 
-def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD"):
+def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD", etapa0_config=None):
     """
-    Calcula exactamente el impacto de la importación antes de ejecutar la transacción atómica
-    y genera la matriz completa de 'Prueba de Oro' para conciliación final.
+    Calcula el impacto exacto de la importación incorporando la Etapa 0 de Configuración de Interpretación
+    y genera la Matriz de Conciliación Multi-Etapa (Excel Original -> Staging -> Procesados -> Definitivos -> Dashboard).
     """
+    if not etapa0_config or not isinstance(etapa0_config, dict):
+        etapa0_config = {
+            "tipo_precio_venta": "VALOR_TOTAL_VENTA",
+            "usar_cantidad": True,
+            "usar_abonos": True,
+            "usar_deuda": True,
+            "formato_regional": "COLOMBIA_LATAM"
+        }
+
     registros_staging = ejecutar_query(
-        "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
+        """SELECT id, fila_num, datos_raw_json, archivo_origen, hoja_origen, fila_origen, 
+                  hash_fila, hash_contenido, nivel_duplicado 
+           FROM importaciones_staging 
+           WHERE batch_id=? AND negocio_id=? 
+           ORDER BY fila_num ASC""",
         (batch_id, negocio_id), fetch=True
     ) or []
 
@@ -825,49 +878,46 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
     clientes_deudores_set = set()
     lotes_set = set()
 
-    unidades_adquiridas = 0.0
-    unidades_vendidas = 0.0
-    unidades_perdidas = 0.0
-    unidades_disponibles = 0.0
+    # Acumuladores de Excel Original vs Definitivo
+    excel_total_ventas = 0.0
+    excel_total_abonos = 0.0
+    excel_total_deudas = 0.0
+    excel_total_costos = 0.0
 
-    total_inversion_lotes = 0.0
-    total_ingresos = 0.0
-    costo_ventas = 0.0
-    costo_perdidas = 0.0
+    definitivo_ventas = 0.0
+    definitivo_recaudo_abonos = 0.0
+    definitivo_cartera = 0.0
+    definitivo_costos = 0.0
 
-    ventas_contado_val = 0.0
-    ventas_credito_val = 0.0
-    total_abonos = 0.0
-    total_cartera_as = 0.0
-    total_deuda_excel = 0.0
+    cnt_normal = 0
+    cnt_sospechoso = 0
+    cnt_confirmado = 0
 
+    cnt_pagado = 0
+    cnt_parcial = 0
+    cnt_pendiente = 0
     cnt_stock = 0
-    cnt_vendida = 0
-    cnt_debe = 0
     cnt_perdida = 0
 
     lotes_acumulados_sim = {}
+    tipo_precio_opt = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
 
-    for fila_num, raw_json in registros_staging:
+    for s_id, fila_num, raw_json, arch_orig, hoja_orig, fila_orig, h_fila, h_cont, nivel_dup in registros_staging:
         raw_row = json.loads(raw_json)
         mapped = {campo: raw_row.get(col, "").strip() for col, campo in mapeo_usuario.items() if campo and campo != "IGNORAR"}
+
+        if nivel_dup == "CONFIRMADO":
+            cnt_confirmado += 1
+        elif nivel_dup == "SOSPECHOSO":
+            cnt_sospechoso += 1
+        else:
+            cnt_normal += 1
 
         nombre_prod = (mapped.get('nombre_producto') or '').strip()
         if not nombre_prod:
             continue
 
         tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
-        raw_est = (mapped.get('estado_origen') or mapped.get('estado') or '').strip()
-        concepto_est = normalizar_concepto_estado(raw_est)
-
-        if concepto_est == "STOCK":
-            cnt_stock += 1
-        elif concepto_est == "PERDIDA":
-            cnt_perdida += 1
-        elif concepto_est == "DEBE":
-            cnt_debe += 1
-        else:
-            cnt_vendida += 1
 
         key_p = nombre_prod.lower()
         productos_procesados.add(key_p)
@@ -878,16 +928,28 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         if cli_nombre and cli_nombre.lower() not in clis_exist_set:
             clientes_nuevos.add(cli_nombre.lower())
 
-        cant = parse_money(mapped.get('cantidad')) or 1.0
-        precio_v = parse_money(mapped.get('precio_venta'))
+        cant = parse_money(mapped.get('cantidad')) if etapa0_config.get('usar_cantidad', True) else 1.0
+        if cant <= 0: cant = 1.0
+
+        precio_v_raw = parse_money(mapped.get('precio_venta'))
         costo_origen = parse_money(mapped.get('costo_unitario_origen'))
         tasa_cambio = parse_money(mapped.get('tasa_cambio'))
         costo_local = parse_money(mapped.get('costo_unitario_local'))
         costo_envio = parse_money(mapped.get('costo_envio'))
         costo_total_imp = parse_money(mapped.get('costo_total'))
-        deuda_val = parse_money(mapped.get('saldo_pendiente'))
-        abono_val = parse_money(mapped.get('abono_monto'))
-        fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
+        deuda_val = parse_money(mapped.get('saldo_pendiente')) if etapa0_config.get('usar_deuda', True) else 0.0
+        abono_val = parse_money(mapped.get('abono_monto')) if etapa0_config.get('usar_abonos', True) else 0.0
+
+        # Regla de Precio Unitario vs Valor Total de la Venta:
+        if tipo_precio_opt == "VALOR_TOTAL_VENTA":
+            tot_v_row = precio_v_raw
+        else:
+            tot_v_row = precio_v_raw * cant
+
+        # Sumatorias de Excel Original
+        excel_total_ventas += tot_v_row
+        excel_total_abonos += abono_val
+        excel_total_deudas += deuda_val
 
         # Costo unitario landed
         if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
@@ -901,7 +963,9 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         else:
             costo_adq = 0.0
 
-        # Regla de Lote para Importación: (Fecha Compra + Tasa Cambio, Producto)
+        excel_total_costos += (costo_adq * cant)
+
+        fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
         pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
         lote_key = (pedido_key, key_p)
         lotes_set.add(lote_key)
@@ -910,96 +974,121 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             lotes_acumulados_sim[lote_key] = {"cant_total": 0.0, "cant_disponible": 0.0, "costo_adq": costo_adq}
         lotes_acumulados_sim[lote_key]["cant_total"] += cant
 
-        unidades_adquiridas += cant
-        total_inversion_lotes += (costo_adq * cant)
-
         if tipo_fila == "SOLO_COMPRA":
-            unidades_disponibles += cant
+            cnt_stock += 1
             lotes_acumulados_sim[lote_key]["cant_disponible"] += cant
 
         elif tipo_fila == "PERDIDA":
-            unidades_perdidas += cant
-            costo_perdidas += (costo_adq * cant)
+            cnt_perdida += 1
 
         elif tipo_fila in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
-            unidades_vendidas += cant
-            tot_v_row = precio_v * cant
-            total_ingresos += tot_v_row
-            costo_ventas += (costo_adq * cant)
-            total_abonos += abono_val
+            definitivo_ventas += tot_v_row
+            definitivo_costos += (costo_adq * cant)
+            recaudo_fila = abono_val
+            definitivo_recaudo_abonos += recaudo_fila
 
-            if raw_est in ('DEBE', 'CARTERA', 'CRÉDITO', 'CREDITO', 'DEUDA') or deuda_val > 0:
-                ventas_credito_val += tot_v_row
-                saldo_calc = max(0.0, tot_v_row - abono_val)
-                total_cartera_as += saldo_calc
-                total_deuda_excel += deuda_val
-                if cli_nombre:
-                    clientes_deudores_set.add(cli_nombre.lower())
+            saldo_pend_fila = max(0.0, tot_v_row - recaudo_fila)
+            definitivo_cartera += saldo_pend_fila
+
+            # Determinación de Estado
+            if saldo_pend_fila <= 0.01:
+                cnt_pagado += 1
+            elif recaudo_fila > 0:
+                cnt_parcial += 1
             else:
-                ventas_contado_val += tot_v_row
+                cnt_pendiente += 1
 
-    utilidad_bruta = total_ingresos - costo_ventas
-    margen_pct = (utilidad_bruta / total_ingresos * 100.0) if total_ingresos > 0 else 0.0
+            if saldo_pend_fila > 0 and cli_nombre:
+                clientes_deudores_set.add(cli_nombre.lower())
+
+    utilidad_bruta = definitivo_ventas - definitivo_costos
+    margen_pct = (utilidad_bruta / definitivo_ventas * 100.0) if definitivo_ventas > 0 else 0.0
     valor_inventario_restante = sum(ldata["cant_disponible"] * ldata["costo_adq"] for ldata in lotes_acumulados_sim.values())
 
     lotes_con_costo = sum(1 for ldata in lotes_acumulados_sim.values() if ldata["costo_adq"] > 0)
     lotes_sin_costo = len(lotes_acumulados_sim) - lotes_con_costo
 
+    # Definición de Diferencia Detectada:
+    diferencia_detectada = excel_total_ventas - definitivo_ventas
+    estado_conciliacion = "CONCILIADA" if (abs(diferencia_detectada) < 1.0 and cnt_confirmado == 0) else "REQUIERE_REVISION"
+
+    # Construcción de la Matriz de Conciliación Multi-Etapa (5 Etapas + Etapa 0)
+    matriz_conciliacion = {
+        "etapa0_config": etapa0_config,
+        "etapa1_excel_original": {
+            "filas_totales": len(registros_staging),
+            "total_ventas": excel_total_ventas,
+            "total_abonos": excel_total_abonos,
+            "total_deudas": excel_total_deudas,
+            "total_costos": excel_total_costos
+        },
+        "etapa2_staging": {
+            "filas_normales": cnt_normal,
+            "duplicados_sospechosos": cnt_sospechoso,
+            "duplicados_confirmados": cnt_confirmado,
+            "filas_procesables": cnt_normal + cnt_sospechoso
+        },
+        "etapa3_datos_procesados": {
+            "pagados": cnt_pagado,
+            "parciales": cnt_parcial,
+            "pendientes": cnt_pendiente,
+            "stock": cnt_stock,
+            "perdida": cnt_perdida
+        },
+        "etapa4_datos_definitivos": {
+            "ventas_definitivas": definitivo_ventas,
+            "recaudo_abonos": definitivo_recaudo_abonos,
+            "cartera_pendiente": definitivo_cartera,
+            "costo_ventas": definitivo_costos,
+            "utilidad_bruta": utilidad_bruta,
+            "margen_pct": round(margen_pct, 2)
+        },
+        "etapa5_dashboard_conciliacion": {
+            "estado": estado_conciliacion,
+            "diferencia_detectada": diferencia_detectada,
+            "clientes_deudores_cnt": len(clientes_deudores_set),
+            "lotes_a_crear": len(lotes_set)
+        }
+    }
+
     prueba_de_oro = {
         "total_filas": len(registros_staging),
         "desglose_estados": {
             "stock": cnt_stock,
-            "vendida": cnt_vendida,
-            "debe": cnt_debe,
+            "vendida": cnt_pagado + cnt_parcial,
+            "debe": cnt_pendiente,
             "perdida": cnt_perdida
         },
-        "unidades": {
-            "adquiridas": unidades_adquiridas,
-            "vendidas": unidades_vendidas,
-            "perdidas": unidades_perdidas,
-            "disponibles": unidades_disponibles
-        },
         "financiero": {
-            "ingresos_totales": total_ingresos,
-            "costo_ventas": costo_ventas,
-            "costo_perdidas": costo_perdidas,
+            "ingresos_totales": definitivo_ventas,
+            "costo_ventas": definitivo_costos,
             "utilidad_bruta": utilidad_bruta,
             "margen_pct": round(margen_pct, 2),
-            "inversion_lotes_total": total_inversion_lotes,
             "valor_inventario_restante": valor_inventario_restante
         },
         "cartera": {
-            "ventas_contado": ventas_contado_val,
-            "ventas_credito": ventas_credito_val,
-            "total_abonos": total_abonos,
-            "cartera_generada_as": total_cartera_as,
-            "deuda_excel_total": total_deuda_excel,
-            "discrepancia_total": abs(total_cartera_as - total_deuda_excel),
+            "ventas_contado": definitivo_ventas - definitivo_cartera,
+            "total_abonos": definitivo_recaudo_abonos,
+            "cartera_generada_as": definitivo_cartera,
+            "deuda_excel_total": excel_total_deudas,
+            "discrepancia_total": abs(definitivo_cartera - excel_total_deudas),
             "clientes_deudores_cnt": len(clientes_deudores_set)
-        },
-        "lotes": {
-            "lotes_creados": len(lotes_set),
-            "con_costo": lotes_con_costo,
-            "sin_costo": lotes_sin_costo
         }
     }
 
-    return True, "Simulación generada", {
+    return True, "Simulación y Matriz de Conciliación generadas con éxito", {
         "batch_id": batch_id,
         "total_filas": len(registros_staging),
         "productos_totales": len(productos_procesados),
         "productos_nuevos": len(productos_nuevos),
         "clientes_nuevos": len(clientes_nuevos),
         "lotes_a_crear": len(lotes_set),
-        "lotes_con_costo": lotes_con_costo,
-        "lotes_sin_costo": lotes_sin_costo,
-        "ventas_a_crear": cnt_vendida + cnt_debe,
-        "total_inversion": total_inversion_lotes,
-        "total_ingresos": total_ingresos,
+        "total_ingresos": definitivo_ventas,
         "utilidad_estimada": utilidad_bruta,
         "margen_estimado_pct": round(margen_pct, 2),
-        "total_cartera": total_cartera_as,
-        "total_abonos": total_abonos,
+        "total_cartera": definitivo_cartera,
+        "total_abonos": definitivo_recaudo_abonos,
+        "matriz_conciliacion": matriz_conciliacion,
         "prueba_de_oro": prueba_de_oro
     }
 
@@ -1041,24 +1130,39 @@ def bulk_insert_con_returning(cursor, table_name, columns, rows_params, ph, is_p
 # ETAPA 5: PROCESAMIENTO APROBADO CON TRANSACCIÓN ATÓMICA ULTRA-RÁPIDA
 # ══════════════════════════════════════════════════════════════════
 
-def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD"):
+def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", etapa0_config=None):
     """
     Confirmación transaccional atómica masiva (BEGIN ... COMMIT/ROLLBACK).
-    Usa procesamiento en 2 pases con inserciones multi-fila (VALUES ..., ...)
-    para completar la importación de cientos de filas en menos de 1 segundo.
+    Conserva el staging intacto (actualiza a PROCESADO) para linaje completo.
     """
+    if not etapa0_config or not isinstance(etapa0_config, dict):
+        etapa0_config = {
+            "tipo_precio_venta": "VALOR_TOTAL_VENTA",
+            "usar_cantidad": True,
+            "usar_abonos": True,
+            "usar_deuda": True,
+            "formato_regional": "COLOMBIA_LATAM"
+        }
+
     registros_staging = ejecutar_query(
-        "SELECT fila_num, datos_raw_json FROM importaciones_staging WHERE batch_id=? AND negocio_id=? ORDER BY fila_num ASC",
+        """SELECT fila_num, datos_raw_json, archivo_origen, hoja_origen, fila_origen, 
+                  hash_fila, hash_contenido, nivel_duplicado 
+           FROM importaciones_staging 
+           WHERE batch_id=? AND negocio_id=? 
+           ORDER BY fila_num ASC""",
         (batch_id, negocio_id), fetch=True
     ) or []
 
     if not registros_staging:
         return False, "No se encontraron datos para procesar", None
 
+    # Generar Simulación y Matriz de Conciliación previa a procesar
+    ok_sim, msg_sim, sim_res = simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos, etapa0_config)
+    matriz_conciliacion = sim_res.get("matriz_conciliacion") if ok_sim and sim_res else {}
+
     undo_token = f"UNDO-{uuid.uuid4().hex[:12].upper()}"
     fecha_hoy = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Recuperar hash de archivo si fue guardado en autorizaciones o calcularlo desde staging
     hash_archivo = None
     if autorizaciones and isinstance(autorizaciones, dict):
         hash_archivo = autorizaciones.get('hash_archivo')
@@ -1073,10 +1177,10 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
         "clientes": [], "abonos": [], "movimientos": []
     }
     procesados = 0
+    tipo_precio_opt = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
 
     try:
         with transaccion() as (cursor, ph, is_pg):
-            # ── PASO 0: Pre-cargar cachés en memoria ──
             cursor.execute(f"SELECT LOWER(nombre), id FROM productos WHERE negocio_id={ph}", (negocio_id,))
             productos_cache = {row[0]: row[1] for row in cursor.fetchall() if row and row[0]}
 
@@ -1089,13 +1193,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             cursor.execute(f"SELECT producto_id, insumo_id FROM producto_insumo WHERE negocio_id={ph}", (negocio_id,))
             producto_insumo_set = {(row[0], row[1]) for row in cursor.fetchall() if row}
 
-            # ── PASO 1: Análisis de Filas, Fechas y Claves de Pedido / Lote ──
             filas_mapeadas = []
-            nuevos_prods_dict = {}     # key_lower -> params_tuple
-            nuevos_inv_dict = {}       # key_lower -> params_tuple
-            nuevos_clientes_dict = {}  # key_lower -> params_tuple
+            nuevos_prods_dict = {}
+            nuevos_inv_dict = {}
+            nuevos_clientes_dict = {}
 
-            for fila_num, raw_json in registros_staging:
+            for fila_num, raw_json, arch_orig, hoja_orig, fila_orig, h_fila, h_cont, nivel_dup in registros_staging:
                 raw_row = json.loads(raw_json)
                 mapped = {campo: raw_row.get(col, "").strip() for col, campo in mapeo_usuario.items() if campo and campo != "IGNORAR"}
 
@@ -1106,32 +1209,25 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
                 tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
 
-                cant = parse_money(mapped.get('cantidad')) or 1.0
-                precio_v = parse_money(mapped.get('precio_venta'))
+                cant = parse_money(mapped.get('cantidad')) if etapa0_config.get('usar_cantidad', True) else 1.0
+                if cant <= 0: cant = 1.0
+
+                precio_v_raw = parse_money(mapped.get('precio_venta'))
                 costo_origen = parse_money(mapped.get('costo_unitario_origen'))
                 tasa_cambio = parse_money(mapped.get('tasa_cambio'))
                 costo_local = parse_money(mapped.get('costo_unitario_local'))
                 costo_envio = parse_money(mapped.get('costo_envio'))
                 costo_total_imp = parse_money(mapped.get('costo_total'))
                 cli_nombre = (mapped.get('cliente_nombre') or '').strip()
-                deuda_val = parse_money(mapped.get('saldo_pendiente'))
-                abono_val = parse_money(mapped.get('abono_monto'))
+                deuda_val = parse_money(mapped.get('saldo_pendiente')) if etapa0_config.get('usar_deuda', True) else 0.0
+                abono_val = parse_money(mapped.get('abono_monto')) if etapa0_config.get('usar_abonos', True) else 0.0
 
-                # Fechas separadas independientemente
                 fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
                 fecha_recepcion_raw = mapped.get('fecha_recepcion') or fecha_compra_raw
 
-                if len(fecha_compra_raw) == 10:
-                    fecha_compra_fmt = f"{fecha_compra_raw} 12:00:00"
-                else:
-                    fecha_compra_fmt = fecha_compra_raw
+                fecha_compra_fmt = f"{fecha_compra_raw} 12:00:00" if len(fecha_compra_raw) == 10 else fecha_compra_raw
+                fecha_recepcion_fmt = f"{fecha_recepcion_raw} 12:00:00" if len(fecha_recepcion_raw) == 10 else fecha_recepcion_raw
 
-                if len(fecha_recepcion_raw) == 10:
-                    fecha_recepcion_fmt = f"{fecha_recepcion_raw} 12:00:00"
-                else:
-                    fecha_recepcion_fmt = fecha_recepcion_raw
-
-                # Costo Landed Unitario definitivo
                 if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
                     costo_adq = costo_total_imp / cant
                 elif costo_total_imp > 0:
@@ -1147,7 +1243,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if key_p not in productos_cache and key_p not in nuevos_prods_dict:
                     categoria = (mapped.get('categoria') or '').strip() or None
                     subcategoria = (mapped.get('subcategoria') or '').strip() or None
-                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
+                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v_raw, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
 
                 if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA", "PERDIDA"):
                     if key_p not in inventario_cache and key_p not in nuevos_inv_dict:
@@ -1169,41 +1265,30 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                             cli_wa or cli_tel, cli_email, cli_dir, 0.0, 15, 'ACTIVO', undo_token
                         )
 
-                # Clave Única de Pedido/Embarque y Lote (importaciones: fecha + tasa de cambio)
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p)
 
-                concepto_est = normalizar_concepto_estado(estado_raw)
-                total_v_row = precio_v * cant
-                tiene_col_abono = 'abono_monto' in mapped
-
-                # Abono efectivo percibido (Regla 4)
-                if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_val == 0.0:
-                    abono_efectivo = total_v_row
+                # Total Venta según opción de Etapa 0:
+                if tipo_precio_opt == "VALOR_TOTAL_VENTA":
+                    total_v_row = precio_v_raw
                 else:
-                    abono_efectivo = abono_val
+                    total_v_row = precio_v_raw * cant
 
+                recaudo_efectivo = abono_val
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
                 metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"
 
-                # Manejo de Sobreabonos y Nota de Origen VENDIDA
-                obs_nota = ""
-                if abono_efectivo > total_v_row and total_v_row > 0:
-                    excedente_abono = abono_efectivo - total_v_row
-                    saldo_calc = 0.0
+                saldo_calc = max(0.0, total_v_row - recaudo_efectivo)
+                if saldo_calc <= 0.01:
                     est_pago = "PAGADO"
+                elif recaudo_efectivo > 0:
+                    est_pago = "PARCIAL"
                 else:
-                    excedente_abono = 0.0
-                    saldo_calc = max(0.0, total_v_row - abono_efectivo)
-                    if saldo_calc <= 0.01:
-                        est_pago = "PAGADO"
-                    elif abono_efectivo > 0:
-                        est_pago = "PARCIAL"
-                    else:
-                        est_pago = "PENDIENTE"
+                    est_pago = "PENDIENTE"
 
-                if concepto_est == "VENDIDA" and saldo_calc > 0.01:
-                    obs_nota = f"⚠️ Detectada como VENDIDA en origen (Abono ${abono_efectivo:,.0f} vs Total ${total_v_row:,.0f})"
+                obs_nota = ""
+                if recaudo_efectivo > total_v_row and total_v_row > 0:
+                    obs_nota = f"⚠️ Recaudo ${recaudo_efectivo:,.0f} excede total venta ${total_v_row:,.0f}"
 
                 filas_mapeadas.append({
                     "fila_num": fila_num,
@@ -1215,13 +1300,13 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "origen_clasificacion": origen_clasificacion,
                     "estado_raw": estado_raw,
                     "cant": cant,
-                    "precio_v": precio_v,
+                    "precio_v": precio_v_raw,
+                    "total_v_row": total_v_row,
                     "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre,
                     "deuda_val": deuda_val,
                     "abono_val": abono_val,
-                    "abono_efectivo": abono_efectivo,
-                    "excedente_abono": excedente_abono,
+                    "recaudo_efectivo": recaudo_efectivo,
                     "saldo_calc": saldo_calc,
                     "metodo_pago": metodo_pago,
                     "obs_nota": obs_nota,
@@ -1229,10 +1314,15 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "fecha_recepcion": fecha_recepcion_fmt,
                     "fecha_venta": fecha_compra_fmt,
                     "pedido_key": pedido_key,
-                    "lote_key": lote_key
+                    "lote_key": lote_key,
+                    "archivo_origen": arch_orig,
+                    "hoja_origen": hoja_orig,
+                    "fila_origen": fila_orig,
+                    "hash_fila": h_fila,
+                    "hash_contenido": h_cont,
+                    "nivel_dup": nivel_dup
                 })
 
-            # ── PASO 2: Inserción masiva de Productos, Inventario y Clientes ──
             if nuevos_prods_dict:
                 cols_p = ["negocio_id", "nombre", "precio", "tipo_producto", "categoria", "subcategoria", "importacion_id"]
                 rows_p = list(nuevos_prods_dict.values())
@@ -1260,7 +1350,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     clientes_cache[lower_name] = cli_id_gen
                     creados_info["clientes"].append(cli_id_gen)
 
-            # Enlaces producto_insumo faltantes
             links_a_crear = []
             for f in filas_mapeadas:
                 pid = productos_cache.get(f["key_p"])
@@ -1273,7 +1362,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 sql_link = f"INSERT INTO producto_insumo (negocio_id, producto_id, insumo_id, cantidad_usada, tipo_relacion) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_link, links_a_crear)
 
-            # ── PASO 3: Agrupación Consolidada de Lotes Maestros ──
             lotes_acumulados = {}
             batch_atributos = []
 
@@ -1281,7 +1369,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 pid = productos_cache[f["key_p"]]
                 inv_id = inventario_cache.get(f["key_p"])
 
-                # Atributos
                 for col_excel, campo_target in mapeo_usuario.items():
                     if campo_target in ("atributo", "variante"):
                         val = f["raw_row"].get(col_excel, "").strip()
@@ -1305,7 +1392,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     if f["tipo_fila"] == "SOLO_COMPRA":
                         lotes_acumulados[lk]["solo_compra_cant"] += f["cant"]
 
-            # Actualizar stock_actual en la tabla inventario para productos con stock disponible activo
             for lk, ldata in lotes_acumulados.items():
                 if ldata["solo_compra_cant"] > 0:
                     cursor.execute(
@@ -1313,7 +1399,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                         (ldata["solo_compra_cant"], ldata["inv_id"], negocio_id)
                     )
 
-            # Creación masiva de Lotes Maestros en BD
             batch_lotes = []
             batch_compras = []
             lotes_keys_order = []
@@ -1347,7 +1432,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 lote_id_map[lk] = gen_id
                 creados_info["lotes"].append(gen_id)
 
-            # ── PASO 4: Registro de Ventas, Movimientos de Lote y Abonos ──
             batch_ventas = []
             ventas_meta = []
 
@@ -1357,11 +1441,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                 if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
                     costo_venta_total = (f["costo_adq"] * f["cant"]) if f["tipo_fila"] == "COMPRA_Y_VENTA" else 0.0
-                    total_venta = f["precio_v"] * f["cant"]
+                    total_venta = f["total_v_row"]
+                    precio_hist_unit = (total_venta / f["cant"]) if f["cant"] > 0 else total_venta
 
                     if f["saldo_calc"] <= 0.01:
                         est_pago = "PAGADO"
-                    elif f["abono_val"] > 0:
+                    elif f["recaudo_efectivo"] > 0:
                         est_pago = "PARCIAL"
                     else:
                         est_pago = "PENDIENTE"
@@ -1369,23 +1454,28 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     obs_final = f.get("obs_nota", "")
                     batch_ventas.append((
                         negocio_id, f["fecha_venta"], pid, f["cant"], total_venta, f["metodo_pago"],
-                        costo_venta_total, f["precio_v"], usuario_id,
-                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, obs_final, undo_token
+                        costo_venta_total, precio_hist_unit, usuario_id,
+                        f["cli_nombre"] or None, cli_id, f["saldo_calc"], est_pago, obs_final, undo_token,
+                        f["archivo_origen"], f["hoja_origen"], f["fila_origen"], f["hash_fila"], f["hash_contenido"]
                     ))
                     ventas_meta.append({
                         "fecha_v": f["fecha_venta"], "cant": f["cant"], "costo_adq": f["costo_adq"],
-                        "costo_venta_total": costo_venta_total, "abono_val": f["abono_val"],
+                        "costo_venta_total": costo_venta_total, "recaudo_efectivo": f["recaudo_efectivo"],
                         "tipo_fila": f["tipo_fila"], "lote_key": f["lote_key"]
                     })
                     procesados += 1
 
-            cols_v = ["negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago", "costo_historico_total", "precio_historico_unitario", "usuario_id", "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "observacion", "importacion_id"]
+            cols_v = [
+                "negocio_id", "fecha", "producto_id", "cantidad", "total", "metodo_pago",
+                "costo_historico_total", "precio_historico_unitario", "usuario_id",
+                "cliente_nombre", "cliente_id", "saldo_pendiente", "estado_pago", "observacion",
+                "importacion_id", "archivo_origen", "hoja_origen", "fila_origen", "hash_fila", "hash_contenido"
+            ]
             res_ventas = bulk_insert_con_returning(cursor, "ventas", cols_v, batch_ventas, ph, is_pg, "id")
 
             batch_movimientos = []
             batch_abonos = []
 
-            # Movimientos de Entrada (1 por Lote Maestro)
             for idx_l, (lk, ldata) in enumerate(lotes_acumulados.items()):
                 l_id = lote_id_map[lk]
                 cant_total = ldata["cant_total"]
@@ -1395,7 +1485,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     ldata["costo_adq"], costo_total, f"Importación {undo_token}", None, usuario_id
                 ))
 
-            # Movimientos de Salida por Venta
             for idx, r in enumerate(res_ventas):
                 v_id = r[0]
                 creados_info["ventas"].append(v_id)
@@ -1408,12 +1497,12 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                         meta["costo_adq"], meta["costo_venta_total"], f"Venta #{v_id} (Importación {undo_token})", v_id, usuario_id
                     ))
 
-                if meta["abono_val"] > 0:
+                # Insertar en abonos_cartera (FUENTE ÚNICA DE VERDAD DEL RECAUDO)
+                if meta["recaudo_efectivo"] > 0:
                     batch_abonos.append((
-                        negocio_id, v_id, meta["fecha_v"], meta["abono_val"], 'Efectivo', usuario_id, 'Abono cargado por Importador Inteligente'
+                        negocio_id, v_id, meta["fecha_v"], meta["recaudo_efectivo"], 'Efectivo', usuario_id, 'Abono cargado por Centro de Conciliación AS'
                     ))
 
-            # Movimientos de Salida por Pérdida/Merma
             for f in filas_mapeadas:
                 if f["tipo_fila"] == "PERDIDA" and f["lote_key"] in lote_id_map:
                     l_id = lote_id_map[f["lote_key"]]
@@ -1438,7 +1527,17 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 sql_ab = f"INSERT INTO abonos_cartera (negocio_id, venta_id, fecha, monto, metodo_pago, usuario_id, observacion) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_ab, batch_abonos)
 
-            # ── PASO 5: Memoria de Mapeo y Auditoría ──
+            # Conservar staging en estado PROCESADO (¡No borrar filas para trazabilidad completa!)
+            cursor.execute(
+                f"UPDATE importaciones_staging SET estado_validacion='PROCESADO' WHERE batch_id={ph} AND negocio_id={ph}",
+                (batch_id, negocio_id)
+            )
+
+            # Guardar auditoría completa con Matriz de Conciliación
+            dup_conf = matriz_conciliacion.get("etapa2_staging", {}).get("duplicados_confirmados", 0)
+            dup_sosp = matriz_conciliacion.get("etapa2_staging", {}).get("duplicados_sospechosos", 0)
+            dif_det = matriz_conciliacion.get("etapa5_dashboard_conciliacion", {}).get("diferencia_detectada", 0.0)
+
             insertar_con_id(cursor,
                 f"INSERT INTO mapeos_importacion (negocio_id, nombre_mapeo, estructura_columnas_json, fecha_creacion) VALUES ({ph}, 'Mapeo Aprobado Tenant', {ph}, {ph})",
                 (negocio_id, json.dumps(mapeo_usuario, ensure_ascii=False), fecha_hoy),
@@ -1447,16 +1546,21 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
             insertar_con_id(cursor,
                 f"""INSERT INTO auditoria_importaciones 
                     (negocio_id, usuario_id, fecha, undo_token, nombre_archivo, 
-                     total_registros, creados_json, hash_archivo, estado)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, 'Importación Excel Empresarial', {ph}, {ph}, {ph}, 'COMPLETADO')""",
+                     total_registros, creados_json, hash_archivo, estado,
+                     matriz_conciliacion_json, etapa0_config_json, duplicados_confirmados, duplicados_sospechosos, diferencia_detectada)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, 'Importación Excel Empresarial', {ph}, {ph}, {ph}, 'COMPLETADO', {ph}, {ph}, {ph}, {ph}, {ph})""",
                 (negocio_id, usuario_id, fecha_hoy, undo_token, procesados,
-                 json.dumps(creados_info, ensure_ascii=False), hash_archivo),
+                 json.dumps(creados_info, ensure_ascii=False), hash_archivo,
+                 json.dumps(matriz_conciliacion, ensure_ascii=False),
+                 json.dumps(etapa0_config, ensure_ascii=False),
+                 dup_conf, dup_sosp, dif_det),
                 ph, is_pg)
 
-        print(f"[IMPORTADOR ÉXITO ATÓMICO] Transacción atómica masiva ejecutada con éxito. undo_token={undo_token}")
-        return True, f"¡Importación exitosa! Se procesaron {procesados} registros en una única transacción atómica ultra-rápida.", {
+        print(f"[CENTRO CONCILIACIÓN ÉXITO] Transacción atómica masiva ejecutada con linaje completo. undo_token={undo_token}")
+        return True, f"¡Importación conciliada exitosamente! Se procesaron {procesados} registros conservando linaje completo y staging auditoriable.", {
             "undo_token": undo_token,
             "procesados": procesados,
+            "matriz_conciliacion": matriz_conciliacion,
             "resumen": creados_info
         }
 
