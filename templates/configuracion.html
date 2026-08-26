@@ -319,7 +319,7 @@
                     </div>
 
                     <!-- ETAPA 0: CONFIGURACIÓN DE INTERPRETACIÓN (PRE-LECTURA) -->
-                    <div id="etapa0-config-panel" style="margin-bottom: 1.5rem; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 1.25rem;">
+                    <div id="etapa0-config-panel" style="margin-bottom: 1.5rem; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 1.25rem;">
                         <h4 style="color: #38bdf8; margin: 0 0 0.5rem 0; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                             ⚙️ Etapa 0: Configuración de Interpretación (Pre-Lectura)
                         </h4>
@@ -330,29 +330,57 @@
                             <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
                                 <span style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">Significado de la columna "Precio Venta":</span>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #f8fafc; cursor: pointer; margin-bottom: 6px;">
-                                    <input type="radio" name="etapa0_precio" value="VALOR_TOTAL_VENTA" checked>
-                                    <span>🔘 <strong>Valor Total de Venta</strong> (El valor en la celda ya es el total de la fila)</span>
+                                    <input type="radio" name="etapa0_precio" value="VALOR_TOTAL_VENTA" checked style="accent-color: #38bdf8; cursor: pointer;">
+                                    <span><strong>Valor Total de Venta</strong> (El valor en la celda ya es el total de la fila)</span>
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #f8fafc; cursor: pointer;">
-                                    <input type="radio" name="etapa0_precio" value="PRECIO_UNITARIO">
-                                    <span>🔘 <strong>Precio Unitario</strong> (Multiplicar precio × cantidad)</span>
+                                    <input type="radio" name="etapa0_precio" value="PRECIO_UNITARIO" style="accent-color: #38bdf8; cursor: pointer;">
+                                    <span><strong>Precio Unitario</strong> (Multiplicar precio × cantidad)</span>
                                 </label>
                             </div>
                             <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
                                 <span style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">Columnas activas a conciliar:</span>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #cbd5e1; cursor: pointer; margin-bottom: 4px;">
-                                    <input type="checkbox" id="chk-etapa0-cant" checked> Usar columna Cantidad
+                                    <input type="checkbox" id="chk-etapa0-cant" checked style="accent-color: #38bdf8;"> Usar columna Cantidad
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #cbd5e1; cursor: pointer; margin-bottom: 4px;">
-                                    <input type="checkbox" id="chk-etapa0-abonos" checked> Usar columna Pagos / Abonos
+                                    <input type="checkbox" id="chk-etapa0-abonos" checked style="accent-color: #38bdf8;"> Usar columna Pagos / Abonos
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #cbd5e1; cursor: pointer;">
-                                    <input type="checkbox" id="chk-etapa0-deuda" checked> Usar columna Deuda / Cartera
+                                    <input type="checkbox" id="chk-etapa0-deuda" checked style="accent-color: #38bdf8;"> Usar columna Deuda / Cartera
                                 </label>
                             </div>
+                            <div style="background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); grid-column: span 2;">
+                                <span style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 6px;">Fuente de Cartera / Saldo Pendiente:</span>
+                                <div style="display: flex; gap: 1.25rem; flex-wrap: wrap;">
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #f8fafc; cursor: pointer;">
+                                        <input type="radio" name="etapa0_cartera" value="CALCULAR" checked style="accent-color: #38bdf8; cursor: pointer;">
+                                        <span><strong>Calcular automáticamente</strong> (Total Venta − Abonos)</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #f8fafc; cursor: pointer;">
+                                        <input type="radio" name="etapa0_cartera" value="USAR_EXCEL" style="accent-color: #38bdf8; cursor: pointer;">
+                                        <span><strong>Usar columna Deuda</strong> reportada en el archivo</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #f8fafc; cursor: pointer;">
+                                        <input type="radio" name="etapa0_cartera" value="COMPARAR" style="accent-color: #38bdf8; cursor: pointer;">
+                                        <span><strong>Comparar ambas</strong> (Conciliación Doble)</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
-                        <div style="font-size: 0.75rem; color: #34d399; font-weight: 600;">
-                            🇨🇴 Formato Regional: Colombia / LATAM (Formato nativo de comas decimales y puntos de miles)
+                        <div style="font-size: 0.8rem; color: #34d399; font-weight: 600; padding: 10px 14px; background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.2); border-radius: 8px; word-wrap: break-word;">
+                            🌎 <strong>Formato Regional: Colombia / LATAM</strong><br>
+                            <span style="font-size: 0.73rem; color: #a7f3d0; font-weight: 400;">(Formato nativo de comas decimales y puntos de miles)</span>
+                        </div>
+                    </div>
+
+                    <!-- BANNER DE RESGUARDO PSICOLÓGICO -->
+                    <div style="margin-bottom: 1.25rem; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px 16px; font-size: 0.82rem;">
+                        <div style="font-weight: 800; color: #38bdf8; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            🛡️ Esta etapa no modifica tus datos
+                        </div>
+                        <div style="color: #cbd5e1; line-height: 1.4;">
+                            La prevalidación no registra ventas ni modifica el inventario. Primero analizaremos el archivo, detectaremos duplicados y calcularemos las diferencias. Podrás revisar el resultado antes de confirmar la importación.
                         </div>
                     </div>
 
@@ -1537,12 +1565,15 @@
         function getEtapa0Config() {
             const rdoTotal = document.querySelector('input[name="etapa0_precio"]:checked');
             const tipoPrecio = rdoTotal ? rdoTotal.value : 'VALOR_TOTAL_VENTA';
+            const rdoCartera = document.querySelector('input[name="etapa0_cartera"]:checked');
+            const fuenteCartera = rdoCartera ? rdoCartera.value : 'CALCULAR';
             const chkCant = document.getElementById('chk-etapa0-cant');
             const chkAbonos = document.getElementById('chk-etapa0-abonos');
             const chkDeuda = document.getElementById('chk-etapa0-deuda');
             
             return {
                 tipo_precio_venta: tipoPrecio,
+                fuente_cartera: fuenteCartera,
                 usar_cantidad: chkCant ? chkCant.checked : true,
                 usar_abonos: chkAbonos ? chkAbonos.checked : true,
                 usar_deuda: chkDeuda ? chkDeuda.checked : true,
@@ -1602,82 +1633,129 @@
                     const e3 = mc.etapa3_datos_procesados || {};
                     const e4 = mc.etapa4_datos_definitivos || {};
                     const e5 = mc.etapa5_dashboard_conciliacion || {};
+                    const comp = e5.comparativa_cartera || {};
 
                     const esConciliada = e5.estado === 'CONCILIADA';
-                    const badgeBg = esConciliada ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)';
-                    const badgeColor = esConciliada ? '#10b981' : '#f59e0b';
-                    const badgeText = esConciliada ? '✅ CONCILIADA' : '⚠️ REQUIERE REVISIÓN';
+                    const badgeBg = esConciliada ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                    const badgeColor = esConciliada ? '#10b981' : '#ef4444';
+                    const badgeText = esConciliada ? '🟢 CONCILIADA' : '🔴 REQUIERE REVISIÓN';
 
                     const difVal = Math.abs(e5.diferencia_detectada || 0);
+                    const btnConfirm = document.getElementById('btn-confirmar-importar');
+                    if (btnConfirm) {
+                        if (!esConciliada) {
+                            btnConfirm.style.background = 'rgba(239, 68, 68, 0.2)';
+                            btnConfirm.style.color = '#ef4444';
+                            btnConfirm.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                            btnConfirm.innerHTML = '⚠️ Revisión Requerida antes de Importar';
+                        } else {
+                            btnConfirm.style.background = '#34d399';
+                            btnConfirm.style.color = 'black';
+                            btnConfirm.style.border = 'none';
+                            btnConfirm.innerHTML = '🚀 ✅ Confirmar Importación';
+                        }
+                    }
 
                     simContainer.style.display = 'block';
                     simContainer.innerHTML = `
-                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 14px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
-                            <!-- ENCABEZADO CENTRO DE CONCILIACIÓN -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
+                        <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                            <!-- HEADER -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem;">
                                 <div>
-                                    <h4 style="color: #38bdf8; margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-                                        🏛️ Matriz de Conciliación de Importación Multi-Etapa
-                                    </h4>
-                                    <span style="font-size: 0.78rem; color: #94a3b8;">
-                                        Trazabilidad completa: Excel Original → Staging → Procesados → Definitivos
+                                    <h3 style="color: #38bdf8; margin: 0; font-size: 1.15rem; font-weight: 800;">
+                                        🔎 RESULTADO DE PREVALIDACIÓN
+                                    </h3>
+                                    <span style="font-size: 0.82rem; color: #cbd5e1; display: block; margin-top: 2px;">
+                                        📄 Archivo analizado | <strong>${e1.filas_totales || r.total_registros || 0} filas analizadas</strong>
                                     </span>
                                 </div>
-                                <span style="font-size: 0.8rem; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}; padding: 5px 12px; border-radius: 20px; font-weight: 800;">
-                                    Estado: ${badgeText}
+                                <span style="font-size: 0.88rem; background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeColor}; padding: 6px 16px; border-radius: 20px; font-weight: 800;">
+                                    ${badgeText}
                                 </span>
                             </div>
 
-                            <!-- RESUMEN DE FILAS Y DUPLICADOS EN 3 NIVELES -->
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem;">
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">Filas Originales</span>
-                                    <strong style="color: #f8fafc; font-size: 1.15rem;">${e1.filas_totales || r.total_registros || 0}</strong>
+                            <!-- 4 KPIS GRID -->
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; text-align: center;">
+                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px; border-radius: 8px;">
+                                    <span style="color: #94a3b8; font-size: 0.75rem; font-weight: 700; display: block;">FILAS TOTALES</span>
+                                    <strong style="color: #f8fafc; font-size: 1.3rem;">${e1.filas_totales || 0}</strong>
                                 </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">🟢 Filas Normales</span>
-                                    <strong style="color: #34d399; font-size: 1.15rem;">${e2.filas_normales || 0}</strong>
+                                <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); padding: 12px; border-radius: 8px;">
+                                    <span style="color: #fde68a; font-size: 0.75rem; font-weight: 700; display: block;">DUPLICADOS</span>
+                                    <strong style="color: #f59e0b; font-size: 1.3rem;">${(e2.duplicados_confirmados || 0) + (e2.duplicados_sospechosos || 0)}</strong>
                                 </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">🟡 Coincidencias Sospechosas</span>
-                                    <strong style="color: #f59e0b; font-size: 1.15rem;">${e2.duplicados_sospechosos || 0}</strong>
+                                <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); padding: 12px; border-radius: 8px;">
+                                    <span style="color: #fca5a5; font-size: 0.75rem; font-weight: 700; display: block;">RECHAZADAS</span>
+                                    <strong style="color: #ef4444; font-size: 1.3rem;">${r.errores || 0}</strong>
                                 </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #94a3b8; font-size: 0.72rem; display: block;">🔴 Duplicados Confirmados</span>
-                                    <strong style="color: #ef4444; font-size: 1.15rem;">${e2.duplicados_confirmados || 0}</strong>
-                                </div>
-                            </div>
-
-                            <!-- VALORES CONCILIADOS DEFINITIVOS -->
-                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem;">
-                                <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #a7f3d0; font-size: 0.72rem; display: block;">Ventas Definitivas</span>
-                                    <strong style="color: #34d399; font-size: 1.2rem;">$${Number(e4.ventas_definitivas || 0).toLocaleString('es-CO')}</strong>
-                                </div>
-                                <div style="background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #bae6fd; font-size: 0.72rem; display: block;">Abonos / Recaudo</span>
-                                    <strong style="color: #38bdf8; font-size: 1.2rem;">$${Number(e4.recaudo_abonos || 0).toLocaleString('es-CO')}</strong>
-                                </div>
-                                <div style="background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #fde68a; font-size: 0.72rem; display: block;">Cartera Pendiente</span>
-                                    <strong style="color: #f59e0b; font-size: 1.2rem;">$${Number(e4.cartera_pendiente || 0).toLocaleString('es-CO')}</strong>
-                                </div>
-                                <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 8px;">
-                                    <span style="color: #cbd5e1; font-size: 0.72rem; display: block;">Costos de Ventas</span>
-                                    <strong style="color: #f8fafc; font-size: 1.2rem;">$${Number(e4.costo_ventas || 0).toLocaleString('es-CO')}</strong>
+                                <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); padding: 12px; border-radius: 8px;">
+                                    <span style="color: #a7f3d0; font-size: 0.75rem; font-weight: 700; display: block;">VÁLIDAS</span>
+                                    <strong style="color: #34d399; font-size: 1.3rem;">${e2.filas_procesables || 0}</strong>
                                 </div>
                             </div>
 
-                            <!-- ALERTA DE DIFERENCIA Y AUDITORÍA -->
-                            <div style="background: ${difVal > 1 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)'}; border: 1px solid ${difVal > 1 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}; border-radius: 10px; padding: 12px; font-size: 0.82rem; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span style="font-weight: 700; color: ${difVal > 1 ? '#ef4444' : '#34d399'}; display: block;">
-                                        ${difVal > 1 ? `⚠️ $${Number(difVal).toLocaleString('es-CO')} de diferencia detectada` : '✓ Conciliación 100% Exacta (Diferencia $0)'}
-                                    </span>
-                                    <span style="color: #94a3b8; font-size: 0.75rem;">
-                                        Desglose por Estado: ${e3.pagados || 0} Pagados, ${e3.parciales || 0} Parciales, ${e3.pendientes || 0} Pendientes | Deudores: ${e5.clientes_deudores_cnt || 0}
+                            <!-- CONCILIACIÓN FINANCIERA TABLE -->
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; margin-bottom: 1.25rem;">
+                                <h4 style="color: #f8fafc; font-size: 0.92rem; margin: 0 0 0.75rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 6px;">
+                                    📊 CONCILIACIÓN FINANCIERA (Excel Original → AS Platform)
+                                </h4>
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+                                    <thead>
+                                        <tr style="color: #94a3b8; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                                            <th style="padding: 6px 8px;">Concepto</th>
+                                            <th style="padding: 6px 8px; text-align: right;">Excel Original</th>
+                                            <th style="padding: 6px 8px; text-align: center;">→</th>
+                                            <th style="padding: 6px 8px; text-align: right;">AS Platform</th>
+                                            <th style="padding: 6px 8px; text-align: center;">Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                                            <td style="padding: 8px; color: #f8fafc; font-weight: 600;">Ventas</td>
+                                            <td style="padding: 8px; text-align: right; color: #cbd5e1;">$${Number(e1.total_ventas || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center; color: #94a3b8;">→</td>
+                                            <td style="padding: 8px; text-align: right; color: #34d399; font-weight: 700;">$${Number(e4.ventas_definitivas || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center;">${Math.abs(e1.total_ventas - e4.ventas_definitivas) < 1 ? '✅' : '⚠️'}</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                                            <td style="padding: 8px; color: #f8fafc; font-weight: 600;">Abonos</td>
+                                            <td style="padding: 8px; text-align: right; color: #cbd5e1;">$${Number(e1.total_abonos || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center; color: #94a3b8;">→</td>
+                                            <td style="padding: 8px; text-align: right; color: #38bdf8; font-weight: 700;">$${Number(e4.recaudo_abonos || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center;">${Math.abs(e1.total_abonos - e4.recaudo_abonos) < 1 ? '✅' : '⚠️'}</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                                            <td style="padding: 8px; color: #f8fafc; font-weight: 600;">Cartera</td>
+                                            <td style="padding: 8px; text-align: right; color: #cbd5e1;">$${Number(e1.total_deudas || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center; color: #94a3b8;">→</td>
+                                            <td style="padding: 8px; text-align: right; color: #f59e0b; font-weight: 700;">$${Number(e4.cartera_pendiente || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center;">${Math.abs(e1.total_deudas - e4.cartera_pendiente) < 1 ? '✅' : '⚠️'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px; color: #f8fafc; font-weight: 600;">Costos</td>
+                                            <td style="padding: 8px; text-align: right; color: #cbd5e1;">$${Number(e1.total_costos || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center; color: #94a3b8;">→</td>
+                                            <td style="padding: 8px; text-align: right; color: #f8fafc; font-weight: 700;">$${Number(e4.costo_ventas || 0).toLocaleString('es-CO')}</td>
+                                            <td style="padding: 8px; text-align: center;">${Math.abs(e1.total_costos - e4.costo_ventas) < 1 ? '✅' : '⚠️'}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            ${comp.fuente_seleccionada === 'COMPARAR' ? `
+                                <div style="background: ${comp.coinciden ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)'}; border: 1px solid ${comp.coinciden ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}; border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; margin-bottom: 1rem;">
+                                    <strong>⚖️ Conciliación Doble de Cartera:</strong><br>
+                                    Cartera calculada por AS: <strong>$${Number(comp.cartera_calculada_as || 0).toLocaleString('es-CO')}</strong> | 
+                                    Excel: <strong>$${Number(comp.cartera_reportada_excel || 0).toLocaleString('es-CO')}</strong>
+                                    <span style="font-weight:800; margin-left: 8px; color: ${comp.coinciden ? '#34d399' : '#ef4444'};">
+                                        ${comp.coinciden ? '🟢 Coinciden exactos' : `🔴 Diferencia: $${Number(comp.diferencia || 0).toLocaleString('es-CO')}`}
                                     </span>
                                 </div>
+                            ` : ''}
+
+                            <!-- MENSAJE DE ESTADO -->
+                            <div style="text-align: center; font-weight: 800; font-size: 0.9rem; color: ${badgeColor};">
+                                ${esConciliada ? '🟢 CONCILIADA — Tu información cuadra perfectamente.' : `🔴 REQUIERE REVISIÓN — Se detectó una diferencia de $${Number(difVal).toLocaleString('es-CO')}.`}
                             </div>
                         </div>
                     `;

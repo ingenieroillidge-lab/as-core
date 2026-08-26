@@ -2227,5 +2227,9 @@ def inject_global_info():
         info['target_nombre'] = session.get('target_nombre', 'Cliente')
     return info
 
+@app.route('/manual-usuario')
+def route_manual_usuario():
+    return render_template('manual_usuario.html')
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

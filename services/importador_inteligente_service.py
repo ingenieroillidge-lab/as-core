@@ -788,58 +788,6 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                 productos_nuevos.append({"nombre": nombre_prod})
 
         estado_row = "VALIDO"
-        if errs:
-            estado_row = "ERROR"
-            total_errores += 1
-        elif advs:
-            estado_row = "ADVERTENCIA"
-            total_advertencias += 1
-        else:
-            total_validos += 1
-
-        update_params.append((
-            estado_row,
-            json.dumps(errs, ensure_ascii=False),
-            json.dumps(advs, ensure_ascii=False),
-            s_id
-        ))
-
-        resumen_filas.append({
-            "fila": fila_num,
-            "estado": estado_row,
-            "datos": mapped_data,
-            "errores": errs,
-            "advertencias": advs
-        })
-
-    ejecutar_query_many(
-        "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
-        update_params
-    )
-
-    ok_sim, msg_sim, sim_data = simular_importacion(batch_id, negocio_id, mapeo_usuario)
-    t_total = time.time() - t_start
-
-    resumen = {
-        "batch_id": batch_id,
-        "total_registros": len(registros_staging),
-        "validos": total_validos,
-        "advertencias": total_advertencias,
-        "errores": total_errores,
-        "productos_nuevos": productos_nuevos,
-        "diferencias_detectadas": diferencias_detectadas,
-        "simulacion": sim_data,
-        "detalles_filas": resumen_filas[:50],
-        "tiempo_ms": int(t_total * 1000)
-    }
-
-    return True, "Prevalidación completada", resumen
-
-
-# ══════════════════════════════════════════════════════════════════
-# ETAPA 4: SIMULACIÓN DE IMPORTACIÓN PRE-CONFIRMACIÓN
-# ══════════════════════════════════════════════════════════════════
-
 def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD", etapa0_config=None):
     """
     Calcula el impacto exacto de la importación incorporando la Etapa 0 de Configuración de Interpretación
@@ -848,6 +796,7 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
     if not etapa0_config or not isinstance(etapa0_config, dict):
         etapa0_config = {
             "tipo_precio_venta": "VALOR_TOTAL_VENTA",
+            "fuente_cartera": "CALCULAR",
             "usar_cantidad": True,
             "usar_abonos": True,
             "usar_deuda": True,
@@ -901,6 +850,7 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
 
     lotes_acumulados_sim = {}
     tipo_precio_opt = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
+    fuente_cartera_opt = etapa0_config.get("fuente_cartera", "CALCULAR")
 
     for s_id, fila_num, raw_json, arch_orig, hoja_orig, fila_orig, h_fila, h_cont, nivel_dup in registros_staging:
         raw_row = json.loads(raw_json)
@@ -987,7 +937,11 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             recaudo_fila = abono_val
             definitivo_recaudo_abonos += recaudo_fila
 
-            saldo_pend_fila = max(0.0, tot_v_row - recaudo_fila)
+            if fuente_cartera_opt == "USAR_EXCEL":
+                saldo_pend_fila = deuda_val
+            else:
+                saldo_pend_fila = max(0.0, tot_v_row - recaudo_fila)
+
             definitivo_cartera += saldo_pend_fila
 
             # Determinación de Estado
@@ -1003,14 +957,19 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
 
     utilidad_bruta = definitivo_ventas - definitivo_costos
     margen_pct = (utilidad_bruta / definitivo_ventas * 100.0) if definitivo_ventas > 0 else 0.0
+    utilidad_bruta = definitivo_ventas - definitivo_costos
+    margen_pct = (utilidad_bruta / definitivo_ventas * 100.0) if definitivo_ventas > 0 else 0.0
     valor_inventario_restante = sum(ldata["cant_disponible"] * ldata["costo_adq"] for ldata in lotes_acumulados_sim.values())
 
-    lotes_con_costo = sum(1 for ldata in lotes_acumulados_sim.values() if ldata["costo_adq"] > 0)
-    lotes_sin_costo = len(lotes_acumulados_sim) - lotes_con_costo
+    # Conciliación Doble de Cartera (AS vs Excel)
+    discrepancia_cartera = abs(definitivo_cartera - excel_total_deudas)
+    coinciden_cartera = bool(discrepancia_cartera < 1.0)
 
-    # Definición de Diferencia Detectada:
     diferencia_detectada = excel_total_ventas - definitivo_ventas
-    estado_conciliacion = "CONCILIADA" if (abs(diferencia_detectada) < 1.0 and cnt_confirmado == 0) else "REQUIERE_REVISION"
+    if fuente_cartera_opt == "COMPARAR" and not coinciden_cartera:
+        estado_conciliacion = "REQUIERE_REVISION"
+    else:
+        estado_conciliacion = "CONCILIADA" if (abs(diferencia_detectada) < 1.0 and cnt_confirmado == 0) else "REQUIERE_REVISION"
 
     # Construcción de la Matriz de Conciliación Multi-Etapa (5 Etapas + Etapa 0)
     matriz_conciliacion = {
@@ -1047,7 +1006,14 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             "estado": estado_conciliacion,
             "diferencia_detectada": diferencia_detectada,
             "clientes_deudores_cnt": len(clientes_deudores_set),
-            "lotes_a_crear": len(lotes_set)
+            "lotes_a_crear": len(lotes_set),
+            "comparativa_cartera": {
+                "fuente_seleccionada": fuente_cartera_opt,
+                "cartera_calculada_as": definitivo_cartera,
+                "cartera_reportada_excel": excel_total_deudas,
+                "coinciden": coinciden_cartera,
+                "diferencia": discrepancia_cartera
+            }
         }
     }
 

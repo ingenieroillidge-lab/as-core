@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Usuario — AS Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0b1329;
+            --card-bg: #111c3a;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #38bdf8;
+            --success: #34d399;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* SIDEBAR DE NAVEGACIÓN DEL MANUAL */
+        .manual-sidebar {
+            width: 300px;
+            background: #090f20;
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem 1rem;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+
+        .manual-sidebar h2 {
+            font-size: 1.1rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-group { margin-bottom: 1.5rem; }
+        .nav-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 0.5rem; font-weight: 700; }
+        .nav-item {
+            display: block;
+            padding: 8px 12px;
+            color: #cbd5e1;
+            text-decoration: none;
+            font-size: 0.88rem;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+        }
+        .nav-item:hover { background: rgba(56, 189, 248, 0.1); color: var(--primary); }
+
+        /* CONTENIDO PRINCIPAL */
+        .manual-content {
+            margin-left: 300px;
+            flex: 1;
+            padding: 2.5rem 3rem;
+            max-width: 1000px;
+        }
+
+        .manual-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+        .manual-header h1 { font-size: 2.2rem; color: #fff; font-weight: 800; margin-bottom: 0.5rem; }
+        .manual-header p { color: var(--text-muted); font-size: 1rem; }
+
+        .section-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .section-card h2 {
+            color: var(--primary);
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-card h3 {
+            color: #fff;
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem 0;
+        }
+
+        .section-card p, .section-card ul {
+            font-size: 0.93rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+            margin-bottom: 1rem;
+        }
+
+        .section-card ul { padding-left: 1.5rem; }
+        .section-card li { margin-bottom: 0.5rem; }
+
+        .alert-box {
+            padding: 1rem 1.25rem;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            margin: 1rem 0;
+            line-height: 1.5;
+        }
+        .alert-info { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #bae6fd; }
+        .alert-success { background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); color: #a7f3d0; }
+        .alert-warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a; }
+
+        code {
+            background: rgba(0,0,0,0.4);
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.12); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="manual-sidebar">
+        <h2>📖 Manual AS Platform</h2>
+        <a href="/" class="back-btn">← Volver al Sistema</a>
+
+        <div class="nav-group">
+            <div class="nav-title">Módulos Principales</div>
+            <a href="#modulo-1" class="nav-item">1. Introducción y Filosofía</a>
+            <a href="#modulo-2" class="nav-item">2. Centro de Conciliación (Importación)</a>
+            <a href="#modulo-3" class="nav-item">3. Etapa 0: Configuración Pre-lectura</a>
+            <a href="#modulo-4" class="nav-item">4. Trazabilidad y Detección de Duplicados</a>
+            <a href="#modulo-5" class="nav-item">5. Gestión Financiera y Cartera</a>
+            <a href="#modulo-6" class="nav-item">6. Reversiones y Auditoría</a>
+        </div>
+    </div>
+
+    <!-- CONTENIDO -->
+    <div class="manual-content">
+        <div class="manual-header">
+            <h1>Manual de Usuario — AS Platform</h1>
+            <p>Guía oficial de operación, conciliación financiera, trazabilidad e importación empresarial de datos.</p>
+        </div>
+
+        <!-- MÓDULO 1 -->
+        <div class="section-card" id="modulo-1">
+            <h2>🏢 1. Introducción y Filosofía de AS Platform</h2>
+            <p>AS Platform es un motor de análisis financiero, inventario y conciliación empresarial diseñado bajo el principio de <strong>Cero Ajustes Matemáticos Forzados</strong> y <strong>Transparencia de Auditoría de Grado Bancario</strong>.</p>
+            
+            <div class="alert-box alert-info">
+                <strong>💡 Filosofía Fundamental:</strong> En AS Platform, ningún dato se sobreescribe o modifica a ciegas. Cada transacción, venta, recaudo o entrada de lote conserva su linaje de origen e id con trazabilidad inmutable.
+            </div>
+        </div>
+
+        <!-- MÓDULO 2 -->
+        <div class="section-card" id="modulo-2">
+            <h2>🏛️ 2. Centro de Conciliación de Importaciones</h2>
+            <p>El Centro de Conciliación te permite migrar archivos Excel o CSV masivos con la tranquilidad de que podrás verificar la conciliación financiera antes de guardar cambios.</p>
+            
+            <h3>El Flujo de Importación de 6 Pasos:</h3>
+            <ul>
+                <li><strong>Paso 1: Subir Archivo:</strong> Carga tu Excel (.xlsx) o CSV. El sistema detectará las pestañas y encabezados.</li>
+                <li><strong>Paso 2: Mapeo Heurístico:</strong> AS Platform sugiere la asignación de columnas según tu histórico.</li>
+                <li><strong>Paso 3: Etapa 0 de Configuración:</strong> Eliges el significado de los valores antes de calcular.</li>
+                <li><strong>Paso 4: Prevalidación:</strong> Simulación atómica que muestra el semáforo y la Matriz de Conciliación sin modificar tu base de datos.</li>
+                <li><strong>Paso 5: Confirmación Atómica:</strong> Procesamiento con token de auditoría (`undo_token`).</li>
+                <li><strong>Paso 6: Registro de Linaje:</strong> Staging conservado en estado `PROCESADO` para futuras auditorías.</li>
+            </ul>
+        </div>
+
+        <!-- MÓDULO 3 -->
+        <div class="section-card" id="modulo-3">
+            <h2>⚙️ 3. Etapa 0: Configuración de Interpretación (Pre-Lectura)</h2>
+            <p>Antes de ejecutar la prevalidación, la Etapa 0 te permite ajustar las reglas matemáticas exactas de tu archivo:</p>
+            
+            <h3>A. Significado de la Columna "Precio Venta"</h3>
+            <ul>
+                <li><strong>Valor Total de Venta:</strong> Selecciona esta opción si el valor de tu celda ya representa el total cobrado en esa fila (ej: $21.212.464).</li>
+                <li><strong>Precio Unitario:</strong> Selecciona esta opción si el valor representa la unidad y debe multiplicarse por la columna Cantidad (ej: $10.000 × 2).</li>
+            </ul>
+
+            <h3>B. Regla de Fuente de Cartera / Saldo Pendiente</h3>
+            <ul>
+                <li><strong>Calcular automáticamente (Total Venta − Abonos):</strong> Deriva el saldo pendiente exacto según el dinero recaudado.</li>
+                <li><strong>Usar columna Deuda reportada en el archivo:</strong> Registra la cartera directamente según el valor asignado en Excel.</li>
+                <li><strong>Comparar ambas (Conciliación Doble):</strong> Calcula ambas cifras y te notifica si existen inconsistencias (ej: <code>🟢 Coinciden</code> o <code>🔴 Diferencia</code>).</li>
+            </ul>
+        </div>
+
+        <!-- MÓDULO 4 -->
+        <div class="section-card" id="modulo-4">
+            <h2>🔍 4. Trazabilidad y Niveles de Duplicación</h2>
+            <p>Cada registro procesado genera dos huellas criptográficas SHA-256:</p>
+            <ul>
+                <li><code>hash_fila</code> (Identidad): SHA-256 de <code>archivo + hoja + fila + valores</code>.</li>
+                <li><code>hash_contenido</code> (Huella): SHA-256 de los valores normalizados.</li>
+            </ul>
+
+            <h3>Clasificación en 3 Niveles:</h3>
+            <ul>
+                <li>🟢 <strong>NORMAL:</strong> Fila nueva y única en ubicación y datos.</li>
+                <li>🟡 <strong>SOSPECHOSO:</strong> Coincidencia de contenido con otra fila (alerta al usuario sin bloquear ventas legítimas idénticas).</li>
+                <li>🔴 <strong>CONFIRMADO:</strong> Re-importación de una fila de origen procesada previamente.</li>
+            </ul>
+        </div>
+
+        <!-- MÓDULO 5 -->
+        <div class="section-card" id="modulo-5">
+            <h2>💳 5. Gestión Financiera y Cartera</h2>
+            <p>La tabla <code>abonos_cartera</code> es la <strong>Única Fuente de Verdad</strong> para los ingresos y cobros.</p>
+            
+            <div class="alert-box alert-success">
+                <strong>✓ Estados de Ventas:</strong><br>
+                • <code>PAGADO</code>: Recaudo es igual al 100% de la venta.<br>
+                • <code>PARCIAL</code>: Hay abonos registrados mayores a $0 pero queda un saldo pendiente.<br>
+                • <code>PENDIENTE</code>: Venta realizada sin abonos iniciales.
+            </div>
+        </div>
+
+        <!-- MÓDULO 6 -->
+        <div class="section-card" id="modulo-6">
+            <h2>↩️ 6. Reversiones y Auditoría</h2>
+            <p>Si deseas deshacer una carga o purgar datos de prueba:</p>
+            <ul>
+                <li><strong>Deshacer Importación Específica:</strong> En <code>⚙️ Configuración → Historial</code>, usa el botón <code>↩️ Deshacer</code> sobre cualquier token.</li>
+                <li><strong>Limpieza de Datos de Prueba:</strong> Usa el botón <code>🧹 Limpiar Todo / Reestablecer Base de Datos</code> para volver a un estado limpio sin registros previos.</li>
+            </ul>
+        </div>
+    </div>
+
+</body>
+</html>
