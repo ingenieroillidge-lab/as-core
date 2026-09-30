@@ -8,6 +8,7 @@ import services.importador_inteligente_service as importador_service
 import services.costos_variables_service as costos_variables_service
 import services.analisis_service as analisis_service
 import services.clientes_service as clientes_service
+import services.lector_libro as lector_libro
 from database import conectar, crear_tablas, ejecutar_query
 
 from datetime import datetime, timedelta
@@ -1469,18 +1470,16 @@ def api_importador_cargar():
 
         filas_matriz = []
         hojas_detectadas = []
+        info_libro = None
 
         if filename.endswith('.xlsx') or filename.endswith('.xlsm'):
             print("[IMPORTADOR] Tipo de archivo detectado: Excel OpenXML (.xlsx/.xlsm)")
             try:
                 print("[IMPORTADOR] Lectura de hojas iniciada")
-                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-                hojas_detectadas = wb.sheetnames
-                print(f"[IMPORTADOR] Hojas detectadas: {hojas_detectadas}")
-                ws = wb.active
-                for r in ws.iter_rows(values_only=True):
-                    if r and any(cell is not None for cell in r):
-                        filas_matriz.append([str(cell).strip() if cell is not None else '' for cell in r])
+                # Elige la hoja de DATOS (no la hoja activa), salta títulos y excluye columnas de fórmula sin valor
+                filas_matriz, info_libro = lector_libro.matriz_de_hoja(file_bytes, request.form.get('hoja') or None)
+                hojas_detectadas = [h['nombre'] for h in info_libro['hojas']]
+                print(f"[IMPORTADOR] Hojas detectadas: { {h['nombre']: h['rol'] for h in info_libro['hojas']} } | usada: {info_libro['hoja_usada']}")
             except Exception as e_xlsx:
                 import traceback
                 print(f"[IMPORTADOR ERROR XLSX] Traceback:\n{traceback.format_exc()}")
@@ -1528,7 +1527,8 @@ def api_importador_cargar():
             "message": msg,
             "info": res_info,
             "propuesta_mapeo": propuesta,
-            "hojas_detectadas": hojas_detectadas
+            "hojas_detectadas": hojas_detectadas,
+            "libro": info_libro
         }
         print("[IMPORTADOR] Carga finalizada")
         return jsonify(resp_data)
