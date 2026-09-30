@@ -1,7 +1,8 @@
 from datetime import datetime
 from database import ejecutar_query
 
-def registrar_movimiento(insumo_id, tipo, cantidad, referencia, usuario_id, negocio_id):
+def registrar_movimiento(insumo_id, tipo, cantidad, referencia, usuario_id, negocio_id, ajustar_stock=True):
+    """ajustar_stock=False: solo deja el rastro del movimiento (el stock ya lo gestionan los lotes)."""
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Validar que el insumo pertenece al negocio
@@ -15,6 +16,8 @@ def registrar_movimiento(insumo_id, tipo, cantidad, referencia, usuario_id, nego
         (negocio_id, fecha, insumo_id, tipo, cantidad, referencia, usuario_id)
     )
 
+    if not ajustar_stock:
+        return True
     operador = "+" if tipo == 'entrada' else "-"
     ejecutar_query(
         f"UPDATE inventario SET stock_actual = stock_actual {operador} ? WHERE id=? AND negocio_id=?",

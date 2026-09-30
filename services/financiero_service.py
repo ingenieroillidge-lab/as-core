@@ -1,6 +1,31 @@
 from database import ejecutar_query
 from datetime import datetime
 
+
+def ventas_con_cobro_inmediato(negocio_id, desde=None, hasta=None):
+    """
+    Única definición de 'cobrado al momento de la venta', derivada de la matemática financiera y NO del método de pago:
+        no_cobrado_en_venta = min(total, saldo_pendiente_actual + abonos_posteriores)
+        cobrado_en_venta    = total - no_cobrado_en_venta
+    Devuelve dicts {id, fecha, total, metodo, cobrado_en_venta, a_credito}.
+    """
+    sql = """SELECT v.id, v.fecha, v.total, v.metodo_pago, v.saldo_pendiente,
+                    COALESCE((SELECT SUM(a.monto) FROM abonos_cartera a WHERE a.venta_id=v.id AND a.negocio_id=v.negocio_id), 0)
+             FROM ventas v WHERE v.negocio_id=?"""
+    params = [negocio_id]
+    if desde and hasta:
+        sql += " AND v.fecha >= ? AND v.fecha <= ?"
+        params.extend([desde, hasta])
+    out = []
+    for vid, fecha, total, metodo, saldo, abonos in (ejecutar_query(sql, params, fetch=True) or []):
+        total = float(total or 0)
+        if saldo is None:   # dato antiguo sin saldo: solo 'CRÉDITO' se asume pendiente
+            saldo = total if (metodo or '').upper() == 'CRÉDITO' else 0.0
+        no_cobrado = min(total, max(0.0, float(saldo)) + float(abonos or 0))
+        out.append({"id": vid, "fecha": fecha or '', "total": total, "metodo": metodo or 'NO_ESPECIFICADO',
+                    "cobrado_en_venta": total - no_cobrado, "a_credito": no_cobrado})
+    return out
+
 def obtener_resumen_financiero(negocio_id, mes_filtro=None, producto_id=None, metodo_pago=None):
     query = "SELECT total, costo_historico_total, cantidad, producto_id FROM ventas WHERE negocio_id=?"
     params = [negocio_id]
@@ -101,8 +126,12 @@ def obtener_rentabilidad_productos(negocio_id):
 
 def realizar_cierre_caja(negocio_id, fecha_cierre=None):
     if not fecha_cierre: fecha_cierre = datetime.now().strftime("%Y-%m-%d")
-    pagos = ejecutar_query("SELECT metodo_pago, SUM(total) FROM ventas WHERE negocio_id=? AND metodo_pago != 'CRÉDITO' AND fecha LIKE ? GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True) or []
-    abonos = ejecutar_query("SELECT metodo_pago, SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND fecha LIKE ? GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True) or []
+    pagos_d = {}
+    for v in ventas_con_cobro_inmediato(negocio_id, f"{fecha_cierre} 00:00:00", f"{fecha_cierre} 23:59:59"):
+        if v["cobrado_en_venta"] > 0:
+            pagos_d[v["metodo"]] = pagos_d.get(v["metodo"], 0.0) + v["cobrado_en_venta"]
+    pagos = list(pagos_d.items())
+    abonos = ejecutar_query("SELECT metodo_pago, SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND fecha LIKE ? AND COALESCE(metodo_pago,'') != 'DESCUENTO_COMERCIAL' GROUP BY metodo_pago", (negocio_id, f"{fecha_cierre}%"), fetch=True) or []
 
     detalle = {}
     total = 0.0
@@ -167,18 +196,20 @@ def obtener_tablero_ejecutivo_completo(negocio_id, fecha_inicio=None, fecha_fin=
         utilidad_bruta = total_ingresos - total_costos_v
         margen_bruto_pct = (utilidad_bruta / total_ingresos * 100.0) if total_ingresos > 0 else 0.0
 
-        ventas_credito = sum(float(v[2] or 0) for v in ventas if (v[6] or '').upper() == 'CRÉDITO')
+        _vc = ventas_con_cobro_inmediato(negocio_id, str_inicio, str_fin)
+        ventas_credito = sum(x["a_credito"] for x in _vc)          # vendido y aún no cobrado al momento de la venta
+        cobrado_en_venta = sum(x["cobrado_en_venta"] for x in _vc)
 
         # ── 3. RECAUDO EN CAJA DEL PERÍODO (FLUJO) ──
-        sql_abonos = "SELECT SUM(monto) FROM abonos_cartera WHERE negocio_id=?"
+        sql_abonos = "SELECT SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND COALESCE(metodo_pago,'') != 'DESCUENTO_COMERCIAL'"
         params_ab = [negocio_id]
         if str_inicio and str_fin:
             sql_abonos += " AND fecha >= ? AND fecha <= ?"
             params_ab.extend([str_inicio[:10], str_fin[:10] + " 23:59:59"])
         res_ab = ejecutar_query(sql_abonos, params_ab, fetch=True)
         recaudo_abonos = res_ab[0][0] or 0.0 if res_ab else 0.0
-        ventas_contado = total_ingresos - ventas_credito
-        recaudo_total_periodo = ventas_contado + recaudo_abonos
+        ventas_contado = cobrado_en_venta
+        recaudo_total_periodo = cobrado_en_venta + recaudo_abonos
         cobertura_caja_pct = (recaudo_total_periodo / total_ingresos * 100.0) if total_ingresos > 0 else 0.0
 
         # ── 4. COSTOS FIJOS Y UTILIDAD NETA DEL PERÍODO ──
@@ -414,15 +445,17 @@ def obtener_tablero_ejecutivo_completo(negocio_id, fecha_inicio=None, fecha_fin=
         lotes_roi = lotes_roi[:20]
 
         # ── 10. EVOLUCIÓN TEMPORAL MULTI-MÉTRICA ──
-        sql_trend = """
-            SELECT SUBSTR(fecha, 1, 7) as mes,
-                   SUM(total) as ingresos,
-                   SUM(costo_historico_total) as costos,
-                   SUM(total - costo_historico_total) as utilidad,
-                   SUM(CASE WHEN UPPER(metodo_pago) = 'CRÉDITO' THEN total ELSE 0 END) as ventas_credito
-            FROM ventas WHERE negocio_id=? GROUP BY mes ORDER BY mes ASC LIMIT 12
-        """
-        trend_rows = ejecutar_query(sql_trend, (negocio_id,), fetch=True) or []
+        _meses = {}
+        for v in ventas_con_cobro_inmediato(negocio_id):
+            m = _meses.setdefault(v["fecha"][:7], {"ing": 0.0, "cred": 0.0})
+            m["ing"] += v["total"]; m["cred"] += v["a_credito"]
+        _cm = {}
+        for mes_c, ing_c, cos_c in (ejecutar_query(
+                "SELECT SUBSTR(fecha,1,7), SUM(total), SUM(costo_historico_total) FROM ventas WHERE negocio_id=? GROUP BY 1",
+                (negocio_id,), fetch=True) or []):
+            _cm[mes_c] = float(cos_c or 0)
+        _orden = sorted(k for k in _meses if k)[-12:]     # los 12 meses MÁS RECIENTES
+        trend_rows = [(k, _meses[k]["ing"], _cm.get(k, 0.0), _meses[k]["ing"] - _cm.get(k, 0.0), _meses[k]["cred"]) for k in _orden]
         series_evolucion = {
             "labels": [t[0] for t in trend_rows],
             "ingresos": [float(t[1] or 0) for t in trend_rows],

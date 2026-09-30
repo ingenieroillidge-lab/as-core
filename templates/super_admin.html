@@ -155,6 +155,11 @@
     </div>
 
     <script>
+        // Escapa texto controlado por los negocios (evita XSS almacenado hacia el Super Admin)
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
         const formatCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 });
 
         async function loadStats() {
@@ -167,7 +172,7 @@
             const leadsList = document.getElementById('hot-leads-list');
             leadsList.innerHTML = data.hot_leads.map(l => `
                 <div style="display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; font-size: 0.85rem;">
-                    <span>${l.nombre}</span>
+                    <span>${esc(l.nombre)}</span>
                     <span style="color: #38bdf8; font-weight: 800;">${l.intentos} clics</span>
                 </div>
             `).join('');
@@ -189,10 +194,10 @@
             tbody.innerHTML = empresas.map(n => `
                 <tr style="${n.es_interna ? 'background: rgba(56,189,248,0.05);' : ''}">
                     <td>
-                        <strong>${n.nombre}</strong>
+                        <strong>${esc(n.nombre)}</strong>
                         ${n.es_interna ? '<span style="font-size:0.65rem; background:#38bdf8; color:#000; padding:1px 6px; border-radius:10px; margin-left:6px; font-weight:800;">INTERNA</span>' : ''}
                     </td>
-                    <td><code style="background: #222; padding: 2px 6px; border-radius: 4px; color: #38bdf8;">${n.admin_user || 'N/A'}</code></td>
+                    <td><code style="background: #222; padding: 2px 6px; border-radius: 4px; color: #38bdf8;">${esc(n.admin_user || 'N/A')}</code></td>
                     <td>
                         <select onchange="cambiarPlan(${n.id}, this.value)" style="background: #111; color: white; border: 1px solid #333; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
                             <option value="PRO" ${n.plan === 'PRO' ? 'selected' : ''}>PRO</option>
@@ -205,7 +210,7 @@
                             <option value="SUSPENDIDO" ${n.status === 'SUSPENDIDO' ? 'selected' : ''}>SUSPENDIDO</option>
                         </select>
                     </td>
-                    <td style="font-size: 0.8rem; color: #888;">${n.fecha_vencimiento || 'Sin fecha'}</td>
+                    <td style="font-size: 0.8rem; color: #888;">${esc(n.fecha_vencimiento || 'Sin fecha')}</td>
                     <td style="display: flex; gap: 5px; flex-wrap: wrap;">
                         <button onclick="verFichaCRM(${n.id})" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-size: 0.75rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; cursor: pointer;" title="Ver Ficha CRM del cliente">
                             📋 Ficha CRM
@@ -216,7 +221,7 @@
                         <button onclick="extenderPro(${n.id})" style="background: #38bdf8; color: black; border: none; font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
                             + Renovar
                         </button>
-                        <button onclick="resetearClave(${n.id}, '${n.admin_user || ''}')" style="background: #333; color: white; border: 1px solid #555; font-size: 0.75rem; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
+                        <button data-u="${esc(n.admin_user || '')}" onclick="resetearClave(${n.id}, this.dataset.u)" style="background: #333; color: white; border: 1px solid #555; font-size: 0.75rem; font-weight: 600; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
                             🔑 Clave
                         </button>
                     </td>
@@ -237,9 +242,9 @@
                 // Suscripción
                 const s = d.suscripcion || {};
                 document.getElementById('crm-sub-detalles').innerHTML = `
-                    Plan: <strong>${d.negocio.plan}</strong> (${s.es_trial ? 'PRO Trial 7 Días' : 'Plan Contratado'})<br>
-                    Estado: <span style="color:${s.estado === 'ACTIVO' ? '#34d399' : '#fb7185'}; font-weight:700;">${s.estado || 'ACTIVO'}</span><br>
-                    Vencimiento: <strong>${d.negocio.fecha_vencimiento || 'N/A'}</strong><br>
+                    Plan: <strong>${esc(d.negocio.plan)}</strong> (${s.es_trial ? 'PRO Trial 7 Días' : 'Plan Contratado'})<br>
+                    Estado: <span style="color:${s.estado === 'ACTIVO' ? '#34d399' : '#fb7185'}; font-weight:700;">${esc(s.estado || 'ACTIVO')}</span><br>
+                    Vencimiento: <strong>${esc(d.negocio.fecha_vencimiento || 'N/A')}</strong><br>
                     Precio Contratado: <strong>${formatCOP.format(s.precio_contratado || 24900)}</strong>
                 `;
 
@@ -255,12 +260,12 @@
                 const tbodyP = document.getElementById('crm-tabla-pagos');
                 tbodyP.innerHTML = (d.pagos && d.pagos.length > 0) ? d.pagos.map(p => `
                     <tr>
-                        <td>${p.fecha}</td>
-                        <td><code>${p.referencia}</code></td>
-                        <td>${p.concepto}</td>
-                        <td>${p.tipo_pago}</td>
+                        <td>${esc(p.fecha)}</td>
+                        <td><code>${esc(p.referencia)}</code></td>
+                        <td>${esc(p.concepto)}</td>
+                        <td>${esc(p.tipo_pago)}</td>
                         <td style="color:#34d399; font-weight:700;">${formatCOP.format(p.monto)}</td>
-                        <td><span style="color:#34d399; font-weight:700;">${p.estado}</span></td>
+                        <td><span style="color:#34d399; font-weight:700;">${esc(p.estado)}</span></td>
                     </tr>
                 `).join('') : '<tr><td colspan="6" style="text-align: center; color: #666;">Sin pagos registrados aún.</td></tr>';
 
@@ -268,9 +273,9 @@
                 const tbodyE = document.getElementById('crm-tabla-eventos');
                 tbodyE.innerHTML = (d.historial_eventos && d.historial_eventos.length > 0) ? d.historial_eventos.map(e => `
                     <tr>
-                        <td>${e.fecha}</td>
-                        <td><strong style="color:${e.evento === 'ACTIVACION_MANUAL' ? '#a855f7' : '#34d399'}">${e.evento}</strong></td>
-                        <td>${e.motivo || e.referencia || '—'}</td>
+                        <td>${esc(e.fecha)}</td>
+                        <td><strong style="color:${e.evento === 'ACTIVACION_MANUAL' ? '#a855f7' : '#34d399'}">${esc(e.evento)}</strong></td>
+                        <td>${esc(e.motivo || e.referencia || '—')}</td>
                     </tr>
                 `).join('') : '<tr><td colspan="3" style="text-align: center; color: #666;">Sin eventos registrados aún.</td></tr>';
 
@@ -385,17 +390,17 @@
 
                 tbody.innerHTML = tickets.map(t => `
                     <tr>
-                        <td style="font-size: 0.75rem; color: #999;">${t.fecha ? t.fecha.substring(0, 16) : '-'}</td>
-                        <td><strong style="color: white;">${t.negocio}</strong></td>
-                        <td style="color: #38bdf8;">${t.usuario}</td>
-                        <td><code style="font-size: 0.75rem;">${t.modulo}</code></td>
+                        <td style="font-size: 0.75rem; color: #999;">${esc(t.fecha ? t.fecha.substring(0, 16) : '-')}</td>
+                        <td><strong style="color: white;">${esc(t.negocio)}</strong></td>
+                        <td style="color: #38bdf8;">${esc(t.usuario)}</td>
+                        <td><code style="font-size: 0.75rem;">${esc(t.modulo)}</code></td>
                         <td style="font-size: 0.85rem; max-width: 250px;">
-                            <strong>${t.pregunta}</strong>
-                            ${t.respuesta_admin ? `<div style="color: #34d399; font-size: 0.78rem; margin-top: 4px;">Resp: ${t.respuesta_admin}</div>` : ''}
+                            <strong>${esc(t.pregunta)}</strong>
+                            ${t.respuesta_admin ? `<div style="color: #34d399; font-size: 0.78rem; margin-top: 4px;">Resp: ${esc(t.respuesta_admin)}</div>` : ''}
                         </td>
                         <td>
                             <span style="font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: ${t.estado === 'RESUELTO' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(245, 158, 11, 0.2)'}; color: ${t.estado === 'RESUELTO' ? '#34d399' : '#f59e0b'};">
-                                ${t.estado}
+                                ${esc(t.estado)}
                             </span>
                         </td>
                         <td>
