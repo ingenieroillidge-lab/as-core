@@ -346,11 +346,12 @@ def obtener_tablero_ejecutivo_completo(negocio_id, fecha_inicio=None, fecha_fin=
             FROM productos p
             LEFT JOIN ventas v ON v.producto_id = p.id AND v.negocio_id = p.negocio_id
         """
-        params_p = [negocio_id]
+        params_p = []
         if str_inicio and str_fin:
             sql_prods_perf += " AND v.fecha >= ? AND v.fecha <= ?"
             params_p.extend([str_inicio, str_fin])
-        sql_prods_perf += " WHERE p.negocio_id=? GROUP BY p.id, p.nombre, p.codigo HAVING ventas > 0"
+        # (orden de parámetros = orden de los '?'; HAVING sin alias para que funcione también en PostgreSQL)
+        sql_prods_perf += " WHERE p.negocio_id=? GROUP BY p.id, p.nombre, p.codigo HAVING COALESCE(SUM(v.total), 0) > 0"
         params_p.append(negocio_id)
 
         prods_perf_raw = ejecutar_query(sql_prods_perf, params_p, fetch=True) or []

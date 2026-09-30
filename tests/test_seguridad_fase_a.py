@@ -43,7 +43,7 @@ def test_migracion_hashea_y_borra_texto_plano():
     ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (501, 'solo_plano', 'miClave9', 'OPERADOR')")
     assert appmod.migrar_passwords_planas() >= 1
     fila = ejecutar_query("SELECT password, password_hash FROM usuarios WHERE username='solo_plano'", fetch=True)[0]
-    assert fila[0] is None and fila[1]
+    assert (fila[0] in (None, "")) and fila[1]
     cliente('solo_plano', 'miClave9')
     assert appmod.migrar_passwords_planas() == 0  # idempotente
 

@@ -44,14 +44,19 @@ app.config.update(
 ROLES_ASIGNABLES = ("ADMIN", "OPERADOR")  # SUPER nunca se asigna desde la app de un negocio
 
 def migrar_passwords_planas():
-    """Migración de seguridad (idempotente): pasa a hash las contraseñas que aún estén en texto plano
-    y borra la columna en claro. Devuelve cuántos usuarios tenían texto plano."""
+    """Migración de seguridad (idempotente): pasa a hash las contraseñas en texto plano y vacía la columna en claro.
+    Devuelve cuántos usuarios se migraron de verdad. Usa '' (no NULL) porque en PostgreSQL la columna puede ser NOT NULL."""
     filas = ejecutar_query("SELECT id, password FROM usuarios WHERE password IS NOT NULL AND password<>''", fetch=True) or []
+    migrados = 0
     for uid_, pw_ in filas:
-        ejecutar_query("UPDATE usuarios SET password_hash=? WHERE id=? AND (password_hash IS NULL OR password_hash='')",
-                       (generate_password_hash(pw_), uid_))
-        ejecutar_query("UPDATE usuarios SET password=NULL WHERE id=?", (uid_,))
-    return len(filas)
+        ok1 = ejecutar_query("UPDATE usuarios SET password_hash=? WHERE id=? AND (password_hash IS NULL OR password_hash='')",
+                             (generate_password_hash(pw_), uid_))
+        ok2 = ejecutar_query("UPDATE usuarios SET password='' WHERE id=?", (uid_,))
+        if ok1 and ok2:
+            migrados += 1
+        else:
+            print(f"[SEGURIDAD] No se pudo limpiar la contraseña en claro del usuario {uid_}.", file=sys.stderr)
+    return migrados
 
 
 # Garantizar creación/verificación de tablas en PostgreSQL/SQLite al iniciar la aplicación
@@ -2126,9 +2131,9 @@ def reset_admin_password(negocio_id):
         new_h = generate_password_hash(new_pass)
 
         if new_user:
-            ejecutar_query("UPDATE usuarios SET username=?, password_hash=?, password=NULL WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_user, new_h, negocio_id))
+            ejecutar_query("UPDATE usuarios SET username=?, password_hash=?, password='' WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_user, new_h, negocio_id))
         else:
-            ejecutar_query("UPDATE usuarios SET password_hash=?, password=NULL WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_h, negocio_id))
+            ejecutar_query("UPDATE usuarios SET password_hash=?, password='' WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_h, negocio_id))
 
         return jsonify({"message": "Credenciales actualizadas exitosamente con hashing seguro"})
     except Exception as e:
@@ -2157,7 +2162,7 @@ def cambiar_mi_password():
             return jsonify({"error": "La contraseña actual ingresada es incorrecta"}), 400
 
         new_h = generate_password_hash(nueva_p)
-        ejecutar_query("UPDATE usuarios SET password_hash=?, password=NULL WHERE id=?", (new_h, uid))
+        ejecutar_query("UPDATE usuarios SET password_hash=?, password='' WHERE id=?", (new_h, uid))
 
         return jsonify({"message": "Contraseña actualizada exitosamente"})
     except Exception as e:
