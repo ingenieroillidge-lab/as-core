@@ -19,4 +19,4 @@ jobs:
       - name: Sintaxis
         run: python -m compileall -q app.py database.py services tests
       - name: Pruebas del contrato y de seguridad (base temporal, sin tocar datos reales)
-        run: python tests/run_all.py
+        run: python -m unittest discover -s tests -p "test_suite.py" -v

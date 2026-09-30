@@ -28,7 +28,7 @@ def correr(script):
 
 def main():
     filtro = sys.argv[1] if len(sys.argv) > 1 else ""
-    scripts = sorted(p for p in glob.glob(os.path.join(RAIZ, "tests", "test_*.py")) if filtro in os.path.basename(p))
+    scripts = sorted(p for p in glob.glob(os.path.join(RAIZ, "tests", "test_*.py")) if filtro in os.path.basename(p) and os.path.basename(p) != "test_suite.py")
     fallos = 0
     for s in scripts:
         code, out, seg = correr(s)
