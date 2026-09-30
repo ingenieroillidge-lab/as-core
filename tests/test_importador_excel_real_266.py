@@ -1,6 +1,5 @@
 import sys
 import os
-import pandas as pd
 import json
 
 sys.path.insert(0, '.')
@@ -29,7 +28,12 @@ def test_excel_real_266():
     ejecutar_query("DELETE FROM compras_entradas WHERE negocio_id=?", (nid,))
     ejecutar_query("DELETE FROM movimientos_lote WHERE negocio_id=?", (nid,))
 
-    excel_path = r"C:\Users\samue\Downloads\Emprendimiento_Camisetas Hincha Store 22-7-26.xlsx"
+    # Archivo real del emprendedor (datos de cliente: NO va al repositorio). Se indica por variable de entorno.
+    excel_path = os.environ.get("AS_EXCEL_266", r"C:\Users\samue\Downloads\Emprendimiento_Camisetas Hincha Store 22-7-26.xlsx")
+    if not os.path.exists(excel_path):
+        print(f"SKIP: no existe el Excel real ({excel_path}). Defina AS_EXCEL_266 para ejecutarla.")
+        sys.exit(5)
+    import pandas as pd
     df = pd.read_excel(excel_path, sheet_name="Inventario")
 
     # Convertir dataframe a matriz de listas para staging

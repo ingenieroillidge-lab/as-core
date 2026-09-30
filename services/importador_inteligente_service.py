@@ -2217,7 +2217,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
                     "nombre_prod": nombre_prod, "key_p": key_p, "tipo_fila": tipo_fila,
                     "origen_clasificacion": origen_clasificacion,
-                    "estado_raw": estado_raw, "cant": cant, "precio_v": precio_v, "costo_adq": costo_adq,
+                    "estado_raw": estado_raw, "cant": cant, "precio_v": precio_ref_raw, "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre, "deuda_val": deuda_val, "abono_val": abono_val,
                     "abono_efectivo": abono_efectivo, "excedente_abono": excedente_abono,
                     "saldo_calc": saldo_calc, "metodo_pago": metodo_pago, "obs_nota": obs_nota,
