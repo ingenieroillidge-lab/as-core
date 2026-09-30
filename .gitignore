@@ -14,3 +14,6 @@ backups/
 
 # Borradores locales
 scratch/
+
+# Excel sintéticos de prueba (sin datos de clientes)
+!tests/fixtures/*.xlsx

@@ -5,6 +5,7 @@ import hashlib
 from datetime import datetime
 from database import ejecutar_query, ejecutar_query_many, transaccion, insertar_con_id
 import services.cartera_service as cartera_service
+from services.normalizador import parse_money as _norm_parse_money, fecha_a_iso as _fecha_a_iso
 
 # ══════════════════════════════════════════════════════════════════
 # NÚCLEO SEMÁNTICO UNIVERSAL
@@ -387,13 +388,8 @@ def construir_contrato_semantico(mapeo_columnas: dict, decisiones_financieras: d
 
 
 def parse_money(val):
-    if not val:
-        return 0.0
-    try:
-        clean = str(val).replace('$', '').replace(',', '').strip()
-        return float(clean) if clean else 0.0
-    except Exception:
-        return 0.0
+    """Montos es-CO ('$ 45.000' = 45000, '45000,00', '85.000,50', '-$ 120.000'). Ver services/normalizador.py."""
+    return _norm_parse_money(val)
 
 
 def calcular_hash_contenido(filas_matriz):
@@ -1226,7 +1222,7 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
 
         excel_total_costos += (costo_adq * cant)
 
-        fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
+        fecha_compra_raw = _fecha_a_iso(mapped.get('fecha_operacion'), datetime.now().strftime("%Y-%m-%d"))
         pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
         lote_key = (pedido_key, key_p)
         lotes_set.add(lote_key)
@@ -1548,8 +1544,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 costo_total_imp = parse_money(mapped.get('costo_total'))
                 cli_nombre = (mapped.get('cliente_nombre') or '').strip()
 
-                fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
-                fecha_recepcion_raw = mapped.get('fecha_recepcion') or fecha_compra_raw
+                fecha_compra_raw = _fecha_a_iso(mapped.get('fecha_operacion'), datetime.now().strftime("%Y-%m-%d"))
+                fecha_recepcion_raw = _fecha_a_iso(mapped.get('fecha_recepcion'), fecha_compra_raw)
 
                 fecha_compra_fmt = f"{fecha_compra_raw} 12:00:00" if len(fecha_compra_raw) == 10 else fecha_compra_raw
                 fecha_recepcion_fmt = f"{fecha_recepcion_raw} 12:00:00" if len(fecha_recepcion_raw) == 10 else fecha_recepcion_raw
@@ -2120,8 +2116,8 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 costo_total_imp = parse_money(mapped.get('costo_total'))
                 cli_nombre = (mapped.get('cliente_nombre') or '').strip()
 
-                fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
-                fecha_recepcion_raw = mapped.get('fecha_recepcion') or fecha_compra_raw
+                fecha_compra_raw = _fecha_a_iso(mapped.get('fecha_operacion'), datetime.now().strftime("%Y-%m-%d"))
+                fecha_recepcion_raw = _fecha_a_iso(mapped.get('fecha_recepcion'), fecha_compra_raw)
                 fecha_compra_fmt = f"{fecha_compra_raw} 12:00:00" if len(fecha_compra_raw) == 10 else fecha_compra_raw
                 fecha_recepcion_fmt = f"{fecha_recepcion_raw} 12:00:00" if len(fecha_recepcion_raw) == 10 else fecha_recepcion_raw
 
