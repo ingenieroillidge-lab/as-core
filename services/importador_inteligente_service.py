@@ -49,9 +49,32 @@ SEMANTIC_CORE = {
         "COSTO TOTAL", "COSTO TOTAL ADQUISICION", "TOTAL COP", "TOTAL COST",
         "COSTO ADQUISICION", "COSTO NETO"
     ],
-    "precio_venta": [
+    # ── Roles financieros explícitos del Contrato Semántico ──
+    # precio_referencia: precio maestro del producto; puede NO ser una venta realizada
+    "precio_referencia": [
         "PRECIO VENTA", "PRECIO DE VENTA", "PRECIO VENTA (COP)", "PVP",
-        "PRICE", "PRECIO UNITARIO", "PRECIO AL PUBLICO"
+        "PRICE", "PRECIO UNITARIO", "PRECIO AL PUBLICO", "PRECIO REFERENCIA",
+        "PRECIO REF", "VALOR REFERENCIA"
+    ],
+    # total_venta_operacion: columna que ya contiene el total real de la transacción
+    "total_venta_operacion": [
+        "TOTAL VENTA", "TOTAL DE VENTA", "VALOR TOTAL", "IMPORTE TOTAL",
+        "TOTAL OPERACION", "TOTAL FACTURADO", "VENTA TOTAL",
+        "VALOR VENTA", "TOTAL COBRADO", "IMPORTE"
+    ],
+    # recaudo_efectivo: dinero efectivamente recibido — NO el valor de la venta
+    "recaudo_efectivo": [
+        "PAGOS/ABONOS", "PAGOS", "ABONOS", "ABONO", "PAGO",
+        "PAGO RECIBIDO", "RECAUDO", "COBRADO", "DINERO RECIBIDO", "EFECTIVO RECIBIDO"
+    ],
+    # cartera_reportada: saldo pendiente informado por el Excel — solo conciliación
+    "cartera_reportada": [
+        "DEUDAS POR COBRAR", "DEUDAS", "CARTERA", "SALDO PENDIENTE",
+        "POR COBRAR", "DEUDA", "CUENTA POR COBRAR", "SALDO"
+    ],
+    # Legacy aliases (retrocompatibilidad — mapeo antiguo)
+    "precio_venta": [
+        "PRECIO VENTA LEGACY", "PRECIO_VENTA_ALIAS"
     ],
 
     # ── Identificadores de Lote / Embarque ──
@@ -94,13 +117,12 @@ SEMANTIC_CORE = {
         "TIPO CLIENTE", "SEGMENTO", "CANAL", "TIPO DE CLIENTE",
         "CLASIFICACION CLIENTE", "CATEGORIA CLIENTE"
     ],
+    # Legacy aliases (retrocompatibilidad — se migran al contrato semántico)
     "saldo_pendiente": [
-        "DEUDAS POR COBRAR", "DEUDAS", "CARTERA", "SALDO PENDIENTE",
-        "POR COBRAR", "DEUDA", "CUENTA POR COBRAR", "SALDO"
+        "SALDO_PENDIENTE_LEGACY", "DEUDA_LEGACY"
     ],
     "abono_monto": [
-        "PAGOS/ABONOS", "PAGOS", "ABONOS", "ABONO", "PAGO",
-        "PAGO RECIBIDO", "RECAUDO"
+        "ABONO_MONTO_LEGACY", "PAGOS_LEGACY"
     ],
 
     # ── Fechas ──
@@ -126,11 +148,29 @@ SEMANTIC_CORE = {
 }
 
 SINGLETON_FIELDS = {
-    "nombre_producto", "codigo_sku", "precio_venta", 
+    "nombre_producto", "codigo_sku",
+    # Campos del Contrato Semántico (nuevos)
+    "precio_referencia", "total_venta_operacion", "recaudo_efectivo", "cartera_reportada",
+    # Legacy aliases
+    "precio_venta", "saldo_pendiente", "abono_monto",
     "estado_origen", "cliente_nombre", "cliente_documento", "cliente_telefono", "cliente_whatsapp",
     "cliente_email", "cliente_direccion", "cliente_tipo",
-    "saldo_pendiente", "abono_monto", 
     "fecha_operacion", "fecha_recepcion"
+}
+
+# Campos financieros críticos: requieren confirmación explícita del usuario antes de procesar.
+# La heurística puede sugerir, pero el Contrato Semántico confirmado es el que manda.
+CAMPOS_FINANCIEROS_CRITICOS = {
+    "precio_referencia", "total_venta_operacion", "recaudo_efectivo", "cartera_reportada",
+    # Legacy aliases (también son críticos si aparecen en mapeos anteriores)
+    "precio_venta", "abono_monto", "saldo_pendiente"
+}
+
+# Tabla de migración de mapeos legacy al Contrato Semántico v2
+MAPEO_LEGACY_A_CONTRATO = {
+    "precio_venta":     "precio_referencia",   # Alias inequívoco
+    "abono_monto":      "recaudo_efectivo",     # Alias inequívoco
+    "saldo_pendiente":  "cartera_reportada",    # Alias inequívoco
 }
 
 ATTRIBUTE_HINTS = [
@@ -152,18 +192,29 @@ VARIANT_HINTS = [
 
 CAMPO_LABELS = {
     "IGNORAR": "🚫 No importar",
+    # Identidad
     "nombre_producto": "📦 Nombre del producto o servicio",
     "codigo_sku": "🔖 Código / SKU / Referencia",
     "categoria": "📂 Categoría",
     "subcategoria": "📁 Subcategoría",
     "atributo": "🏷️ Atributo del producto",
     "variante": "🔀 Variante (talla, color, medida...)",
+    # Costos
     "costo_unitario_origen": "💵 Costo unitario (moneda origen)",
     "tasa_cambio": "💱 Tasa de cambio",
     "costo_unitario_local": "💰 Costo unitario (moneda local)",
     "costo_envio": "🚚 Costo logístico / envío",
     "costo_total": "📦 Costo total de adquisición",
-    "precio_venta": "🏷️ Precio de venta",
+    # ── Roles financieros del Contrato Semántico ─────────────────
+    "precio_referencia":     "🏷️ Precio de referencia del producto (puede ser precio maestro, no necesariamente venta realizada)",
+    "total_venta_operacion": "💰 Total de la operación/venta (columna con el valor total ya calculado)",
+    "recaudo_efectivo":      "💵 Recaudo efectivo (dinero recibido — no el valor de la venta)",
+    "cartera_reportada":     "💳 Cartera reportada en el archivo (saldo pendiente — solo para conciliación)",
+    # Legacy aliases (retrocompatibilidad)
+    "precio_venta":    "🏷️ Precio de venta (legado — migrar a Precio referencia)",
+    "abono_monto":     "💵 Pago / Abono recibido (legado — migrar a Recaudo efectivo)",
+    "saldo_pendiente": "💳 Cuenta por cobrar / Deuda (legado — migrar a Cartera reportada)",
+    # ─────────────────────────────────────────────────────────────
     "cantidad": "🔢 Cantidad / Unidades",
     "estado_origen": "🚦 Estado (Stock, Vendida, Debe, Pérdida)",
     "cliente_nombre": "👤 Cliente",
@@ -173,12 +224,166 @@ CAMPO_LABELS = {
     "cliente_email": "📧 Email / Correo",
     "cliente_direccion": "📍 Dirección / Ciudad",
     "cliente_tipo": "🏷️ Tipo / Segmento de cliente",
-    "saldo_pendiente": "💳 Cuenta por cobrar / Deuda",
-    "abono_monto": "💵 Pago / Abono recibido",
     "fecha_operacion": "📅 Fecha de operación",
     "fecha_recepcion": "📦 Fecha de recepción",
     "campo_calculado": "📊 Campo derivado — usar para validación",
 }
+
+
+# ══════════════════════════════════════════════════════════════════
+# CONTRATO SEMÁNTICO FINANCIERO
+# ══════════════════════════════════════════════════════════════════
+
+def intentar_migrar_mapeo_legado(mapeo_guardado: dict, headers: list) -> dict:
+    """
+    Intenta migrar un mapeo legacy al Contrato Semántico v2.
+
+    Retorna un dict con:
+      - 'contrato_parcial':     dict con los campos ya migrados inequívocamente
+      - 'ambiguedades':         list de roles financieros que necesitan confirmación
+      - 'requiere_confirmacion': bool  — True si hay alguna ambigüedad crítica
+      - 'sugerencias':          dict  — sugerencia pre-seleccionable para cada ambigüedad
+
+    No modifica la DB. La persistencia solo ocurre después de la confirmación explícita.
+    """
+    contrato_parcial = {}
+    ambiguedades = []
+    sugerencias = {}
+
+    campos_en_archivo = set(mapeo_guardado.values())
+
+    for campo_legado, campo_nuevo in MAPEO_LEGACY_A_CONTRATO.items():
+        if campo_legado in campos_en_archivo:
+            # Encontrar la columna Excel que tiene este campo legacy
+            col_excel = next(
+                (col for col, campo in mapeo_guardado.items() if campo == campo_legado),
+                None
+            )
+            if col_excel:
+                # Verificar si la columna sigue existiendo en el nuevo archivo
+                if col_excel in headers:
+                    contrato_parcial[campo_nuevo] = col_excel
+                else:
+                    # La columna ya no existe: requiere que el usuario la re-asigne
+                    ambiguedades.append({
+                        "campo_rol": campo_nuevo,
+                        "razon": f"La columna '{col_excel}' (anteriormente '{campo_legado}') no existe en el nuevo archivo.",
+                        "columnas_disponibles": headers
+                    })
+
+    # Detectar si ya existe total_venta_operacion sin que hubiera en el legado
+    if "total_venta_operacion" not in contrato_parcial:
+        # El legado no tenía este campo: necesita el usuario definir el origen del total de venta
+        ambiguedades.append({
+            "campo_rol": "origen_total_venta",
+            "razon": (
+                "No se detectó en el historial previo cómo se calculaba el total de la venta. "
+                "Necesitamos que confirmes si se usa Precio × Cantidad o una columna de Total."
+            ),
+            "columnas_disponibles": headers
+        })
+
+    # Sugerencias automáticas para campos aún sin asignar
+    for campo_nuevo in ("precio_referencia", "total_venta_operacion", "recaudo_efectivo", "cartera_reportada"):
+        if campo_nuevo not in contrato_parcial:
+            # Buscar columna sugerida por heurística
+            for col in headers:
+                col_norm = col.upper().strip()
+                sinonimos = SEMANTIC_CORE.get(campo_nuevo, [])
+                if col_norm in sinonimos:
+                    sugerencias[campo_nuevo] = col
+                    break
+
+    requiere_confirmacion = len(ambiguedades) > 0 or "total_venta_operacion" not in contrato_parcial
+
+    return {
+        "contrato_parcial": contrato_parcial,
+        "ambiguedades": ambiguedades,
+        "requiere_confirmacion": requiere_confirmacion,
+        "sugerencias": sugerencias
+    }
+
+
+def construir_contrato_semantico(mapeo_columnas: dict, decisiones_financieras: dict) -> dict:
+    """
+    Construye el Contrato Semántico Financiero confirmado a partir de:
+      - mapeo_columnas:         {col_excel: campo_as}  (resultado del paso 2 del wizard)
+      - decisiones_financieras: decisiones explícitas del usuario del paso 3 del wizard:
+          {
+            "campo_producto":         "Artículo",          # columna Excel
+            "campo_precio_referencia":"Precio Venta",      # columna Excel (precio maestro)
+            "campo_cantidad":         "Cantidad",          # columna Excel
+            "origen_total_venta":     "COLUMNA" | "PRECIO_X_CANTIDAD" | "PRECIO_REFERENCIA_TOTAL",
+            "campo_total_venta_operacion": "Total Venta",  # si origen == "COLUMNA"
+            "campo_recaudo":          "Pagos",             # columna Excel (puede ser None)
+            "campo_cartera_reportada":"Deuda",             # columna Excel (puede ser None)
+          }
+
+    Retorna el Contrato Semántico listo para ser almacenado y ejecutado:
+      {
+        "version": "v2",
+        "campo_producto":          str | None,
+        "campo_precio_referencia": str | None,
+        "campo_cantidad":          str | None,
+        "origen_total_venta":      "COLUMNA" | "PRECIO_X_CANTIDAD" | "PRECIO_REFERENCIA_TOTAL",
+        "campo_total_venta_operacion": str | None,
+        "campo_recaudo":           str | None,
+        "campo_cartera_reportada": str | None,
+        "mapeo_columnas":          dict,    # mapa completo columna→campo para el resto de campos
+        "formulas": {
+            "total_venta":          str,    # descripción humana de la fórmula
+            "recaudo":              str,
+            "cartera_calculada":    str,
+            "cartera_reportada":    str | None,
+            "diferencia":           str | None,
+        },
+        "tiene_conciliacion_doble": bool,  # True si existe campo_cartera_reportada
+      }
+    """
+    d = decisiones_financieras
+
+    origen = d.get("origen_total_venta", "PRECIO_X_CANTIDAD")
+    campo_prod = d.get("campo_producto")
+    campo_precio_ref = d.get("campo_precio_referencia")
+    campo_cant = d.get("campo_cantidad")
+    campo_tot_op = d.get("campo_total_venta_operacion")
+    campo_recaudo = d.get("campo_recaudo")
+    campo_cartera = d.get("campo_cartera_reportada")
+
+    # Construir descripción humana de fórmulas según origen_total_venta
+    if origen == "COLUMNA":
+        formula_total = f"Total Venta = {campo_tot_op}"
+    elif origen == "PRECIO_REFERENCIA_TOTAL":
+        formula_total = f"Total Venta = {campo_precio_ref}  (ya contiene el total de la operación)"
+    else:  # PRECIO_X_CANTIDAD
+        formula_total = f"Total Venta = {campo_precio_ref} × {campo_cant}"
+
+    formula_recaudo = f"Recaudo = {campo_recaudo}" if campo_recaudo else "Recaudo = $0 (no se mapeó columna de pagos)"
+    formula_cartera_calc = "Cartera Calculada = Total Venta − Recaudo"
+    formula_cartera_rep = f"Cartera Reportada = {campo_cartera}  [solo conciliación]" if campo_cartera else None
+    formula_diferencia = "Diferencia = Cartera Calculada − Cartera Reportada" if campo_cartera else None
+
+    tiene_conciliacion_doble = bool(campo_cartera)
+
+    return {
+        "version": "v2",
+        "campo_producto":              campo_prod,
+        "campo_precio_referencia":     campo_precio_ref,
+        "campo_cantidad":              campo_cant,
+        "origen_total_venta":          origen,
+        "campo_total_venta_operacion": campo_tot_op,
+        "campo_recaudo":               campo_recaudo,
+        "campo_cartera_reportada":     campo_cartera,
+        "mapeo_columnas":              mapeo_columnas,
+        "formulas": {
+            "total_venta":          formula_total,
+            "recaudo":              formula_recaudo,
+            "cartera_calculada":    formula_cartera_calc,
+            "cartera_reportada":    formula_cartera_rep,
+            "diferencia":           formula_diferencia,
+        },
+        "tiene_conciliacion_doble": tiene_conciliacion_doble,
+    }
 
 
 def parse_money(val):
@@ -271,10 +476,12 @@ def normalizar_concepto_estado(val_raw):
 
 def determinar_tipo_fila(mapped_data):
     """
-    Determina qué tipo de operación representa una fila y su nivel de confianza:
-    - Retorna (tipo_fila, origen_clasificacion)
+    Determina qué tipo de operación representa una fila y su nivel de confianza.
+    Compatible con campos del Contrato Semántico v2 y campos legacy.
+
+    Retorna (tipo_fila, origen_clasificacion):
     - EXPLICITA: Determinado por Estado mapeado en Excel (STOCK, PERDIDA, DEBE, VENDIDA)
-    - INFERIDA: Determinado por deducción de estructura (Costos + Precio/Cliente)
+    - INFERIDA: Determinado por deducción de estructura (Costos + Precio/Recaudo/Cliente)
     """
     raw_est = (mapped_data.get('estado_origen') or mapped_data.get('estado') or '').strip()
     concepto = normalizar_concepto_estado(raw_est)
@@ -286,18 +493,25 @@ def determinar_tipo_fila(mapped_data):
     elif concepto in ("DEBE", "VENDIDA"):
         return "COMPRA_Y_VENTA", "EXPLICITA"
 
-    # Fallback estructural si no hay columna de Estado o si es AMBIGUO:
+    # Fallback estructural — compatible con Contrato Semántico v2 y legacy
     tiene_costos = any(mapped_data.get(c) for c in [
         'costo_unitario_origen', 'costo_unitario_local', 'costo_total'
     ])
-    tiene_precio_venta = bool(mapped_data.get('precio_venta'))
+    # precio_referencia (v2) o precio_venta (legacy)
+    tiene_precio_ref = bool(
+        mapped_data.get('precio_referencia') or
+        mapped_data.get('precio_venta') or
+        mapped_data.get('total_venta_operacion')
+    )
+    # recaudo_efectivo (v2) o abono_monto (legacy)
+    tiene_recaudo = bool(mapped_data.get('recaudo_efectivo') or mapped_data.get('abono_monto'))
     tiene_cliente = bool(mapped_data.get('cliente_nombre'))
 
-    if tiene_costos and (tiene_precio_venta or tiene_cliente):
+    if tiene_costos and (tiene_precio_ref or tiene_cliente):
         return "COMPRA_Y_VENTA", "INFERIDA"
-    elif tiene_costos and not tiene_precio_venta:
+    elif tiene_costos and not tiene_precio_ref:
         return "SOLO_COMPRA", "INFERIDA"
-    elif tiene_precio_venta and not tiene_costos:
+    elif (tiene_precio_ref or tiene_recaudo) and not tiene_costos:
         return "SOLO_VENTA", "INFERIDA"
     else:
         return "REGISTRO_HISTORICO", "INFERIDA"
@@ -704,11 +918,11 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                 f"AS no intentará adivinar; se utilizará deducción estructural a menos que el usuario lo ajuste."
             )
 
-        precio_v = parse_money(mapped_data.get('precio_venta'))
-        abono_val = parse_money(mapped_data.get('abono_monto'))
-        deuda_excel = parse_money(mapped_data.get('saldo_pendiente'))
+        precio_v = parse_money(mapped_data.get('precio_referencia') or mapped_data.get('precio_venta'))
+        abono_val = parse_money(mapped_data.get('recaudo_efectivo') or mapped_data.get('abono_monto'))
+        deuda_excel = parse_money(mapped_data.get('cartera_reportada') or mapped_data.get('saldo_pendiente'))
         total_v_row = precio_v * cant_val
-        tiene_col_abono = 'abono_monto' in mapped_data
+        tiene_col_abono = ('recaudo_efectivo' in mapped_data or 'abono_monto' in mapped_data)
 
         # Regla 4 del Contrato Semántico: Abonos
         if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_excel == 0.0:
@@ -786,22 +1000,108 @@ def conciliar_y_prevalidar(batch_id, negocio_id, mapeo_usuario):
                         pass
             else:
                 productos_nuevos.append({"nombre": nombre_prod})
-
         estado_row = "VALIDO"
-def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD", etapa0_config=None):
+        if errs:
+            estado_row = "ERROR"
+            total_errores += 1
+        elif advs:
+            estado_row = "ADVERTENCIA"
+            total_advertencias += 1
+        else:
+            total_validos += 1
+
+        update_params.append((
+            estado_row,
+            json.dumps(errs, ensure_ascii=False),
+            json.dumps(advs, ensure_ascii=False),
+            s_id
+        ))
+
+        resumen_filas.append({
+            "fila": fila_num,
+            "estado": estado_row,
+            "datos": mapped_data,
+            "errores": errs,
+            "advertencias": advs
+        })
+
+    ejecutar_query_many(
+        "UPDATE importaciones_staging SET estado_validacion=?, errores_json=?, advertencias_json=? WHERE id=?",
+        update_params
+    )
+
+    t_total = time.time() - t_start
+
+    resumen = {
+        "batch_id": batch_id,
+        "total_registros": len(registros_staging),
+        "validos": total_validos,
+        "advertencias": total_advertencias,
+        "errores": total_errores,
+        "productos_nuevos": productos_nuevos,
+        "diferencias_detectadas": diferencias_detectadas,
+        "detalles_filas": resumen_filas[:50],
+        "tiempo_ms": int(t_total * 1000)
+    }
+
+    return True, "Prevalidación completada", resumen
+
+
+# ══════════════════════════════════════════════════════════════════
+# ETAPA 4: SIMULACIÓN DE IMPORTACIÓN PRE-CONFIRMACIÓN
+# ══════════════════════════════════════════════════════════════════
+
+def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos="POR_UNIDAD", etapa0_config=None, contrato_semantico=None):
     """
-    Calcula el impacto exacto de la importación incorporando la Etapa 0 de Configuración de Interpretación
-    y genera la Matriz de Conciliación Multi-Etapa (Excel Original -> Staging -> Procesados -> Definitivos -> Dashboard).
+    Calcula el impacto exacto de la importación usando el Contrato Semántico Financiero v2.
+    Retrocompatible con etapa0_config legacy.
+
+    Prioridad: contrato_semantico (v2) > etapa0_config (legacy) > defaults seguros.
     """
-    if not etapa0_config or not isinstance(etapa0_config, dict):
-        etapa0_config = {
-            "tipo_precio_venta": "VALOR_TOTAL_VENTA",
-            "fuente_cartera": "CALCULAR",
-            "usar_cantidad": True,
-            "usar_abonos": True,
-            "usar_deuda": True,
-            "formato_regional": "COLOMBIA_LATAM"
-        }
+    # ── Resolución del Contrato Semántico ──
+    cs = None
+    if contrato_semantico and isinstance(contrato_semantico, dict) and contrato_semantico.get("version") == "v2":
+        cs = contrato_semantico
+    elif etapa0_config and isinstance(etapa0_config, dict):
+        # Compatibilidad legacy: convertir etapa0_config al nuevo modelo
+        tipo_precio = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
+        fuente_legacy = etapa0_config.get("fuente_cartera", "CALCULAR")
+        origen_tv = "PRECIO_REFERENCIA_TOTAL" if tipo_precio == "VALOR_TOTAL_VENTA" else "PRECIO_X_CANTIDAD"
+        # Detectar las columnas del mapeo por sus campos legacy
+        col_precio_leg = next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None)
+        col_recaudo_leg = next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None)
+        col_cartera_leg = next((c for c, f in mapeo_usuario.items() if f in ("saldo_pendiente", "cartera_reportada")), None) if fuente_legacy in ("USAR_EXCEL", "COMPARAR") else None
+        col_cant_leg = next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None)
+        col_prod_leg = next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None)
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              col_prod_leg,
+            "campo_precio_referencia":     col_precio_leg,
+            "campo_cantidad":              col_cant_leg,
+            "origen_total_venta":          origen_tv,
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               col_recaudo_leg,
+            "campo_cartera_reportada":     col_cartera_leg,
+        })
+    else:
+        # Default mínimo seguro
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None),
+            "campo_precio_referencia":     next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None),
+            "campo_cantidad":              next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None),
+            "origen_total_venta":          "PRECIO_REFERENCIA_TOTAL",
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None),
+            "campo_cartera_reportada":     None,
+        })
+
+    # Extraer las columnas Excel que corresponden a cada rol financiero del contrato
+    _col_precio_ref  = cs.get("campo_precio_referencia")
+    _col_total_op    = cs.get("campo_total_venta_operacion")
+    _col_recaudo     = cs.get("campo_recaudo")
+    _col_cartera_rep = cs.get("campo_cartera_reportada")
+    _col_cant        = cs.get("campo_cantidad")
+    _origen_total    = cs.get("origen_total_venta", "PRECIO_X_CANTIDAD")
+    _tiene_doble     = cs.get("tiene_conciliacion_doble", False)
 
     registros_staging = ejecutar_query(
         """SELECT id, fila_num, datos_raw_json, archivo_origen, hoja_origen, fila_origen, 
@@ -849,8 +1149,6 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
     cnt_perdida = 0
 
     lotes_acumulados_sim = {}
-    tipo_precio_opt = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
-    fuente_cartera_opt = etapa0_config.get("fuente_cartera", "CALCULAR")
 
     for s_id, fila_num, raw_json, arch_orig, hoja_orig, fila_orig, h_fila, h_cont, nivel_dup in registros_staging:
         raw_row = json.loads(raw_json)
@@ -878,28 +1176,41 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         if cli_nombre and cli_nombre.lower() not in clis_exist_set:
             clientes_nuevos.add(cli_nombre.lower())
 
-        cant = parse_money(mapped.get('cantidad')) if etapa0_config.get('usar_cantidad', True) else 1.0
+        # ── Extracción de valores financieros según Contrato Semántico ──
+        # Cantidad: de la columna mapeada por el contrato
+        cant_raw = raw_row.get(_col_cant, "") if _col_cant else (mapped.get('cantidad') or "")
+        cant = parse_money(cant_raw)
         if cant <= 0: cant = 1.0
 
-        precio_v_raw = parse_money(mapped.get('precio_venta'))
-        costo_origen = parse_money(mapped.get('costo_unitario_origen'))
-        tasa_cambio = parse_money(mapped.get('tasa_cambio'))
-        costo_local = parse_money(mapped.get('costo_unitario_local'))
-        costo_envio = parse_money(mapped.get('costo_envio'))
-        costo_total_imp = parse_money(mapped.get('costo_total'))
-        deuda_val = parse_money(mapped.get('saldo_pendiente')) if etapa0_config.get('usar_deuda', True) else 0.0
-        abono_val = parse_money(mapped.get('abono_monto')) if etapa0_config.get('usar_abonos', True) else 0.0
+        # Precio referencia del producto (precio maestro, puede NO ser venta)
+        precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
 
-        # Regla de Precio Unitario vs Valor Total de la Venta:
-        if tipo_precio_opt == "VALOR_TOTAL_VENTA":
-            tot_v_row = precio_v_raw
-        else:
-            tot_v_row = precio_v_raw * cant
+        # Total de la operación — según origen definido en el contrato
+        if _origen_total == "COLUMNA" and _col_total_op:
+            tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
+        elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
+            tot_v_row = precio_ref_raw  # La columna ya contiene el total
+        else:  # PRECIO_X_CANTIDAD
+            tot_v_row = precio_ref_raw * cant
+
+        # Recaudo efectivo: dinero recibido — nunca confundir con valor de la venta
+        recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
+        abono_val = recaudo_raw
+
+        # Cartera reportada: deuda declarada en Excel — SOLO para conciliación, nunca valor definitivo
+        deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
 
         # Sumatorias de Excel Original
         excel_total_ventas += tot_v_row
         excel_total_abonos += abono_val
         excel_total_deudas += deuda_val
+
+        # Costos de adquisición (campos no financieros — siguen del mapeo general)
+        costo_origen    = parse_money(mapped.get('costo_unitario_origen'))
+        tasa_cambio     = parse_money(mapped.get('tasa_cambio'))
+        costo_local     = parse_money(mapped.get('costo_unitario_local'))
+        costo_envio     = parse_money(mapped.get('costo_envio'))
+        costo_total_imp = parse_money(mapped.get('costo_total'))
 
         # Costo unitario landed
         if granularidad_costos == "POR_LOTE" and cant > 1 and costo_total_imp > 0:
@@ -937,11 +1248,10 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             recaudo_fila = abono_val
             definitivo_recaudo_abonos += recaudo_fila
 
-            if fuente_cartera_opt == "USAR_EXCEL":
-                saldo_pend_fila = deuda_val
-            else:
-                saldo_pend_fila = max(0.0, tot_v_row - recaudo_fila)
-
+            # Cartera Calculada = Total Venta − Recaudo
+            # La cartera_reportada (deuda_val) NUNCA es el valor definitivo.
+            # Solo se usa para conciliación comparativa.
+            saldo_pend_fila = max(0.0, tot_v_row - recaudo_fila)
             definitivo_cartera += saldo_pend_fila
 
             # Determinación de Estado
@@ -957,23 +1267,22 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
 
     utilidad_bruta = definitivo_ventas - definitivo_costos
     margen_pct = (utilidad_bruta / definitivo_ventas * 100.0) if definitivo_ventas > 0 else 0.0
-    utilidad_bruta = definitivo_ventas - definitivo_costos
-    margen_pct = (utilidad_bruta / definitivo_ventas * 100.0) if definitivo_ventas > 0 else 0.0
     valor_inventario_restante = sum(ldata["cant_disponible"] * ldata["costo_adq"] for ldata in lotes_acumulados_sim.values())
 
     # Conciliación Doble de Cartera (AS vs Excel)
+    # Solo activa si el Contrato Semántico declara que existe columna de Cartera Reportada
     discrepancia_cartera = abs(definitivo_cartera - excel_total_deudas)
     coinciden_cartera = bool(discrepancia_cartera < 1.0)
 
     diferencia_detectada = excel_total_ventas - definitivo_ventas
-    if fuente_cartera_opt == "COMPARAR" and not coinciden_cartera:
+    if _tiene_doble and not coinciden_cartera:
         estado_conciliacion = "REQUIERE_REVISION"
     else:
         estado_conciliacion = "CONCILIADA" if (abs(diferencia_detectada) < 1.0 and cnt_confirmado == 0) else "REQUIERE_REVISION"
 
-    # Construcción de la Matriz de Conciliación Multi-Etapa (5 Etapas + Etapa 0)
+    # Matrices de Conciliación — incluye el Contrato Semántico como Etapa 0
     matriz_conciliacion = {
-        "etapa0_config": etapa0_config,
+        "etapa0_contrato_semantico": cs,
         "etapa1_excel_original": {
             "filas_totales": len(registros_staging),
             "total_ventas": excel_total_ventas,
@@ -1008,7 +1317,8 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
             "clientes_deudores_cnt": len(clientes_deudores_set),
             "lotes_a_crear": len(lotes_set),
             "comparativa_cartera": {
-                "fuente_seleccionada": fuente_cartera_opt,
+                "origen_total_venta": _origen_total,
+                "tiene_conciliacion_doble": _tiene_doble,
                 "cartera_calculada_as": definitivo_cartera,
                 "cartera_reportada_excel": excel_total_deudas,
                 "coinciden": coinciden_cartera,
@@ -1096,19 +1406,51 @@ def bulk_insert_con_returning(cursor, table_name, columns, rows_params, ph, is_p
 # ETAPA 5: PROCESAMIENTO APROBADO CON TRANSACCIÓN ATÓMICA ULTRA-RÁPIDA
 # ══════════════════════════════════════════════════════════════════
 
-def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", etapa0_config=None):
+def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", etapa0_config=None, contrato_semantico=None):
     """
     Confirmación transaccional atómica masiva (BEGIN ... COMMIT/ROLLBACK).
     Conserva el staging intacto (actualiza a PROCESADO) para linaje completo.
+    Usa el Contrato Semántico v2 si está disponible; cae a legacy etapa0_config si no.
     """
-    if not etapa0_config or not isinstance(etapa0_config, dict):
-        etapa0_config = {
-            "tipo_precio_venta": "VALOR_TOTAL_VENTA",
-            "usar_cantidad": True,
-            "usar_abonos": True,
-            "usar_deuda": True,
-            "formato_regional": "COLOMBIA_LATAM"
-        }
+    # ── Resolución del Contrato Semántico ──
+    cs = None
+    if contrato_semantico and isinstance(contrato_semantico, dict) and contrato_semantico.get("version") == "v2":
+        cs = contrato_semantico
+    elif etapa0_config and isinstance(etapa0_config, dict):
+        tipo_precio = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
+        fuente_legacy = etapa0_config.get("fuente_cartera", "CALCULAR")
+        origen_tv = "PRECIO_REFERENCIA_TOTAL" if tipo_precio == "VALOR_TOTAL_VENTA" else "PRECIO_X_CANTIDAD"
+        col_precio_leg = next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None)
+        col_recaudo_leg = next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None)
+        col_cartera_leg = next((c for c, f in mapeo_usuario.items() if f in ("saldo_pendiente", "cartera_reportada")), None) if fuente_legacy in ("USAR_EXCEL", "COMPARAR") else None
+        col_cant_leg = next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None)
+        col_prod_leg = next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None)
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              col_prod_leg,
+            "campo_precio_referencia":     col_precio_leg,
+            "campo_cantidad":              col_cant_leg,
+            "origen_total_venta":          origen_tv,
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               col_recaudo_leg,
+            "campo_cartera_reportada":     col_cartera_leg,
+        })
+    else:
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None),
+            "campo_precio_referencia":     next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None),
+            "campo_cantidad":              next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None),
+            "origen_total_venta":          "PRECIO_REFERENCIA_TOTAL",
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None),
+            "campo_cartera_reportada":     None,
+        })
+
+    _col_precio_ref  = cs.get("campo_precio_referencia")
+    _col_total_op    = cs.get("campo_total_venta_operacion")
+    _col_recaudo     = cs.get("campo_recaudo")
+    _col_cartera_rep = cs.get("campo_cartera_reportada")
+    _col_cant        = cs.get("campo_cantidad")
+    _origen_total    = cs.get("origen_total_venta", "PRECIO_X_CANTIDAD")
 
     registros_staging = ejecutar_query(
         """SELECT fila_num, datos_raw_json, archivo_origen, hoja_origen, fila_origen, 
@@ -1123,7 +1465,10 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
         return False, "No se encontraron datos para procesar", None
 
     # Generar Simulación y Matriz de Conciliación previa a procesar
-    ok_sim, msg_sim, sim_res = simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos, etapa0_config)
+    ok_sim, msg_sim, sim_res = simular_importacion(
+        batch_id, negocio_id, mapeo_usuario, granularidad_costos,
+        etapa0_config=etapa0_config, contrato_semantico=cs
+    )
     matriz_conciliacion = sim_res.get("matriz_conciliacion") if ok_sim and sim_res else {}
 
     undo_token = f"UNDO-{uuid.uuid4().hex[:12].upper()}"
@@ -1143,7 +1488,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
         "clientes": [], "abonos": [], "movimientos": []
     }
     procesados = 0
-    tipo_precio_opt = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
 
     try:
         with transaccion() as (cursor, ph, is_pg):
@@ -1175,18 +1519,34 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
                 tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
 
-                cant = parse_money(mapped.get('cantidad')) if etapa0_config.get('usar_cantidad', True) else 1.0
+                cant_raw = raw_row.get(_col_cant, "") if _col_cant else (mapped.get('cantidad') or "")
+                cant = parse_money(cant_raw)
                 if cant <= 0: cant = 1.0
 
-                precio_v_raw = parse_money(mapped.get('precio_venta'))
-                costo_origen = parse_money(mapped.get('costo_unitario_origen'))
-                tasa_cambio = parse_money(mapped.get('tasa_cambio'))
-                costo_local = parse_money(mapped.get('costo_unitario_local'))
-                costo_envio = parse_money(mapped.get('costo_envio'))
+                # Precio de referencia (precio maestro — puede NO ser venta)
+                precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
+
+                # Total de la operación — según origen del contrato semántico
+                if _origen_total == "COLUMNA" and _col_total_op:
+                    tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
+                elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
+                    tot_v_row = precio_ref_raw
+                else:  # PRECIO_X_CANTIDAD
+                    tot_v_row = precio_ref_raw * cant
+
+                # Recaudo efectivo: dinero recibido — NO el valor de la venta
+                recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
+                abono_val = recaudo_raw
+
+                # Cartera reportada: solo para auditoría — NO el valor definitivo
+                deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
+
+                costo_origen    = parse_money(mapped.get('costo_unitario_origen'))
+                tasa_cambio     = parse_money(mapped.get('tasa_cambio'))
+                costo_local     = parse_money(mapped.get('costo_unitario_local'))
+                costo_envio     = parse_money(mapped.get('costo_envio'))
                 costo_total_imp = parse_money(mapped.get('costo_total'))
                 cli_nombre = (mapped.get('cliente_nombre') or '').strip()
-                deuda_val = parse_money(mapped.get('saldo_pendiente')) if etapa0_config.get('usar_deuda', True) else 0.0
-                abono_val = parse_money(mapped.get('abono_monto')) if etapa0_config.get('usar_abonos', True) else 0.0
 
                 fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
                 fecha_recepcion_raw = mapped.get('fecha_recepcion') or fecha_compra_raw
@@ -1209,7 +1569,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 if key_p not in productos_cache and key_p not in nuevos_prods_dict:
                     categoria = (mapped.get('categoria') or '').strip() or None
                     subcategoria = (mapped.get('subcategoria') or '').strip() or None
-                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v_raw, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
+                    # Guardar precio_referencia como precio del producto (no el total de la venta)
+                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_ref_raw, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
 
                 if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA", "PERDIDA"):
                     if key_p not in inventario_cache and key_p not in nuevos_inv_dict:
@@ -1234,11 +1595,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 pedido_key = f"{fecha_compra_raw[:10]}_{tasa_cambio}"
                 lote_key = (pedido_key, key_p)
 
-                # Total Venta según opción de Etapa 0:
-                if tipo_precio_opt == "VALOR_TOTAL_VENTA":
-                    total_v_row = precio_v_raw
-                else:
-                    total_v_row = precio_v_raw * cant
+                # Total Venta: resuelto por el Contrato Semántico (ya calculado como tot_v_row)
+                total_v_row = tot_v_row
 
                 recaudo_efectivo = abono_val
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
@@ -1266,7 +1624,7 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                     "origen_clasificacion": origen_clasificacion,
                     "estado_raw": estado_raw,
                     "cant": cant,
-                    "precio_v": precio_v_raw,
+                    "precio_v": precio_ref_raw,   # Precio de referencia del producto
                     "total_v_row": total_v_row,
                     "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre,
@@ -1613,11 +1971,51 @@ def revertir_importacion(undo_token, negocio_id, usuario_id):
 # STREAMING DE PROGRESO REAL DE IMPORTACIÓN (SSE)
 # ══════════════════════════════════════════════════════════════════
 
-def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", criterio_lote="FECHA_TRM"):
+def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo_usuario, autorizaciones=None, granularidad_costos="POR_UNIDAD", criterio_lote="FECHA_TRM", etapa0_config=None, contrato_semantico=None):
     """
     Generador SSE que emite notificaciones de progreso reales por cada fase
     del pipeline manteniendo 100% de integridad transaccional atómica.
+    Compatible con Contrato Semántico v2.
     """
+    # ── Resolución del Contrato Semántico ──
+    cs = None
+    if contrato_semantico and isinstance(contrato_semantico, dict) and contrato_semantico.get("version") == "v2":
+        cs = contrato_semantico
+    elif etapa0_config and isinstance(etapa0_config, dict):
+        tipo_precio = etapa0_config.get("tipo_precio_venta", "VALOR_TOTAL_VENTA")
+        origen_tv = "PRECIO_REFERENCIA_TOTAL" if tipo_precio == "VALOR_TOTAL_VENTA" else "PRECIO_X_CANTIDAD"
+        col_precio_leg = next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None)
+        col_recaudo_leg = next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None)
+        col_cartera_leg = next((c for c, f in mapeo_usuario.items() if f in ("saldo_pendiente", "cartera_reportada")), None)
+        col_cant_leg = next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None)
+        col_prod_leg = next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None)
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              col_prod_leg,
+            "campo_precio_referencia":     col_precio_leg,
+            "campo_cantidad":              col_cant_leg,
+            "origen_total_venta":          origen_tv,
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               col_recaudo_leg,
+            "campo_cartera_reportada":     col_cartera_leg,
+        })
+    else:
+        cs = construir_contrato_semantico(mapeo_usuario, {
+            "campo_producto":              next((c for c, f in mapeo_usuario.items() if f == "nombre_producto"), None),
+            "campo_precio_referencia":     next((c for c, f in mapeo_usuario.items() if f in ("precio_venta", "precio_referencia")), None),
+            "campo_cantidad":              next((c for c, f in mapeo_usuario.items() if f == "cantidad"), None),
+            "origen_total_venta":          "PRECIO_REFERENCIA_TOTAL",
+            "campo_total_venta_operacion": None,
+            "campo_recaudo":               next((c for c, f in mapeo_usuario.items() if f in ("abono_monto", "recaudo_efectivo")), None),
+            "campo_cartera_reportada":     None,
+        })
+
+    _col_precio_ref  = cs.get("campo_precio_referencia")
+    _col_total_op    = cs.get("campo_total_venta_operacion")
+    _col_recaudo     = cs.get("campo_recaudo")
+    _col_cartera_rep = cs.get("campo_cartera_reportada")
+    _col_cant        = cs.get("campo_cantidad")
+    _origen_total    = cs.get("origen_total_venta", "PRECIO_X_CANTIDAD")
+
     def make_event(stage_id, title, status, detail, result=None):
         payload = {
             "stage": stage_id,
@@ -1697,16 +2095,30 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 estado_raw = (mapped.get('estado_origen') or mapped.get('estado') or '').strip().upper()
                 tipo_fila, origen_clasificacion = determinar_tipo_fila(mapped)
 
-                cant = parse_money(mapped.get('cantidad')) or 1.0
-                precio_v = parse_money(mapped.get('precio_venta'))
-                costo_origen = parse_money(mapped.get('costo_unitario_origen'))
-                tasa_cambio = parse_money(mapped.get('tasa_cambio'))
-                costo_local = parse_money(mapped.get('costo_unitario_local'))
-                costo_envio = parse_money(mapped.get('costo_envio'))
+                cant_raw = raw_row.get(_col_cant, "") if _col_cant else (mapped.get('cantidad') or "")
+                cant = parse_money(cant_raw)
+                if cant <= 0: cant = 1.0
+
+                precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
+
+                if _origen_total == "COLUMNA" and _col_total_op:
+                    tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
+                elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
+                    tot_v_row = precio_ref_raw
+                else:  # PRECIO_X_CANTIDAD
+                    tot_v_row = precio_ref_raw * cant
+
+                recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
+                abono_val = recaudo_raw
+
+                deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
+
+                costo_origen    = parse_money(mapped.get('costo_unitario_origen'))
+                tasa_cambio     = parse_money(mapped.get('tasa_cambio'))
+                costo_local     = parse_money(mapped.get('costo_unitario_local'))
+                costo_envio     = parse_money(mapped.get('costo_envio'))
                 costo_total_imp = parse_money(mapped.get('costo_total'))
                 cli_nombre = (mapped.get('cliente_nombre') or '').strip()
-                deuda_val = parse_money(mapped.get('saldo_pendiente'))
-                abono_val = parse_money(mapped.get('abono_monto'))
 
                 fecha_compra_raw = mapped.get('fecha_operacion') or datetime.now().strftime("%Y-%m-%d")
                 fecha_recepcion_raw = mapped.get('fecha_recepcion') or fecha_compra_raw
@@ -1724,7 +2136,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 if key_p not in productos_cache and key_p not in nuevos_prods_dict:
                     categoria = (mapped.get('categoria') or '').strip() or None
                     subcategoria = (mapped.get('subcategoria') or '').strip() or None
-                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_v, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
+                    nuevos_prods_dict[key_p] = (negocio_id, nombre_prod, precio_ref_raw, 'COMERCIALIZADO', categoria, subcategoria, undo_token)
 
                 if tipo_fila in ("COMPRA_Y_VENTA", "SOLO_COMPRA", "PERDIDA"):
                     if key_p not in inventario_cache and key_p not in nuevos_inv_dict:
@@ -1776,14 +2188,8 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                 lote_key = (pedido_key, key_p)
 
                 concepto_est = normalizar_concepto_estado(estado_raw)
-                total_v_row = precio_v * cant
-                tiene_col_abono = 'abono_monto' in mapped
-
-                # Abono efectivo percibido (Regla 4)
-                if not tiene_col_abono and concepto_est == "VENDIDA" and deuda_val == 0.0:
-                    abono_efectivo = total_v_row
-                else:
-                    abono_efectivo = abono_val
+                total_v_row = tot_v_row
+                abono_efectivo = abono_val
 
                 metodo_pago_excel = (mapped.get('metodo_pago') or '').strip()
                 metodo_pago = metodo_pago_excel if metodo_pago_excel else "NO_ESPECIFICADO"

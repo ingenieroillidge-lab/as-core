@@ -1536,12 +1536,13 @@ def api_importador_prevalidar():
         d = request.json or {}
         batch_id = d.get('batch_id')
         mapeo_usuario = d.get('mapeo_usuario', {})
-        etapa0_config = d.get('etapa0_config', {})
+        etapa0_config = d.get('etapa0_config', {})           # legacy
+        contrato_semantico = d.get('contrato_semantico')     # v2 Semantic Contract
 
         if not batch_id or not mapeo_usuario:
             return jsonify({"ok": False, "error": "batch_id y mapeo_usuario son obligatorios", "stage": "input_validation"}), 400
 
-        print(f"[PREVALIDAR] batch_id={batch_id}, campos_mapeados={len(mapeo_usuario)}")
+        print(f"[PREVALIDAR] batch_id={batch_id}, campos_mapeados={len(mapeo_usuario)}, contrato_v2={bool(contrato_semantico)}")
         ok, msg, resumen = importador_service.conciliar_y_prevalidar(batch_id, nid, mapeo_usuario)
 
         if ok:
@@ -1552,7 +1553,11 @@ def api_importador_prevalidar():
             filas_datos = [json.loads(r[0]) for r in registros if r and r[0]]
 
             gran_costo, gran_motivos = importador_service.inferir_granularidad_costos(filas_datos, mapeo_usuario)
-            ok_sim, msg_sim, simulacion = importador_service.simular_importacion(batch_id, nid, mapeo_usuario, gran_costo, etapa0_config)
+            ok_sim, msg_sim, simulacion = importador_service.simular_importacion(
+                batch_id, nid, mapeo_usuario, gran_costo,
+                etapa0_config=etapa0_config,
+                contrato_semantico=contrato_semantico
+            )
 
             resumen["granularidad_costos"] = {
                 "tipo_inferido": gran_costo,
@@ -1588,13 +1593,15 @@ def api_importador_procesar():
     mapeo_usuario = d.get('mapeo_usuario', {})
     autorizaciones = d.get('autorizaciones', {})
     granularidad_costos = d.get('granularidad_costos', 'POR_UNIDAD')
-    etapa0_config = d.get('etapa0_config', {})
+    etapa0_config = d.get('etapa0_config', {})          # legacy
+    contrato_semantico = d.get('contrato_semantico')    # v2 Semantic Contract
 
     if not batch_id or not mapeo_usuario:
         return jsonify({"error": "batch_id y mapeo_usuario son obligatorios"}), 400
 
     ok, msg, result = importador_service.procesar_importacion_aprobada(
-        batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos, etapa0_config
+        batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos,
+        etapa0_config=etapa0_config, contrato_semantico=contrato_semantico
     )
     if ok:
         return jsonify({"message": msg, "data": result})
@@ -1612,6 +1619,8 @@ def api_importador_procesar_stream():
     autorizaciones = data.get('autorizaciones', {})
     granularidad_costos = data.get('granularidad_costos', 'POR_UNIDAD')
     criterio_lote = data.get('criterio_lote', 'FECHA_TRM')
+    etapa0_config = data.get('etapa0_config', {})
+    contrato_semantico = data.get('contrato_semantico')
 
     if not batch_id or not mapeo_usuario:
         return jsonify({"error": "Faltan datos obligatorios (batch_id o mapeo_usuario)"}), 400
@@ -1619,7 +1628,8 @@ def api_importador_procesar_stream():
     return Response(
         stream_with_context(
             importador_service.procesar_importacion_aprobada_stream(
-                batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos, criterio_lote
+                batch_id, nid, uid, mapeo_usuario, autorizaciones, granularidad_costos, criterio_lote,
+                etapa0_config=etapa0_config, contrato_semantico=contrato_semantico
             )
         ),
         mimetype='text/event-stream'
