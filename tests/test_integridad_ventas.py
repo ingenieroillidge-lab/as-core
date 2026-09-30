@@ -114,6 +114,14 @@ def test_recaudo_sale_de_saldos_no_del_metodo_de_pago():
     assert cierre["total"] == 140000, cierre
 
 
+def test_ranking_de_productos_del_tablero_no_queda_vacio():
+    import services.financiero_service as fs
+    r = fs.obtener_tablero_ejecutivo_completo(NEG, periodo='TODO', comparar_anterior=False)
+    assert r.get('ok'), r
+    rank = r.get('ranking_productos') or r.get('productos', {}).get('ranking') or []
+    assert rank, list(r.keys())
+
+
 if __name__ == '__main__':
     for n, f in list(globals().items()):
         if n.startswith('test_'):

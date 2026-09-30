@@ -78,6 +78,13 @@ def init_db():
             except:
                 conn.rollback()
 
+        # Bases PostgreSQL antiguas tienen 'password' NOT NULL; ya no se usa (solo password_hash). Idempotente.
+        try:
+            cursor.execute("ALTER TABLE usuarios ALTER COLUMN password DROP NOT NULL")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
         agregar_columna('usuarios', 'password_hash', 'TEXT')
         agregar_columna('usuarios', 'email', 'TEXT')
         agregar_columna('usuarios', 'nombre_completo', 'TEXT')
