@@ -9,6 +9,11 @@ except ImportError:
     generate_password_hash = None
     check_password_hash = None
 
+# Variables de entorno pegadas con saltos de línea/espacios (error común en paneles): se limpian una vez.
+for _k in ("DATABASE_URL", "SECRET_KEY"):
+    if os.environ.get(_k) is not None:
+        os.environ[_k] = os.environ[_k].strip()
+
 try:
     import psycopg2
     POSTGRES_AVAILABLE = True
