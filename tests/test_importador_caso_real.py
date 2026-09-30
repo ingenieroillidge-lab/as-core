@@ -106,7 +106,7 @@ def test_caso_real_empresario():
     print(f"-> STAGE 5B OK: Filtro por cliente 'Juan Perez' aplicado correctamente: Ingresos=${k_juan['ingresos']:,.0f}")
 
     # STAGE 6: Reversión
-    ok_und, msg_und = importador_service.revertir_importacion(undo_token, nid, uid)
+    ok_und, msg_und, _data_und = importador_service.revertir_importacion(undo_token, nid, uid)
     assert ok_und, f"Falló Reversión: {msg_und}"
     print(f"-> STAGE 6 OK: Reversión asistida completada.")
 

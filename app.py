@@ -22,21 +22,46 @@ import os
 
 
 app = Flask(__name__)
-app.secret_key = "as_platform_high_conversion_2024"
+
+# Clave de sesión: SIEMPRE desde variable de entorno (nunca en el código).
+# Si falta, se genera una aleatoria solo para esta ejecución (las sesiones se cierran al reiniciar).
+# En producción con varios workers de gunicorn DEBE definirse SECRET_KEY.
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    import secrets as _secrets
+    _secret = _secrets.token_hex(32)
+    print("[SEGURIDAD] SECRET_KEY no definida: se usa una clave temporal. Defínela en el entorno.", file=sys.stderr)
+app.secret_key = _secret
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+    MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+)
+
+ROLES_ASIGNABLES = ("ADMIN", "OPERADOR")  # SUPER nunca se asigna desde la app de un negocio
+
+def migrar_passwords_planas():
+    """Migración de seguridad (idempotente): pasa a hash las contraseñas que aún estén en texto plano
+    y borra la columna en claro. Devuelve cuántos usuarios tenían texto plano."""
+    filas = ejecutar_query("SELECT id, password FROM usuarios WHERE password IS NOT NULL AND password<>''", fetch=True) or []
+    for uid_, pw_ in filas:
+        ejecutar_query("UPDATE usuarios SET password_hash=? WHERE id=? AND (password_hash IS NULL OR password_hash='')",
+                       (generate_password_hash(pw_), uid_))
+        ejecutar_query("UPDATE usuarios SET password=NULL WHERE id=?", (uid_,))
+    return len(filas)
+
 
 # Garantizar creación/verificación de tablas en PostgreSQL/SQLite al iniciar la aplicación
 try:
     crear_tablas()
-except Exception as _e_db:
-    print(f"[DB INIT ERROR] Error al crear/verificar tablas: {_e_db}")
-
-
-# Asegurar tablas al iniciar
-try:
-    crear_tablas()
     DB_STATUS = "Conectado y Tablas Listas"
+    _n_mig = migrar_passwords_planas()
+    if _n_mig:
+        print(f"[SEGURIDAD] {_n_mig} contraseña(s) en texto plano migradas a hash.", file=sys.stderr)
 except Exception as e:
-    DB_STATUS = f"Error de DB: {str(e)}"
+    DB_STATUS = "Error de DB"
     print(f"CRITICAL DB ERROR: {e}", file=sys.stderr)
 
 # ==========================
@@ -173,9 +198,9 @@ def login():
         u = (request.form.get('username') or '').strip()
         p = (request.form.get('password') or '').strip()
         try:
-            res = ejecutar_query("SELECT id, username, role, negocio_id, password_hash, password FROM usuarios WHERE LOWER(username)=LOWER(?)", (u,), fetch=True)
+            res = ejecutar_query("SELECT id, username, role, negocio_id, password_hash FROM usuarios WHERE LOWER(username)=LOWER(?)", (u,), fetch=True)
             if res:
-                uid, uname, role, nid, p_hash, plain_p = res[0]
+                uid, uname, role, nid, p_hash = res[0]
                 
                 # Verificar si la cuenta de negocio o usuario están suspendidos
                 n_chk = ejecutar_query("SELECT status FROM negocios WHERE id=?", (nid,), fetch=True)
@@ -185,10 +210,6 @@ def login():
                 valid = False
                 if p_hash and check_password_hash(p_hash, p):
                     valid = True
-                elif plain_p == p:
-                    valid = True
-                    new_h = generate_password_hash(p)
-                    ejecutar_query("UPDATE usuarios SET password_hash=? WHERE id=?", (new_h, uid))
 
                 if valid:
                     session['user_id'] = uid
@@ -204,7 +225,8 @@ def login():
                         return redirect(url_for('super_admin_page'))
                     return redirect(url_for('index'))
         except Exception as e:
-            return render_template('login.html', error=f"Error de sistema: {str(e)}")
+            print(f"[LOGIN ERROR] {e}", file=sys.stderr)
+            return render_template('login.html', error="No pudimos iniciar sesión por un problema del sistema. Intenta de nuevo.")
         return render_template('login.html', error="Credenciales inválidas")
     return render_template('login.html')
 
@@ -473,7 +495,9 @@ def api_usuarios():
         d = request.json or {}
         u = (d.get('username') or '').strip()
         p = (d.get('password') or '').strip()
-        role = d.get('role', 'OPERADOR')
+        role = (d.get('role') or 'OPERADOR').strip().upper()
+        if role not in ROLES_ASIGNABLES:
+            return jsonify({"error": "Rol no permitido"}), 400
         if not u or not p:
             return jsonify({"error": "Nombre de usuario y contraseña son obligatorios"}), 400
         
@@ -1033,6 +1057,7 @@ def post_cartera_abono():
 
 @app.route('/api/cartera/convertir_descuento/<int:venta_id>', methods=['POST'])
 @login_required
+@admin_required
 def post_cartera_convertir_descuento(venta_id):
     nid = session['negocio_id']
     uid = session['user_id']
@@ -1314,15 +1339,15 @@ def importar_google_sheets():
         return jsonify({"error": "Debe proporcionar la URL de la hoja de Google Sheets"}), 400
 
     try:
-        if 'docs.google.com/spreadsheets' in url and '/export?' not in url:
-            sheet_id = url.split('/d/')[1].split('/')[0]
-            csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
-        else:
-            csv_url = url
+        import re as _re
+        m_sheet = _re.match(r'^https://docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]{20,})', url)
+        if not m_sheet:
+            return jsonify({"error": "Solo se aceptan enlaces de Google Sheets (https://docs.google.com/spreadsheets/d/...)"}), 400
+        csv_url = f"https://docs.google.com/spreadsheets/d/{m_sheet.group(1)}/export?format=csv"
 
         req = urllib.request.Request(csv_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            csv_data = response.read().decode('utf-8-sig', errors='ignore')
+        with urllib.request.urlopen(req, timeout=20) as response:
+            csv_data = response.read(10 * 1024 * 1024).decode('utf-8-sig', errors='ignore')
 
         reader = csv.reader(io.StringIO(csv_data))
         rows = list(reader)
@@ -1649,6 +1674,7 @@ def api_importador_historial():
 
 @app.route('/api/importador/deshacer/<undo_token>', methods=['POST'])
 @login_required
+@admin_required
 def api_importador_deshacer(undo_token):
     nid = session['negocio_id']
     uid = session['user_id']
@@ -1659,6 +1685,7 @@ def api_importador_deshacer(undo_token):
 
 @app.route('/api/importador/purgar', methods=['POST'])
 @login_required
+@admin_required
 def api_importador_purgar():
     nid = session['negocio_id']
     ok, msg = importador_service.purgar_datos_importaciones(nid)
@@ -1720,6 +1747,7 @@ def api_costos_fijos():
 
 @app.route('/api/costos-fijos/<int:cid>', methods=['DELETE'])
 @login_required
+@admin_required
 def api_costos_fijos_delete(cid):
     nid = session['negocio_id']
     ejecutar_query("DELETE FROM costos_fijos WHERE id=? AND negocio_id=?", (cid, nid))
@@ -1855,7 +1883,7 @@ def handle_super_negocios():
             # Crear primer Admin
             admin_user = (d.get('admin_user') or '').strip()
             admin_pass = (d.get('admin_pass') or '').strip()
-            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password, role) VALUES (?,?,?,?)", (nid, admin_user, admin_pass, 'ADMIN'))
+            ejecutar_query("INSERT INTO usuarios (negocio_id, username, password_hash, role) VALUES (?,?,?,?)", (nid, admin_user, generate_password_hash(admin_pass), 'ADMIN'))
             # Crear config inicial
             ejecutar_query("INSERT INTO configuracion_negocio (negocio_id, nombre_comercial, tipo_operacion) VALUES (?, ?, 'HÍBRIDO')", (nid, d['nombre']))
             return jsonify({"message": "Nuevo cliente registrado exitosamente"})
@@ -2110,9 +2138,9 @@ def reset_admin_password(negocio_id):
         new_h = generate_password_hash(new_pass)
 
         if new_user:
-            ejecutar_query("UPDATE usuarios SET username=?, password_hash=?, password=? WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_user, new_h, new_pass, negocio_id))
+            ejecutar_query("UPDATE usuarios SET username=?, password_hash=?, password=NULL WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_user, new_h, negocio_id))
         else:
-            ejecutar_query("UPDATE usuarios SET password_hash=?, password=? WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_h, new_pass, negocio_id))
+            ejecutar_query("UPDATE usuarios SET password_hash=?, password=NULL WHERE negocio_id=? AND (role='ADMIN' OR role='SUPER')", (new_h, negocio_id))
 
         return jsonify({"message": "Credenciales actualizadas exitosamente con hashing seguro"})
     except Exception as e:
@@ -2130,22 +2158,18 @@ def cambiar_mi_password():
             return jsonify({"error": "La nueva contraseña no puede estar vacía"}), 400
 
         uid = session['user_id']
-        res = ejecutar_query("SELECT password_hash, password FROM usuarios WHERE id=?", (uid,), fetch=True)
+        res = ejecutar_query("SELECT password_hash FROM usuarios WHERE id=?", (uid,), fetch=True)
         if not res:
             return jsonify({"error": "Usuario no encontrado"}), 404
 
-        p_hash, plain_p = res[0]
-        valid = False
-        if p_hash and check_password_hash(p_hash, actual_p):
-            valid = True
-        elif plain_p == actual_p:
-            valid = True
+        p_hash = res[0][0]
+        valid = bool(p_hash and check_password_hash(p_hash, actual_p))
 
         if not valid and session.get('role') != 'SUPER':
             return jsonify({"error": "La contraseña actual ingresada es incorrecta"}), 400
 
         new_h = generate_password_hash(nueva_p)
-        ejecutar_query("UPDATE usuarios SET password_hash=?, password=? WHERE id=?", (new_h, nueva_p, uid))
+        ejecutar_query("UPDATE usuarios SET password_hash=?, password=NULL WHERE id=?", (new_h, uid))
 
         return jsonify({"message": "Contraseña actualizada exitosamente"})
     except Exception as e:
@@ -2242,4 +2266,4 @@ def route_manual_usuario():
     return render_template('manual_usuario.html')
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", port=int(os.environ.get("PORT", "5000")))

@@ -1,9 +1,16 @@
-## .gitignore
+# Entorno y dependencias
 venv/
+.venv/
 __pycache__/
-*.db
-backups/
-*.pdf
-.env
-scratch/
+*.pyc
 
+# Datos y secretos (nunca al repositorio)
+*.db
+*.sqlite
+backups/
+.env
+*.xlsx
+*.pdf
+
+# Borradores locales
+scratch/
