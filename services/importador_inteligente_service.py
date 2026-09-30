@@ -1,5 +1,8 @@
 import json
+import re
 import uuid
+import difflib
+import unicodedata
 import time
 import hashlib
 from datetime import datetime
@@ -55,7 +58,8 @@ SEMANTIC_CORE = {
     "precio_referencia": [
         "PRECIO VENTA", "PRECIO DE VENTA", "PRECIO VENTA (COP)", "PVP",
         "PRICE", "PRECIO UNITARIO", "PRECIO AL PUBLICO", "PRECIO REFERENCIA",
-        "PRECIO REF", "VALOR REFERENCIA"
+        "PRECIO REF", "VALOR REFERENCIA", "PRECIO DE LISTA", "PRECIO LISTA",
+        "PRECIO DE LISTA (COP)", "PRECIO LISTA (COP)", "PRECIO CATALOGO", "TARIFA"
     ],
     # total_venta_operacion: columna que ya contiene el total real de la transacción
     "total_venta_operacion": [
@@ -356,6 +360,9 @@ def construir_contrato_semantico(mapeo_columnas: dict, decisiones_financieras: d
         formula_total = f"Total Venta = {campo_tot_op}"
     elif origen == "PRECIO_REFERENCIA_TOTAL":
         formula_total = f"Total Venta = {campo_precio_ref}  (ya contiene el total de la operación)"
+    elif origen == "RECAUDO_MAS_SALDO":
+        formula_total = (f"Total Venta (precio pactado) = {campo_recaudo} + {campo_cartera}; "
+                         f"{campo_precio_ref} es solo precio de lista y la diferencia es descuento")
     else:  # PRECIO_X_CANTIDAD
         formula_total = f"Total Venta = {campo_precio_ref} × {campo_cant}"
 
@@ -364,7 +371,8 @@ def construir_contrato_semantico(mapeo_columnas: dict, decisiones_financieras: d
     formula_cartera_rep = f"Cartera Reportada = {campo_cartera}  [solo conciliación]" if campo_cartera else None
     formula_diferencia = "Diferencia = Cartera Calculada − Cartera Reportada" if campo_cartera else None
 
-    tiene_conciliacion_doble = bool(campo_cartera)
+    # Con RECAUDO_MAS_SALDO la cartera reportada es insumo del total, no una verificación independiente.
+    tiene_conciliacion_doble = bool(campo_cartera) and origen != "RECAUDO_MAS_SALDO"
 
     return {
         "version": "v2",
@@ -455,20 +463,53 @@ def inferir_granularidad_costos(filas_datos, mapeo_usuario):
 
 
 CONCEPTOS_ESTADO_MAP = {
-    "STOCK": ["STOCK", "DISPONIBLE", "EN STOCK", "INVENTARIO", "ALMACEN", "PENDIENTE", "EN TRANSITO", "POR LLEGAR"],
+    "STOCK": ["STOCK", "DISPONIBLE", "EN STOCK", "INVENTARIO", "ALMACEN", "PENDIENTE", "EN TRANSITO", "POR LLEGAR",
+              "PEDIDO POR LLEGAR", "EN CAMINO"],
     "VENDIDA": ["VENDIDA", "VENDIDO", "VENTA", "PAGADO", "PAGADA", "CONTADO", "ENTREGADO"],
-    "DEBE": ["DEBE", "DEUDA", "CARTERA", "CREDITO", "CRÉDITO", "POR COBRAR", "SALDO PENDIENTE", "EN DEUDA"],
+    "DEBE": ["DEBE", "DEUDA", "CARTERA", "CREDITO", "CRÉDITO", "POR COBRAR", "SALDO PENDIENTE", "EN DEUDA",
+             "FIADA", "FIADO", "A CREDITO", "ABONO", "PARCIAL"],
     "PERDIDA": ["PERDIDA", "PÉRDIDA", "DAÑADO", "DAÑADA", "MERMA", "ROBO", "DESCARTE"]
 }
+
+
+def _sin_acentos_mayus(txt):
+    t = ''.join(c for c in unicodedata.normalize('NFD', str(txt)) if unicodedata.category(c) != 'Mn')
+    return re.sub(r'\s+', ' ', t).strip().upper()
+
+
+def interpretar_estado(val_raw, cutoff=0.8):
+    """(concepto, calidad): EXACTA | APROXIMADA (errata, ej. 'Vendidada' -> VENDIDA) | AMBIGUA | VACIA.
+    Lo aproximado debe mostrarse al usuario para confirmarlo; nunca se asume en silencio."""
+    if val_raw is None or not str(val_raw).strip():
+        return None, "VACIA"
+    limpio = _sin_acentos_mayus(val_raw)
+    tabla = {_sin_acentos_mayus(sin): concepto for concepto, sins in CONCEPTOS_ESTADO_MAP.items() for sin in sins}
+    if limpio in tabla:
+        return tabla[limpio], "EXACTA"
+    parecidos = difflib.get_close_matches(limpio, list(tabla), n=2, cutoff=cutoff)
+    if parecidos and (len(parecidos) == 1 or tabla[parecidos[0]] == tabla[parecidos[1]]):
+        return tabla[parecidos[0]], "APROXIMADA"
+    return "AMBIGUO", "AMBIGUA"
+
 
 def normalizar_concepto_estado(val_raw):
     if not val_raw:
         return None
-    val_clean = str(val_raw).strip().upper()
-    for concepto, sinonimos in CONCEPTOS_ESTADO_MAP.items():
-        if val_clean in sinonimos:
-            return concepto
-    return "AMBIGUO"
+    return interpretar_estado(val_raw)[0]
+
+def calcular_total_operacion(origen, raw_row, col_total, precio_ref, cant, recaudo, cartera_rep):
+    """Total de la operación según el Contrato Semántico (regla explícita; nunca silenciosa).
+    COLUMNA: total escrito en el Excel · PRECIO_REFERENCIA_TOTAL: la columna de precio ya es el total ·
+    RECAUDO_MAS_SALDO: precio pactado = cobrado + por cobrar (el precio de lista es solo referencia; la
+    diferencia es descuento) · PRECIO_X_CANTIDAD (por defecto): precio unitario × cantidad."""
+    if origen == "COLUMNA" and col_total:
+        return parse_money(raw_row.get(col_total, ""))
+    if origen == "PRECIO_REFERENCIA_TOTAL":
+        return precio_ref
+    if origen == "RECAUDO_MAS_SALDO":
+        return max(0.0, recaudo) + max(0.0, cartera_rep)
+    return precio_ref * cant
+
 
 def determinar_tipo_fila(mapped_data):
     """
@@ -831,6 +872,23 @@ def proponer_mapeo_heuristico(headers, negocio_id, muestras=None):
 
         destinos_usados[match_campo] = destinos_usados.get(match_campo, 0) + 1
 
+    # 5. Sin columna de producto: no ignorar en silencio; proponer (confianza BAJA, a confirmar) la columna de
+    #    texto más variada que quedó sin asignar (ej. 'Equipo' en un Excel de camisetas).
+    if not destinos_usados.get("nombre_producto"):
+        candidatas = []
+        for prop in propuesta:
+            if prop["campo_propuesto"] in ("IGNORAR", None):
+                vals = [str(m.get(prop["columna_excel"], '')).strip() for m in muestras if m.get(prop["columna_excel"])]
+                if len(vals) >= 3 and all(not re.fullmatch(r'[\d.,\s$%-]+', v) for v in vals):
+                    candidatas.append((len({v.lower() for v in vals}), prop))
+        if candidatas:
+            distintos, prop = max(candidatas, key=lambda t: t[0])
+            if distintos >= 3:
+                prop.update(campo_propuesto="nombre_producto", confianza="BAJA", origen="HEURISTICA_SIN_PRODUCTO",
+                            label=CAMPO_LABELS.get("nombre_producto", "nombre_producto"),
+                            motivos=[f"No encontré una columna de producto. Esta es texto con {distintos} valores distintos "
+                                     "en la muestra; confírmala o elige otra."])
+
     return propuesta
 
 
@@ -1181,13 +1239,6 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
         # Precio referencia del producto (precio maestro, puede NO ser venta)
         precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
 
-        # Total de la operación — según origen definido en el contrato
-        if _origen_total == "COLUMNA" and _col_total_op:
-            tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
-        elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
-            tot_v_row = precio_ref_raw  # La columna ya contiene el total
-        else:  # PRECIO_X_CANTIDAD
-            tot_v_row = precio_ref_raw * cant
 
         # Recaudo efectivo: dinero recibido — nunca confundir con valor de la venta
         recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
@@ -1195,6 +1246,8 @@ def simular_importacion(batch_id, negocio_id, mapeo_usuario, granularidad_costos
 
         # Cartera reportada: deuda declarada en Excel — SOLO para conciliación, nunca valor definitivo
         deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
+
+        tot_v_row = calcular_total_operacion(_origen_total, raw_row, _col_total_op, precio_ref_raw, cant, recaudo_raw, deuda_val)
 
         # Sumatorias de Excel Original
         excel_total_ventas += tot_v_row
@@ -1522,13 +1575,6 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
                 # Precio de referencia (precio maestro — puede NO ser venta)
                 precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
 
-                # Total de la operación — según origen del contrato semántico
-                if _origen_total == "COLUMNA" and _col_total_op:
-                    tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
-                elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
-                    tot_v_row = precio_ref_raw
-                else:  # PRECIO_X_CANTIDAD
-                    tot_v_row = precio_ref_raw * cant
 
                 # Recaudo efectivo: dinero recibido — NO el valor de la venta
                 recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
@@ -1536,6 +1582,8 @@ def procesar_importacion_aprobada(batch_id, negocio_id, usuario_id, mapeo_usuari
 
                 # Cartera reportada: solo para auditoría — NO el valor definitivo
                 deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
+
+                tot_v_row = calcular_total_operacion(_origen_total, raw_row, _col_total_op, precio_ref_raw, cant, recaudo_raw, deuda_val)
 
                 costo_origen    = parse_money(mapped.get('costo_unitario_origen'))
                 tasa_cambio     = parse_money(mapped.get('tasa_cambio'))
@@ -2097,17 +2145,13 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
                 precio_ref_raw = parse_money(raw_row.get(_col_precio_ref, "")) if _col_precio_ref else parse_money(mapped.get('precio_referencia') or mapped.get('precio_venta'))
 
-                if _origen_total == "COLUMNA" and _col_total_op:
-                    tot_v_row = parse_money(raw_row.get(_col_total_op, ""))
-                elif _origen_total == "PRECIO_REFERENCIA_TOTAL":
-                    tot_v_row = precio_ref_raw
-                else:  # PRECIO_X_CANTIDAD
-                    tot_v_row = precio_ref_raw * cant
 
                 recaudo_raw = parse_money(raw_row.get(_col_recaudo, "")) if _col_recaudo else parse_money(mapped.get('recaudo_efectivo') or mapped.get('abono_monto'))
                 abono_val = recaudo_raw
 
                 deuda_val = parse_money(raw_row.get(_col_cartera_rep, "")) if _col_cartera_rep else parse_money(mapped.get('cartera_reportada') or mapped.get('saldo_pendiente'))
+
+                tot_v_row = calcular_total_operacion(_origen_total, raw_row, _col_total_op, precio_ref_raw, cant, recaudo_raw, deuda_val)
 
                 costo_origen    = parse_money(mapped.get('costo_unitario_origen'))
                 tasa_cambio     = parse_money(mapped.get('tasa_cambio'))
@@ -2213,7 +2257,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
                     "fila_num": fila_num, "raw_row": raw_row, "mapped": mapped,
                     "nombre_prod": nombre_prod, "key_p": key_p, "tipo_fila": tipo_fila,
                     "origen_clasificacion": origen_clasificacion,
-                    "estado_raw": estado_raw, "cant": cant, "precio_v": precio_ref_raw, "costo_adq": costo_adq,
+                    "estado_raw": estado_raw, "cant": cant, "precio_v": precio_ref_raw, "total_v_row": total_v_row, "costo_adq": costo_adq,
                     "cli_nombre": cli_nombre, "deuda_val": deuda_val, "abono_val": abono_val,
                     "abono_efectivo": abono_efectivo, "excedente_abono": excedente_abono,
                     "saldo_calc": saldo_calc, "metodo_pago": metodo_pago, "obs_nota": obs_nota,
@@ -2370,7 +2414,7 @@ def procesar_importacion_aprobada_stream(batch_id, negocio_id, usuario_id, mapeo
 
                 if f["tipo_fila"] in ("COMPRA_Y_VENTA", "SOLO_VENTA"):
                     costo_venta_total = (f["costo_adq"] * f["cant"]) if f["tipo_fila"] == "COMPRA_Y_VENTA" else 0.0
-                    total_venta = f["precio_v"] * f["cant"]
+                    total_venta = f.get("total_v_row", f["precio_v"] * f["cant"])
 
                     if f["saldo_calc"] <= 0.01:
                         est_pago = "PAGADO"
