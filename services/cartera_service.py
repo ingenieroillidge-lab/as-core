@@ -185,17 +185,17 @@ def obtener_resumen_cartera(negocio_id, mes_filtro=None):
         dias_promedio = round(total_dias / conteo_cuentas) if conteo_cuentas > 0 else 0
 
         # 2. Recaudo del mes (Abonos recibidos en el mes + Ventas al contado del mes)
+        # Los descuentos comerciales saldan la deuda pero NO son dinero recibido.
         abonos_mes = ejecutar_query(
-            "SELECT SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND fecha LIKE ?",
+            "SELECT SUM(monto) FROM abonos_cartera WHERE negocio_id=? AND fecha LIKE ? AND COALESCE(metodo_pago,'') != 'DESCUENTO_COMERCIAL'",
             (negocio_id, f"{mes_actual}%"), fetch=True
         )
         total_abonos_mes = abonos_mes[0][0] or 0.0 if abonos_mes else 0.0
 
-        ventas_contado_mes = ejecutar_query(
-            "SELECT SUM(total) FROM ventas WHERE negocio_id=? AND metodo_pago != 'CRÉDITO' AND (estado_pago='PAGADO' OR estado_pago IS NULL) AND fecha LIKE ?",
-            (negocio_id, f"{mes_actual}%"), fetch=True
-        )
-        total_contado_mes = ventas_contado_mes[0][0] or 0.0 if ventas_contado_mes else 0.0
+        # Cobrado al momento de la venta = total - (saldo + abonos posteriores); definición única en financiero_service.
+        from services.financiero_service import ventas_con_cobro_inmediato
+        total_contado_mes = sum(v["cobrado_en_venta"] for v in ventas_con_cobro_inmediato(negocio_id)
+                                if v["fecha"].startswith(mes_actual))
 
         recaudo_mes = total_abonos_mes + total_contado_mes
 

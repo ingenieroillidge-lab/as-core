@@ -1,9 +1,18 @@
 from datetime import datetime
-from database import ejecutar_query
+from database import ejecutar_query, transaccion, insertar_con_id
 import services.inventario_service as inventario_service
 import services.lotes_service as lotes_service
 
 def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, negocio_id, fecha_custom=None):
+    """Compatibilidad: devuelve (ok, total | mensaje)."""
+    ok, r, _vid = registrar_venta_con_id(producto_id, cantidad_vendida, metodo_pago, usuario_id, negocio_id, fecha_custom)
+    return ok, r
+
+
+def registrar_venta_con_id(producto_id, cantidad_vendida, metodo_pago, usuario_id, negocio_id, fecha_custom=None):
+    """Devuelve (ok, total | mensaje, venta_id). El id viene del propio INSERT (sin 'ORDER BY id DESC LIMIT 1')."""
+    if not cantidad_vendida or float(cantidad_vendida) <= 0:
+        return False, "La cantidad debe ser mayor a cero", None
     if fecha_custom and str(fecha_custom).strip():
         fecha = str(fecha_custom).strip()
         if len(fecha) == 10:
@@ -13,7 +22,7 @@ def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, nego
 
     # 1. Obtener datos del producto (Filtrado por negocio)
     res = ejecutar_query("SELECT nombre, precio FROM productos WHERE id=? AND negocio_id=?", (producto_id, negocio_id), fetch=True)
-    if not res: return False, "Producto no encontrado o no pertenece a su empresa"
+    if not res: return False, "Producto no encontrado o no pertenece a su empresa", None
     nombre_prod, precio_actual = res[0]
     total_ingreso = precio_actual * cantidad_vendida
 
@@ -49,28 +58,27 @@ def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, nego
             costo_total_momento += costo_unit * cant_necesaria
 
     if insumos_insuficientes:
-        return False, "Stock insuficiente: " + ", ".join(insumos_insuficientes)
+        return False, "Stock insuficiente: " + ", ".join(insumos_insuficientes), None
 
     # 4. Procesar transacción con Multi-tenancy
     try:
-        # Insertar venta inicial
-        ejecutar_query(
-            """INSERT INTO ventas (negocio_id, fecha, producto_id, cantidad, total, metodo_pago, costo_historico_total, precio_historico_unitario, usuario_id) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (negocio_id, fecha, producto_id, cantidad_vendida, total_ingreso, metodo_pago, costo_total_momento, precio_actual, usuario_id)
-        )
-
-        v_res = ejecutar_query("SELECT id FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1", (negocio_id,), fetch=True)
-        venta_id = v_res[0][0] if v_res else None
+        # Insertar venta inicial y obtener su id en la misma operación
+        with transaccion() as (cur, ph, is_pg):
+            venta_id = insertar_con_id(
+                cur,
+                """INSERT INTO ventas (negocio_id, fecha, producto_id, cantidad, total, metodo_pago, costo_historico_total, precio_historico_unitario, usuario_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (negocio_id, fecha, producto_id, cantidad_vendida, total_ingreso, metodo_pago, costo_total_momento, precio_actual, usuario_id),
+                ph, is_pg)
 
         # Si maneja lotes, consumir secuencialmente por FEFO/FIFO
         if maneja_lotes == 1:
             costo_lotes_total = 0.0
             for insumo_id, cant_desc in items_a_descontar:
-                ok, c_costo, _ = lotes_service.consumir_lotes_insumo(insumo_id, cant_desc, negocio_id, venta_id=venta_id, usuario_id=usuario_id)
+                ok, c_costo, traza = lotes_service.consumir_lotes_insumo(insumo_id, cant_desc, negocio_id, venta_id=venta_id, usuario_id=usuario_id)
                 if ok:
                     costo_lotes_total += c_costo
-                inventario_service.registrar_movimiento(insumo_id, 'salida', cant_desc, f"Venta #{venta_id} {nombre_prod}", usuario_id, negocio_id)
+                inventario_service.registrar_movimiento(insumo_id, 'salida', cant_desc, f"Venta #{venta_id} {nombre_prod}", usuario_id, negocio_id, ajustar_stock=not traza)  # con lotes el stock ya se sincronizó
             
             # Actualizar venta con el costo histórico exacto asignado por lotes
             ejecutar_query("UPDATE ventas SET costo_historico_total=? WHERE id=? AND negocio_id=?", (costo_lotes_total, venta_id, negocio_id))
@@ -80,9 +88,9 @@ def registrar_venta(producto_id, cantidad_vendida, metodo_pago, usuario_id, nego
                     insumo_id, 'salida', cant_desc, f"Venta {nombre_prod}", usuario_id, negocio_id
                 )
 
-        return True, total_ingreso
+        return True, total_ingreso, venta_id
     except Exception as e:
-        return False, f"Error en la transacción: {str(e)}"
+        return False, f"Error en la transacción: {str(e)}", None
 
 def eliminar_venta(venta_id, negocio_id, usuario_id):
     """
@@ -109,24 +117,32 @@ def eliminar_venta(venta_id, negocio_id, usuario_id):
             (producto_id, negocio_id), fetch=True
         ) or []
 
-        for i_id, cant_receta in insumos_receta:
-            cant_reintegrar = cant_receta * cantidad_vendida
-            inventario_service.registrar_movimiento(
-                i_id, 'entrada', cant_reintegrar, f"Reversión / Anulación Venta #{venta_id}", usuario_id, negocio_id
-            )
-
-        # 3. Revertir lotes si existen movimientos de lote para la venta
         movs_lote = ejecutar_query(
             "SELECT lote_id, cantidad FROM movimientos_lote WHERE venta_id=? AND negocio_id=?",
             (venta_id, negocio_id), fetch=True
         ) or []
+
+        # Con lotes, el stock se reconstruye desde los lotes (evita sumar dos veces); sin lotes, se reintegra por receta.
+        for i_id, cant_receta in insumos_receta:
+            cant_reintegrar = cant_receta * cantidad_vendida
+            inventario_service.registrar_movimiento(
+                i_id, 'entrada', cant_reintegrar, f"Reversión / Anulación Venta #{venta_id}", usuario_id, negocio_id,
+                ajustar_stock=not movs_lote
+            )
+
+        # 3. Revertir lotes (y reactivar los que quedaron AGOTADO)
+        insumos_lote = set()
         for lote_id, cant_lote in movs_lote:
             ejecutar_query(
-                "UPDATE lotes_inventario SET cantidad_disponible = cantidad_disponible + ? WHERE id=? AND negocio_id=?",
+                "UPDATE lotes_inventario SET cantidad_disponible = cantidad_disponible + ?, estado='ACTIVO' WHERE id=? AND negocio_id=?",
                 (cant_lote, lote_id, negocio_id)
             )
+            r = ejecutar_query("SELECT insumo_id FROM lotes_inventario WHERE id=? AND negocio_id=?", (lote_id, negocio_id), fetch=True)
+            if r: insumos_lote.add(r[0][0])
         if movs_lote:
             ejecutar_query("DELETE FROM movimientos_lote WHERE venta_id=? AND negocio_id=?", (venta_id, negocio_id))
+            for ins in insumos_lote:
+                lotes_service.sincronizar_stock_consolidado(ins, negocio_id)
 
         # 4. Eliminar abonos de cartera asociados a la venta si existen
         ejecutar_query("DELETE FROM abonos_cartera WHERE venta_id=? AND negocio_id=?", (venta_id, negocio_id))

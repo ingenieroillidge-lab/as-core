@@ -587,48 +587,36 @@ def post_venta():
     abono_inicial = float(d.get('abono_inicial', 0.0))
     observacion = (d.get('observacion') or '').strip()
 
-    s, r = ventas_service.registrar_venta(
-        producto_id, 
-        cantidad, 
-        metodo, 
-        session['user_id'], 
-        session['negocio_id'],
-        fecha_custom=fecha
+    s, r, v_id = ventas_service.registrar_venta_con_id(
+        producto_id, cantidad, metodo, session['user_id'], session['negocio_id'], fecha_custom=fecha
     )
 
     if s:
-        # Si la venta es a Crédito o se proporcionaron datos de cliente/crédito
-        if metodo == 'CRÉDITO' or cliente or fecha_limite or abono_inicial > 0:
-            if cliente:
-                cartera_service.crear_o_actualizar_cliente(cliente, session['negocio_id'])
-
-            v_res = ejecutar_query(
-                "SELECT id, total FROM ventas WHERE negocio_id=? ORDER BY id DESC LIMIT 1",
-                (session['negocio_id'],), fetch=True
+        nid = session['negocio_id']
+        es_credito = (metodo == 'CRÉDITO') or bool(fecha_limite) or abono_inicial > 0
+        if cliente:
+            cartera_service.crear_o_actualizar_cliente(cliente, nid)
+        total_v = float(r)
+        if es_credito:
+            # La venta nace con saldo = total; registrar_abono descuenta el abono UNA sola vez.
+            ejecutar_query(
+                """UPDATE ventas SET estado_pago='PENDIENTE', cliente_nombre=?, saldo_pendiente=?, fecha_limite_pago=?, observacion=?
+                   WHERE id=? AND negocio_id=?""",
+                (cliente if cliente else "Cliente Crédito", total_v, fecha_limite, observacion, v_id, nid)
             )
-            if v_res:
-                v_id, total_v = v_res[0]
-                total_v = float(total_v)
-
-                if abono_inicial > 0:
-                    saldo_p = max(0.0, total_v - abono_inicial)
-                    estado_p = "PAGADO" if saldo_p <= 0.01 else "PARCIAL"
-                else:
-                    saldo_p = total_v
-                    estado_p = "PENDIENTE"
-
-                ejecutar_query(
-                    """UPDATE ventas SET 
-                       estado_pago=?, cliente_nombre=?, saldo_pendiente=?, fecha_limite_pago=?, observacion=?
-                       WHERE id=? AND negocio_id=?""",
-                    (estado_p, cliente if cliente else "Cliente Crédito", saldo_p, fecha_limite, observacion, v_id, session['negocio_id'])
+            if abono_inicial > 0:
+                # El método del abono es el que indicó el usuario; 'CRÉDITO' no es un medio de pago.
+                metodo_abono = metodo if metodo and metodo != 'CRÉDITO' else 'NO_ESPECIFICADO'
+                cartera_service.registrar_abono(
+                    v_id, min(abono_inicial, total_v), metodo_abono, session['user_id'], nid,
+                    observacion="Abono inicial de la venta", fecha_custom=fecha
                 )
-
-                if abono_inicial > 0:
-                    cartera_service.registrar_abono(
-                        v_id, abono_inicial, "Efectivo (Abono Inicial)", session['user_id'], session['negocio_id'],
-                        observacion="Abono Inicial en Venta a Crédito", fecha_custom=fecha
-                    )
+        elif cliente:
+            # Venta de contado asociada a un cliente: queda PAGADA (saldo 0), no pendiente.
+            ejecutar_query(
+                "UPDATE ventas SET cliente_nombre=?, observacion=? WHERE id=? AND negocio_id=?",
+                (cliente, observacion, v_id, nid)
+            )
 
         return jsonify({"message": "ok", "total": r})
     else:
